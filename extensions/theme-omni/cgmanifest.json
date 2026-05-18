@@ -1,0 +1,16 @@
+{
+	"registrations": [
+		{
+			"component": {
+				"type": "git",
+				"git": {
+					"name": "getomni/visual-studio-code",
+					"repositoryUrl": "https://github.com/getomni/visual-studio-code"
+				}
+			},
+			"license": "MIT",
+			"version": "1.0.12"
+		}
+	],
+	"version": 1
+}

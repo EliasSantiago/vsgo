@@ -1,0 +1,133 @@
+{
+	"name": "agent-pr-review",
+	"displayName": "Agent PR Review",
+	"description": "GitHub pull request review with AI assist powered by your configured language model providers.",
+	"publisher": "vscode",
+	"license": "MIT",
+	"version": "0.1.0",
+	"engines": {
+		"vscode": "^1.96.0"
+	},
+	"categories": [
+		"AI",
+		"SCM Providers"
+	],
+	"main": "./out/extension.js",
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"contributes": {
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "agentPrReview",
+					"title": "Reviews",
+					"icon": "$(git-pull-request)"
+				}
+			]
+		},
+		"views": {
+			"agentPrReview": [
+				{
+					"id": "agentPrReview.list",
+					"name": "Pull Requests",
+					"icon": "$(git-pull-request)",
+					"contextualTitle": "Pull Requests"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "agent-pr-review.refresh",
+				"title": "Agent PR Review: Refresh",
+				"category": "Agent PR Review",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "agent-pr-review.signIn",
+				"title": "Agent PR Review: Sign In to GitHub",
+				"category": "Agent PR Review"
+			},
+			{
+				"command": "agent-pr-review.openOnGitHub",
+				"title": "Open on GitHub",
+				"category": "Agent PR Review",
+				"icon": "$(link-external)"
+			},
+			{
+				"command": "agent-pr-review.aiReview",
+				"title": "AI Review",
+				"category": "Agent PR Review",
+				"icon": "$(sparkle)"
+			},
+			{
+				"command": "agent-pr-review.postPendingReview",
+				"title": "Post Pending Review as Draft on GitHub",
+				"category": "Agent PR Review",
+				"icon": "$(cloud-upload)"
+			},
+			{
+				"command": "agent-pr-review.clearReview",
+				"title": "Clear AI Review",
+				"category": "Agent PR Review",
+				"icon": "$(clear-all)"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "agent-pr-review.refresh",
+					"when": "view == agentPrReview.list",
+					"group": "navigation"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "agent-pr-review.aiReview",
+					"when": "view == agentPrReview.list && viewItem == pullRequest",
+					"group": "inline@1"
+				},
+				{
+					"command": "agent-pr-review.openOnGitHub",
+					"when": "view == agentPrReview.list && viewItem == pullRequest",
+					"group": "inline@2"
+				}
+			],
+			"comments/commentThread/title": [
+				{
+					"command": "agent-pr-review.postPendingReview",
+					"when": "commentController == agent-pr-review.findings",
+					"group": "navigation"
+				}
+			]
+		},
+		"configuration": {
+			"title": "Agent PR Review",
+			"properties": {
+				"agent-pr-review.model": {
+					"type": "string",
+					"default": "",
+					"description": "Preferred model for AI review (vendor or vendor/family). Empty picks a capable default."
+				},
+				"agent-pr-review.maxDiffBytes": {
+					"type": "number",
+					"default": 200000,
+					"description": "Maximum diff size sent to the model. Larger PRs will be truncated."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"compile": "node ./node_modules/typescript/bin/tsc -p ./",
+		"watch": "node ./node_modules/typescript/bin/tsc -p ./ -w"
+	},
+	"dependencies": {},
+	"devDependencies": {
+		"@types/node": "20.x",
+		"@types/vscode": "1.96.x"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/microsoft/vscode.git"
+	}
+}

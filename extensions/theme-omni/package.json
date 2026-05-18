@@ -1,0 +1,27 @@
+{
+  "name": "theme-omni",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "1.0.12",
+  "publisher": "vscode",
+  "license": "MIT",
+  "homepage": "https://github.com/getomni/visual-studio-code",
+  "engines": {
+    "vscode": "*"
+  },
+  "categories": ["Themes"],
+  "contributes": {
+    "themes": [
+      {
+        "id": "Omni",
+        "label": "%themeLabel%",
+        "uiTheme": "vs-dark",
+        "path": "./themes/omni-color-theme.json"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/getomni/visual-studio-code.git"
+  }
+}

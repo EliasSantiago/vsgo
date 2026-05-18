@@ -1,0 +1,407 @@
+{
+	"name": "agent-chat",
+	"displayName": "Agent Chat",
+	"description": "Default chat participant powered by your configured AI providers (BYOK).",
+	"publisher": "vscode",
+	"license": "MIT",
+	"version": "0.1.0",
+	"engines": {
+		"vscode": "^1.96.0"
+	},
+	"categories": [
+		"AI",
+		"Chat"
+	],
+	"main": "./out/extension.js",
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"enabledApiProposals": [
+		"defaultChatParticipant",
+		"chatParticipantAdditions",
+		"chatProvider",
+		"languageModelCapabilities",
+		"languageModelSystem"
+	],
+	"contributes": {
+		"chatParticipants": [
+			{
+				"id": "vscode.agent-chat.default",
+				"name": "agent",
+				"fullName": "Agent",
+				"description": "AI assistant powered by your configured providers",
+				"isDefault": true,
+				"locations": [
+					"panel"
+				],
+				"modes": [
+					"ask",
+					"edit",
+					"agent"
+				]
+			}
+		],
+		"languageModelChatProviders": [
+			{
+				"vendor": "anthropic",
+				"displayName": "Anthropic",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "API key for Anthropic (sk-ant-...)",
+							"title": "API Key"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
+			},
+			{
+				"vendor": "openai",
+				"displayName": "OpenAI",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "API key for OpenAI (sk-...)",
+							"title": "API Key"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
+			},
+			{
+				"vendor": "gemini",
+				"displayName": "Google Gemini",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "API key for Google Gemini (AIza...)",
+							"title": "API Key"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
+			},
+			{
+				"vendor": "ollama",
+				"displayName": "Ollama (local)",
+				"configuration": {
+					"properties": {
+						"baseUrl": {
+							"type": "string",
+							"description": "Base URL of the Ollama server",
+							"title": "Base URL",
+							"default": "http://localhost:11434"
+						}
+					},
+					"required": [
+						"baseUrl"
+					]
+				}
+			}
+		],
+		"languageModelTools": [
+			{
+				"name": "agent_read_file",
+				"displayName": "Read File",
+				"modelDescription": "Read the contents of a file from the workspace. Use a path relative to the workspace root, or an absolute path.",
+				"userDescription": "Read a workspace file",
+				"icon": "$(file)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"path": {
+							"type": "string",
+							"description": "Path of the file to read"
+						}
+					},
+					"required": [
+						"path"
+					]
+				}
+			},
+			{
+				"name": "agent_write_file",
+				"displayName": "Write File",
+				"modelDescription": "Create or overwrite a file with the given content. Use a path relative to the workspace root, or an absolute path. Parent directories must already exist.",
+				"userDescription": "Write a workspace file",
+				"icon": "$(edit)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"path": {
+							"type": "string",
+							"description": "Path of the file to write"
+						},
+						"content": {
+							"type": "string",
+							"description": "Full text content to write"
+						}
+					},
+					"required": [
+						"path",
+						"content"
+					]
+				}
+			},
+			{
+				"name": "agent_list_dir",
+				"displayName": "List Directory",
+				"modelDescription": "List the immediate entries of a directory in the workspace.",
+				"userDescription": "List directory entries",
+				"icon": "$(folder)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"path": {
+							"type": "string",
+							"description": "Path of the directory (defaults to workspace root)"
+						}
+					}
+				}
+			},
+			{
+				"name": "agent_run_command",
+				"displayName": "Run Command",
+				"modelDescription": "Run a shell command on the user's machine. Use sparingly; the user will be asked to confirm before each invocation. Returns stdout/stderr.",
+				"userDescription": "Run a shell command",
+				"icon": "$(terminal)",
+				"tags": [
+					"agent-chat",
+					"terminal"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"command": {
+							"type": "string",
+							"description": "Shell command to execute"
+						},
+						"cwd": {
+							"type": "string",
+							"description": "Working directory (defaults to workspace root)"
+						}
+					},
+					"required": [
+						"command"
+					]
+				}
+			}
+		],
+		"commands": [
+			{
+				"command": "agent-chat.addApiKey",
+				"title": "Agent Chat: Add API Key...",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.removeApiKey",
+				"title": "Agent Chat: Remove API Key...",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.listApiKeys",
+				"title": "Agent Chat: List Configured Providers",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.reloadRules",
+				"title": "Agent Chat: Reload Rules",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.addMemory",
+				"title": "Agent Chat: Add Memory...",
+				"category": "Agent Chat",
+				"icon": "$(add)"
+			},
+			{
+				"command": "agent-chat.forgetMemory",
+				"title": "Agent Chat: Forget Memory...",
+				"category": "Agent Chat",
+				"icon": "$(trash)"
+			},
+			{
+				"command": "agent-chat.newAgent",
+				"title": "Agent Chat: New Agent...",
+				"category": "Agent Chat",
+				"icon": "$(add)"
+			},
+			{
+				"command": "agent-chat.promoteAgent",
+				"title": "Agent Chat: Promote Agent to Foreground",
+				"category": "Agent Chat",
+				"icon": "$(arrow-up)"
+			},
+			{
+				"command": "agent-chat.deleteAgent",
+				"title": "Agent Chat: Delete Agent...",
+				"category": "Agent Chat",
+				"icon": "$(trash)"
+			},
+			{
+				"command": "agent-chat.refreshAgentDiff",
+				"title": "Agent Chat: Refresh Agent Diff",
+				"category": "Agent Chat",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "agent-chat.bugBot.applyFix",
+				"title": "Apply Fix",
+				"category": "Agent Chat",
+				"icon": "$(check)"
+			},
+			{
+				"command": "agent-chat.bugBot.dismiss",
+				"title": "Dismiss",
+				"category": "Agent Chat",
+				"icon": "$(close)"
+			},
+			{
+				"command": "agent-chat.bugBot.toggle",
+				"title": "Agent Chat: Toggle Bug Bot",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.splitChanges",
+				"title": "Agent Chat: Split Working Tree into PRs...",
+				"category": "Agent Chat",
+				"icon": "$(git-pull-request)"
+			}
+		],
+		"configuration": {
+			"title": "Agent Chat",
+			"properties": {
+				"agent-chat.bugBot.enabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Run a background reviewer on the active file. Findings appear as inline comment threads. Opt-in because it uses API tokens."
+				},
+				"agent-chat.bugBot.model": {
+					"type": "string",
+					"default": "",
+					"description": "Preferred model for Bug Bot, as vendor or vendor/family (e.g. \"anthropic/claude-haiku\"). Empty picks a fast default."
+				},
+				"agent-chat.bugBot.minSeverity": {
+					"type": "string",
+					"default": "warning",
+					"enum": ["info", "warning", "error"],
+					"description": "Hide findings below this severity."
+				}
+			}
+		},
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "agentChat",
+					"title": "Agent",
+					"icon": "$(sparkle)"
+				}
+			]
+		},
+		"views": {
+			"agentChat": [
+				{
+					"id": "agentChatSessions",
+					"name": "Agents",
+					"icon": "$(rocket)",
+					"contextualTitle": "Agent Sessions"
+				},
+				{
+					"id": "agentChatMemory",
+					"name": "Memory",
+					"icon": "$(lightbulb)",
+					"contextualTitle": "Agent Memory"
+				}
+			]
+		},
+		"menus": {
+			"view/title": [
+				{
+					"command": "agent-chat.newAgent",
+					"when": "view == agentChatSessions",
+					"group": "navigation"
+				},
+				{
+					"command": "agent-chat.addMemory",
+					"when": "view == agentChatMemory",
+					"group": "navigation"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "agent-chat.promoteAgent",
+					"when": "view == agentChatSessions",
+					"group": "inline@1"
+				},
+				{
+					"command": "agent-chat.refreshAgentDiff",
+					"when": "view == agentChatSessions",
+					"group": "inline@2"
+				},
+				{
+					"command": "agent-chat.deleteAgent",
+					"when": "view == agentChatSessions",
+					"group": "agent@9"
+				},
+				{
+					"command": "agent-chat.forgetMemory",
+					"when": "view == agentChatMemory && viewItem == agentMemoryEntry",
+					"group": "inline"
+				}
+			],
+			"comments/commentThread/title": [
+				{
+					"command": "agent-chat.bugBot.applyFix",
+					"when": "commentController == agent-chat.bugBot && commentThread == bugBot-with-fix",
+					"group": "inline@1"
+				},
+				{
+					"command": "agent-chat.bugBot.dismiss",
+					"when": "commentController == agent-chat.bugBot",
+					"group": "inline@2"
+				}
+			]
+		}
+	},
+	"scripts": {
+		"compile": "node ./node_modules/typescript/bin/tsc -p ./",
+		"watch": "node ./node_modules/typescript/bin/tsc -p ./ -w"
+	},
+	"dependencies": {},
+	"devDependencies": {
+		"@types/node": "20.x",
+		"@types/vscode": "1.96.x"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/microsoft/vscode.git"
+	}
+}

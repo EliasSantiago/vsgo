@@ -1,0 +1,25 @@
+{
+	"extends": "../tsconfig.base.json",
+	"compilerOptions": {
+		"rootDir": "./src",
+		"outDir": "./out",
+		"typeRoots": [
+			"./node_modules/@types"
+		],
+		"skipLibCheck": true,
+		"lib": [
+			"ES2024",
+			"DOM"
+		]
+	},
+	"include": [
+		"src/**/*",
+		"../../src/vscode-dts/vscode.d.ts",
+		"../../src/vscode-dts/vscode.proposed.defaultChatParticipant.d.ts",
+		"../../src/vscode-dts/vscode.proposed.chatParticipantAdditions.d.ts",
+		"../../src/vscode-dts/vscode.proposed.chatProvider.d.ts",
+		"../../src/vscode-dts/vscode.proposed.languageModelCapabilities.d.ts",
+		"../../src/vscode-dts/vscode.proposed.languageModelSystem.d.ts",
+		"../../node_modules/@types/node/index.d.ts"
+	]
+}

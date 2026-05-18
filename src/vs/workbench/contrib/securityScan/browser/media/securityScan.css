@@ -1,0 +1,185 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.security-scan-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+	font-size: 13px;
+}
+
+.security-scan-view .security-scan-header {
+	padding: 6px 12px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+	min-height: 22px;
+}
+
+.security-scan-view .security-scan-header .codicon-modifier-spin {
+	color: var(--vscode-progressBar-background);
+}
+
+.security-scan-view .security-scan-empty {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+	gap: 12px;
+	color: var(--vscode-descriptionForeground);
+	text-align: center;
+}
+
+.security-scan-view .security-scan-empty .codicon {
+	font-size: 32px;
+	opacity: 0.6;
+}
+
+.security-scan-view .security-scan-empty button {
+	background-color: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border: 1px solid transparent;
+	padding: 4px 12px;
+	cursor: pointer;
+	border-radius: 2px;
+	font-family: inherit;
+	font-size: 12px;
+}
+
+.security-scan-view .security-scan-empty button:hover {
+	background-color: var(--vscode-button-hoverBackground);
+}
+
+.security-scan-view .security-scan-list {
+	flex: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.security-scan-view .security-scan-file-group {
+	user-select: none;
+}
+
+.security-scan-view .security-scan-file-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px 4px 4px;
+	cursor: pointer;
+	color: var(--vscode-foreground);
+	background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+	position: sticky;
+	top: 0;
+	z-index: 1;
+}
+
+.security-scan-view .security-scan-file-header:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.security-scan-view .security-scan-file-header .twistie {
+	width: 14px;
+	display: inline-flex;
+	justify-content: center;
+}
+
+.security-scan-view .security-scan-file-header .file-path {
+	flex: 1;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	direction: rtl;
+	text-align: left;
+}
+
+.security-scan-view .security-scan-file-header .file-count {
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+	background-color: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	padding: 0 6px;
+	border-radius: 8px;
+	min-width: 16px;
+	text-align: center;
+}
+
+.security-scan-view .security-scan-finding {
+	display: flex;
+	flex-direction: column;
+	padding: 4px 8px 4px 26px;
+	cursor: pointer;
+	gap: 2px;
+	position: relative;
+}
+
+.security-scan-view .security-scan-finding:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.security-scan-view .security-scan-finding.ignored {
+	opacity: 0.55;
+}
+
+.security-scan-view .security-scan-finding .finding-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 18px;
+}
+
+.security-scan-view .security-scan-finding .finding-severity {
+	flex-shrink: 0;
+}
+
+.security-scan-view .security-scan-finding .finding-severity.error { color: var(--vscode-problemsErrorIcon-foreground, #f14c4c); }
+.security-scan-view .security-scan-finding .finding-severity.warning { color: var(--vscode-problemsWarningIcon-foreground, #cca700); }
+.security-scan-view .security-scan-finding .finding-severity.info { color: var(--vscode-problemsInfoIcon-foreground, #75beff); }
+
+.security-scan-view .security-scan-finding .finding-title {
+	flex: 1;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.security-scan-view .security-scan-finding .finding-meta {
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+}
+
+.security-scan-view .security-scan-finding .finding-description {
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+	padding-left: 22px;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.security-scan-view .security-scan-finding .finding-actions {
+	display: none;
+	gap: 4px;
+	flex-shrink: 0;
+}
+
+.security-scan-view .security-scan-finding:hover .finding-actions {
+	display: inline-flex;
+}
+
+.security-scan-view .security-scan-finding .finding-actions .codicon {
+	cursor: pointer;
+	padding: 2px;
+	border-radius: 3px;
+	color: var(--vscode-icon-foreground);
+}
+
+.security-scan-view .security-scan-finding .finding-actions .codicon:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+}

@@ -1,0 +1,1 @@
+- [Build/launch flags](build-launch.md) — NODE_EXTRA_CA_CERTS + VSCODE_SKIP_PRELAUNCH + --no-sandbox são obrigatórios para rodar via scripts/code.sh.
