@@ -43,6 +43,16 @@ export async function getDependencies(packageType: 'deb' | 'rpm', buildDir: stri
 		throw new Error('Invalid RPM arch string ' + arch);
 	}
 
+	// For local/self-service builds, skip the sysroot-based dpkg-shlibdeps
+	// computation (which needs Microsoft's CI toolchain and can fail against a
+	// newer host dpkg-dev) and use the curated reference dependency list, which
+	// is exactly what official packages ship with for this architecture.
+	if (process.env['VSCODE_USE_REFERENCE_DEPS']) {
+		return (packageType === 'deb'
+			? debianGeneratedDeps[arch as DebianArchString]
+			: rpmGeneratedDeps[arch as RpmArchString]).slice();
+	}
+
 	// Get the files for which we want to find dependencies.
 	const canAsar = false; // TODO@esm ASAR disabled in ESM
 	const nativeModulesPath = path.join(buildDir, 'resources', 'app', canAsar ? 'node_modules.asar.unpacked' : 'node_modules');

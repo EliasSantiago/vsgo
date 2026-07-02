@@ -226,6 +226,9 @@ import './contrib/chat/browser/chatSessions/chatSessions.contribution.js';
 
 // Security Scan
 import './contrib/securityScan/browser/securityScan.contribution.js';
+
+// Spec Driven Development
+import './contrib/specDriven/browser/specDriven.contribution.js';
 import './contrib/chat/browser/contextContrib/chatContext.contribution.js';
 import './contrib/imageCarousel/browser/imageCarousel.contribution.js';
 

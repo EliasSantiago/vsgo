@@ -22,7 +22,7 @@ import { ChatViewId, IChatWidgetService } from '../chat.js';
 import { EditingSessionAction, EditingSessionActionContext, getEditingSessionContext } from '../chatEditing/chatEditingActions.js';
 import { ACTION_ID_NEW_CHAT, ACTION_ID_NEW_EDIT_SESSION, CHAT_CATEGORY, clearChatSessionPreservingType, handleCurrentEditingSession } from './chatActions.js';
 import { clearChatEditor } from './chatClear.js';
-import { AgentSessionProviders, AgentSessionsViewerOrientation } from '../agentSessions/agentSessions.js';
+import { AgentSessionProviders } from '../agentSessions/agentSessions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 
 export interface INewEditSessionActionContext {
@@ -118,10 +118,8 @@ export function registerNewChatActions() {
 				keybinding: {
 					weight: KeybindingWeight.WorkbenchContrib + 1,
 					primary: KeyMod.CtrlCmd | KeyCode.KeyN,
-					secondary: [KeyMod.CtrlCmd | KeyCode.KeyL],
 					mac: {
 						primary: KeyMod.CtrlCmd | KeyCode.KeyN,
-						secondary: [KeyMod.WinCtrl | KeyCode.KeyL]
 					},
 					when: ChatContextKeys.inChatSession
 				}
@@ -192,17 +190,6 @@ export function registerNewChatActions() {
 			const context = getEditingSessionContext(accessor, args);
 			await runNewChatAction(accessor, context, executeCommandContext, AgentSessionProviders.Local);
 		}
-	});
-
-	MenuRegistry.appendMenuItem(MenuId.ChatViewSessionTitleNavigationToolbar, {
-		command: {
-			id: ACTION_ID_NEW_CHAT,
-			title: localize2('chat.goBack', "Go Back"),
-			icon: Codicon.arrowLeft,
-		},
-		when: ChatContextKeys.agentSessionsViewerOrientation.notEqualsTo(AgentSessionsViewerOrientation.SideBySide), // when sessions show side by side, no need for a back button
-		group: 'navigation',
-		order: 1
 	});
 
 	MenuRegistry.appendMenuItem(MenuId.ChatTitleBarMenu, {

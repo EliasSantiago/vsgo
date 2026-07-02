@@ -9,10 +9,56 @@ import { Plan, PlanStep, StepResult } from './planSchema.js';
 
 const MAX_SUBAGENT_TURNS = 10;
 
+export const RUN_SUBAGENT_TOOL_NAME = 'agent_run_subagent';
+
+/**
+ * Tool the main agent can call to delegate a single focused task to a sub-agent.
+ * Unlike {@link SUBMIT_PLAN_TOOL}, this dispatches one self-contained task on
+ * demand and returns its summary, rather than a whole DAG submitted up front.
+ */
+export const RUN_SUBAGENT_TOOL: vscode.LanguageModelChatTool = {
+	name: RUN_SUBAGENT_TOOL_NAME,
+	description:
+		'Delegate a single focused, self-contained task to a sub-agent that runs with the same file and shell tools you have. The sub-agent works independently in its own context (it does NOT see the conversation history) and returns a short summary of what it did. Use this to offload a well-scoped piece of work — e.g. "investigate why test X fails and fix it" or "refactor module Y" — so your own context stays focused. Always provide a COMPLETE, self-contained task description including the relevant files, goals, and acceptance criteria. For multiple independent tasks that can run in parallel, prefer agent_submit_plan instead. Do NOT use this for trivial single-file edits you can do inline.',
+	inputSchema: {
+		type: 'object',
+		properties: {
+			task: {
+				type: 'string',
+				description: 'The complete, self-contained task for the sub-agent. Include all context it needs: files, goals, and acceptance criteria.',
+				minLength: 8,
+			},
+			context: {
+				type: 'string',
+				description: 'Optional extra context or constraints the sub-agent should know (e.g. relevant file paths, conventions, prior findings).',
+			},
+		},
+		required: ['task'],
+	},
+};
+
 export interface SubagentContext {
 	readonly model: vscode.LanguageModelChat;
 	readonly tools: readonly vscode.LanguageModelChatTool[];
 	readonly globalContext: string;
+}
+
+/**
+ * Run a single sub-agent for an ad-hoc task that is not part of a plan. Reuses
+ * {@link runSubagent} by wrapping the task in a synthetic one-step plan.
+ */
+export async function runStandaloneSubagent(
+	task: string,
+	extraContext: string,
+	ctx: SubagentContext,
+	token: vscode.CancellationToken,
+): Promise<StepResult> {
+	const step: PlanStep = { id: 'subagent', description: task, dependsOn: [], files: [] };
+	const plan: Plan = { steps: [step] };
+	const mergedCtx: SubagentContext = extraContext
+		? { ...ctx, globalContext: [ctx.globalContext, extraContext].filter(Boolean).join('\n\n') }
+		: ctx;
+	return runSubagent(step, plan, new Map(), mergedCtx, token);
 }
 
 export async function runSubagent(

@@ -552,6 +552,30 @@ class PrimaryOpenChatGlobalAction extends OpenChatGlobalAction {
 			}]
 		});
 	}
+
+	override async run(accessor: ServicesAccessor, opts?: string | IChatViewOpenOptions): Promise<IChatAgentResult & { type?: 'confirmation' } | undefined> {
+		if (!opts) {
+			const layoutService = accessor.get(IWorkbenchLayoutService);
+			const viewsService = accessor.get(IViewsService);
+			const viewDescriptorService = accessor.get(IViewDescriptorService);
+
+			if (viewsService.isViewVisible(ChatViewId)) {
+				const chatLocation = viewDescriptorService.getViewLocationById(ChatViewId);
+				let part: Parts.PANEL_PART | Parts.SIDEBAR_PART | Parts.AUXILIARYBAR_PART | undefined;
+				switch (chatLocation) {
+					case ViewContainerLocation.Panel: part = Parts.PANEL_PART; break;
+					case ViewContainerLocation.Sidebar: part = Parts.SIDEBAR_PART; break;
+					case ViewContainerLocation.AuxiliaryBar: part = Parts.AUXILIARYBAR_PART; break;
+				}
+				if (part) {
+					layoutService.setPartHidden(true, part);
+					return;
+				}
+			}
+		}
+
+		return super.run(accessor, opts);
+	}
 }
 
 export function getOpenChatActionIdForMode(mode: IChatMode): string {
@@ -1477,20 +1501,29 @@ export function registerChatActions() {
 		}
 	});
 
-	// Show a direct gear action to open the Customizations editor
-	MenuRegistry.appendMenuItem(MenuId.ViewTitle, {
+	// Show gear in the window title bar (right side, adjacent to layout controls) so it is always visible
+	MenuRegistry.appendMenuItem(MenuId.TitleBar, {
 		command: {
 			id: AICustomizationManagementCommands.OpenEditor,
-			title: localize2('openChatCustomizations', "Open Customizations"),
+			title: localize2('openChatCustomizationsTitleBar', "Open Customizations"),
 			category: CHAT_CATEGORY,
 			icon: Codicon.gear
 		},
-		group: 'navigation',
-		when: ContextKeyExpr.and(
-			ChatContextKeys.enabled,
-			ContextKeyExpr.equals('view', ChatViewId),
-		),
-		order: 6
+		group: '0_leading',
+		when: ChatContextKeys.enabled,
+		order: -999
+	});
+
+	// Also show in the global activity manage menu so it's accessible when the chat is hidden
+	MenuRegistry.appendMenuItem(MenuId.GlobalActivity, {
+		command: {
+			id: AICustomizationManagementCommands.OpenEditor,
+			title: localize2('openChatCustomizationsGlobal', "Open Customizations"),
+			category: CHAT_CATEGORY,
+		},
+		group: '2_configuration',
+		when: ChatContextKeys.enabled,
+		order: 3
 	});
 }
 

@@ -15,6 +15,12 @@ export interface ModelSpec {
 	readonly maxOutputTokens: number;
 }
 
+/** Real token usage reported by a provider's streaming API. */
+export interface IProviderUsage {
+	readonly inputTokens: number;
+	readonly outputTokens: number;
+}
+
 export abstract class BaseChatProvider implements vscode.LanguageModelChatProvider {
 	protected cachedModels: ModelSpec[] | undefined;
 
@@ -33,6 +39,11 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		return undefined;
 	}
 
+	/**
+	 * Sends the chat request and streams parts via `progress`. Returns the real
+	 * token usage when the provider's API reports it, otherwise `void` (the base
+	 * class then falls back to an estimate).
+	 */
 	abstract sendChat(
 		credential: string,
 		model: ModelSpec,
@@ -40,7 +51,7 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		tools: readonly vscode.LanguageModelChatTool[] | undefined,
 		progress: vscode.Progress<vscode.LanguageModelResponsePart2>,
 		token: vscode.CancellationToken,
-	): Promise<void>;
+	): Promise<IProviderUsage | void>;
 
 	async provideLanguageModelChatInformation(
 		options: vscode.PrepareLanguageModelChatModelOptions,
@@ -91,7 +102,45 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		const spec = (this.cachedModels ?? this.fallbackModels()).find(m => m.id === model.id)
 			?? { id: model.id, name: model.name, family: model.family ?? model.id, maxInputTokens: model.maxInputTokens, maxOutputTokens: model.maxOutputTokens };
 		const tools = (options as { tools?: readonly vscode.LanguageModelChatTool[] }).tools;
-		await this.sendChat(credential, spec, messages, tools, progress, token);
+
+		// Accumulate streamed output so we can estimate output tokens when the
+		// provider's API does not report real usage.
+		let outputText = '';
+		const meteredProgress: vscode.Progress<vscode.LanguageModelResponsePart2> = {
+			report: part => {
+				if (part instanceof vscode.LanguageModelTextPart) {
+					outputText += part.value;
+				}
+				progress.report(part);
+			},
+		};
+
+		const startedAt = Date.now();
+		const usage = await this.sendChat(credential, spec, messages, tools, meteredProgress, token);
+		this.reportUsage(spec, model, messages, outputText, usage, Date.now() - startedAt);
+	}
+
+	/** Reports token usage to the AI Usage meter (best-effort, never throws). */
+	private reportUsage(spec: ModelSpec, model: vscode.LanguageModelChatInformation, messages: readonly vscode.LanguageModelChatRequestMessage[], outputText: string, usage: IProviderUsage | void, durationMs: number): void {
+		try {
+			const estimated = !usage;
+			const inputTokens = usage ? usage.inputTokens : messages.reduce((sum, m) => sum + estimateTokens(messageText(m)), 0);
+			const outputTokens = usage ? usage.outputTokens : estimateTokens(outputText);
+			const graphEnabled = vscode.workspace.getConfiguration('agent-chat').get<boolean>('codeGraph.enabled', false);
+			void vscode.commands.executeCommand('_vsgo.aiUsage.record', {
+				timestamp: Date.now(),
+				vendor: this.providerId,
+				modelId: spec.id,
+				modelName: model.name ?? spec.name,
+				inputTokens,
+				outputTokens,
+				durationMs,
+				estimated,
+				tags: [graphEnabled ? 'code-graph:on' : 'code-graph:off'],
+			});
+		} catch (err) {
+			log(`[${this.providerId}] reportUsage failed:`, err instanceof Error ? err.message : String(err));
+		}
 	}
 
 	async provideTokenCount(
@@ -128,6 +177,16 @@ function extractText(message: vscode.LanguageModelChatRequestMessage): string {
 		}
 	}
 	return out;
+}
+
+/** Alias for readability at the usage-reporting call sites. */
+function messageText(message: vscode.LanguageModelChatRequestMessage): string {
+	return extractText(message);
+}
+
+/** Rough token estimate (~4 characters per token) used only as a fallback. */
+function estimateTokens(text: string): number {
+	return Math.ceil(text.length / 4);
 }
 
 export async function* parseSSE(response: Response, token: vscode.CancellationToken): AsyncIterable<unknown> {

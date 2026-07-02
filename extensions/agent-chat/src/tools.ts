@@ -4,23 +4,75 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
+import { CodeGraphService, SymbolInfo } from './graphIndex/codeGraphService.js';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
-interface ReadFileInput { path: string; }
-interface WriteFileInput { path: string; content: string; }
-interface ListDirInput { path?: string; }
-interface RunCommandInput { command: string; cwd?: string; }
+interface ReadFileInput { path: string }
+interface WriteFileInput { path: string; content: string }
+interface ListDirInput { path?: string }
+interface RunCommandInput { command: string; cwd?: string }
+interface SearchInput { query: string; isRegex?: boolean; path?: string }
 
 export function registerTools(): vscode.Disposable {
 	const subs: vscode.Disposable[] = [];
 	subs.push(vscode.lm.registerTool('agent_read_file', new ReadFileTool()));
 	subs.push(vscode.lm.registerTool('agent_write_file', new WriteFileTool()));
 	subs.push(vscode.lm.registerTool('agent_list_dir', new ListDirTool()));
+	subs.push(vscode.lm.registerTool('agent_search', new SearchTool()));
 	subs.push(vscode.lm.registerTool('agent_run_command', new RunCommandTool()));
+
+	// Code graph tool, gated behind the `agent-chat.codeGraph.enabled` setting so
+	// it can be toggled on/off (and A/B compared via the AI Usage meter).
+	const graph = new CodeGraphService();
+	subs.push({ dispose: () => graph.dispose() });
+	let graphToolReg: vscode.Disposable | undefined;
+	const syncGraphTool = () => {
+		const enabled = vscode.workspace.getConfiguration('agent-chat').get<boolean>('codeGraph.enabled', false);
+		if (enabled && !graphToolReg) {
+			graphToolReg = vscode.lm.registerTool('agent_code_graph', new CodeGraphTool(graph));
+			void graph.ensureReady();
+		} else if (!enabled && graphToolReg) {
+			graphToolReg.dispose();
+			graphToolReg = undefined;
+		}
+	};
+	syncGraphTool();
+	subs.push(vscode.workspace.onDidChangeConfiguration(e => {
+		if (e.affectsConfiguration('agent-chat.codeGraph.enabled')) {
+			syncGraphTool();
+		}
+	}));
+	subs.push({ dispose: () => graphToolReg?.dispose() });
+
 	return vscode.Disposable.from(...subs);
+}
+
+interface CodeGraphInput { query: string; kind?: SymbolInfo['kind'] }
+
+class CodeGraphTool implements vscode.LanguageModelTool<CodeGraphInput> {
+	constructor(private readonly graph: CodeGraphService) { }
+
+	async invoke(options: vscode.LanguageModelToolInvocationOptions<CodeGraphInput>, _token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> {
+		const ready = await this.graph.ensureReady();
+		if (!ready) {
+			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('Code graph unavailable (tree-sitter failed to load).')]);
+		}
+		const { query, kind } = options.input;
+		const results = this.graph.querySymbols(query, kind);
+		if (results.length === 0) {
+			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(`No symbols found for "${query}".`)]);
+		}
+		const lines = results.map(s => `${s.kind} ${s.name} — ${s.file}:${s.line}`);
+		return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(lines.join('\n'))]);
+	}
+
+	async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<CodeGraphInput>): Promise<vscode.PreparedToolInvocation> {
+		return { invocationMessage: `Consultando grafo de código: \`${options.input.query}\`` };
+	}
 }
 
 class ReadFileTool implements vscode.LanguageModelTool<ReadFileInput> {
@@ -33,7 +85,7 @@ class ReadFileTool implements vscode.LanguageModelTool<ReadFileInput> {
 	}
 
 	async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<ReadFileInput>): Promise<vscode.PreparedToolInvocation> {
-		return { invocationMessage: `Reading \`${options.input.path}\`` };
+		return { invocationMessage: `Lendo \`${options.input.path}\`` };
 	}
 }
 
@@ -42,17 +94,11 @@ class WriteFileTool implements vscode.LanguageModelTool<WriteFileInput> {
 		const uri = resolveUri(options.input.path);
 		const data = Buffer.from(options.input.content, 'utf8');
 		await vscode.workspace.fs.writeFile(uri, data);
-		return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(`Wrote ${data.byteLength} bytes to ${options.input.path}`)]);
+		return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(`Escreveu ${data.byteLength} bytes em ${options.input.path}`)]);
 	}
 
 	async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<WriteFileInput>): Promise<vscode.PreparedToolInvocation> {
-		return {
-			invocationMessage: `Writing \`${options.input.path}\``,
-			confirmationMessages: {
-				title: 'Write file',
-				message: new vscode.MarkdownString(`The assistant wants to write to \`${options.input.path}\`. Continue?`),
-			},
-		};
+		return { invocationMessage: `Escrevendo \`${options.input.path}\`` };
 	}
 }
 
@@ -75,7 +121,78 @@ class ListDirTool implements vscode.LanguageModelTool<ListDirInput> {
 	}
 
 	async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<ListDirInput>): Promise<vscode.PreparedToolInvocation> {
-		return { invocationMessage: `Listing \`${options.input.path ?? '.'}\`` };
+		return { invocationMessage: `Listando \`${options.input.path ?? '.'}\`` };
+	}
+}
+
+const MAX_SEARCH_MATCHES = 100;
+
+/**
+ * Search file contents across the workspace. Uses ripgrep when available and
+ * falls back to `grep -rn`. Returns matches as `relativePath:line: text`.
+ */
+export async function searchWorkspace(input: SearchInput): Promise<string> {
+	const cwd = input.path ? resolveFsPath(input.path) : workspaceRootPath();
+	const query = input.query;
+	if (!query) {
+		return 'Consulta de busca vazia.';
+	}
+	try {
+		const args = [
+			'--line-number',
+			'--no-heading',
+			'--color', 'never',
+			'--max-count', String(MAX_SEARCH_MATCHES),
+			input.isRegex ? '--regexp' : '--fixed-strings',
+			query,
+			'.',
+		];
+		const { stdout } = await execFileAsync('rg', args, { cwd, maxBuffer: 4 * 1024 * 1024 });
+		return formatSearchOutput(stdout, query);
+	} catch (rgErr) {
+		// ripgrep returns exit code 1 when there are no matches — not an error.
+		if (isNoMatchExit(rgErr)) {
+			return `Nenhum resultado para "${query}".`;
+		}
+		// ripgrep missing — fall back to grep.
+		try {
+			const grepArgs = ['-rn', input.isRegex ? '-E' : '-F', '--', query, '.'];
+			const { stdout } = await execFileAsync('grep', grepArgs, { cwd, maxBuffer: 4 * 1024 * 1024 });
+			return formatSearchOutput(stdout, query);
+		} catch (grepErr) {
+			if (isNoMatchExit(grepErr)) {
+				return `Nenhum resultado para "${query}".`;
+			}
+			const message = grepErr instanceof Error ? grepErr.message : String(grepErr);
+			return `Erro na busca: ${message}`;
+		}
+	}
+}
+
+function isNoMatchExit(err: unknown): boolean {
+	return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 1;
+}
+
+function formatSearchOutput(stdout: string, query: string): string {
+	const lines = stdout.split('\n').filter(Boolean);
+	if (lines.length === 0) {
+		return `Nenhum resultado para "${query}".`;
+	}
+	const trimmed = lines.slice(0, MAX_SEARCH_MATCHES).map(line => line.length > 240 ? line.slice(0, 240) + '…' : line);
+	const header = lines.length > MAX_SEARCH_MATCHES
+		? `${MAX_SEARCH_MATCHES}+ resultados para "${query}" (mostrando os primeiros ${MAX_SEARCH_MATCHES}):`
+		: `${trimmed.length} resultado(s) para "${query}":`;
+	return `${header}\n${trimmed.join('\n')}`;
+}
+
+class SearchTool implements vscode.LanguageModelTool<SearchInput> {
+	async invoke(options: vscode.LanguageModelToolInvocationOptions<SearchInput>, _token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> {
+		const text = await searchWorkspace(options.input);
+		return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(text)]);
+	}
+
+	async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<SearchInput>): Promise<vscode.PreparedToolInvocation> {
+		return { invocationMessage: `Buscando \`${options.input.query}\`` };
 	}
 }
 
@@ -108,46 +225,44 @@ class RunCommandTool implements vscode.LanguageModelTool<RunCommandInput> {
 		const cwd = options.input.cwd ? resolveFsPath(options.input.cwd) : workspaceRootPath();
 		try {
 			const { stdout, stderr } = await execAsync(options.input.command, { cwd, maxBuffer: 4 * 1024 * 1024 });
-			const out = [stdout, stderr].filter(Boolean).join('\n').trim() || '(no output)';
+			const out = [stdout, stderr].filter(Boolean).join('\n').trim() || '(sem saída)';
 			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(out)]);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
-			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(`Command failed: ${message}`)]);
+			return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(`Comando falhou: ${message}`)]);
 		}
 	}
 
 	async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<RunCommandInput>): Promise<vscode.PreparedToolInvocation> {
 		const danger = classifyCommand(options.input.command);
 		if (danger) {
-			const message = new vscode.MarkdownString(
-				`### ⚠️ Dangerous command\n\nThe assistant wants to run:\n\n\`\`\`\n${options.input.command}\n\`\`\`\n\n**Reason flagged:** ${danger.reason}\n\nThis operation can be destructive or irreversible. Continue only if you fully understand the effect.`,
-			);
-			message.supportThemeIcons = true;
-			return {
-				invocationMessage: `⚠️ Running dangerous command \`${options.input.command}\``,
-				confirmationMessages: {
-					title: 'Dangerous shell command',
-					message,
-				},
-			};
+			const autoApprove = vscode.workspace.getConfiguration('agent-chat').get<boolean>('autoApproveTools', true);
+			if (!autoApprove) {
+				const message = new vscode.MarkdownString(
+					`### ⚠️ Comando perigoso\n\nO assistente quer executar:\n\n\`\`\`\n${options.input.command}\n\`\`\`\n\n**Motivo:** ${danger.reason}\n\nEsta operação pode ser destrutiva ou irreversível. Continue somente se entender o efeito.`,
+				);
+				message.supportThemeIcons = true;
+				return {
+					invocationMessage: `⚠️ Executando comando perigoso \`${options.input.command}\``,
+					confirmationMessages: {
+						title: 'Comando shell perigoso',
+						message,
+					},
+				};
+			}
+			return { invocationMessage: `⚠️ Executando \`${options.input.command}\` (${danger.reason})` };
 		}
-		return {
-			invocationMessage: `Running \`${options.input.command}\``,
-			confirmationMessages: {
-				title: 'Run shell command',
-				message: new vscode.MarkdownString(`The assistant wants to run:\n\n\`\`\`\n${options.input.command}\n\`\`\`\n\nContinue?`),
-			},
-		};
+		return { invocationMessage: `Executando \`${options.input.command}\`` };
 	}
 }
 
-function resolveUri(p: string): vscode.Uri {
+export function resolveUri(p: string): vscode.Uri {
 	if (p.startsWith('/') || /^[A-Za-z]:[/\\]/.test(p)) {
 		return vscode.Uri.file(p);
 	}
 	const folders = vscode.workspace.workspaceFolders ?? [];
 	if (folders.length === 0) {
-		throw new Error('No workspace folder is open');
+		throw new Error('Nenhuma pasta de workspace está aberta');
 	}
 	const folder = matchFolderByPrefix(folders, p);
 	if (folder) {

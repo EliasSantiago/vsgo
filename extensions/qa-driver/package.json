@@ -1,0 +1,32 @@
+{
+	"name": "qa-driver",
+	"displayName": "QA Driver",
+	"description": "Playwright-backed browser driver for the QA AI Testing feature. Runs in the extension host so Chromium can be spawned via require('playwright').",
+	"publisher": "vscode",
+	"license": "MIT",
+	"version": "0.1.0",
+	"engines": {
+		"vscode": "^1.96.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"main": "./out/extension.js",
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"contributes": {},
+	"scripts": {
+		"compile": "node ./node_modules/typescript/bin/tsc -p ./",
+		"watch": "node ./node_modules/typescript/bin/tsc -p ./ -w"
+	},
+	"dependencies": {},
+	"devDependencies": {
+		"@types/node": "20.x",
+		"@types/vscode": "1.96.x"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/microsoft/vscode.git"
+	}
+}

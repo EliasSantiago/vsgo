@@ -146,7 +146,7 @@ registerAction2(class AcceptAction extends WorkingSetAction {
 	constructor() {
 		super({
 			id: 'chatEditing.acceptFile',
-			title: localize2('accept.file', 'Keep'),
+			title: localize2('accept.file', 'Manter'),
 			icon: Codicon.check,
 			menu: [{
 				when: ContextKeyExpr.and(ContextKeyExpr.equals('resourceScheme', CHAT_EDITING_MULTI_DIFF_SOURCE_RESOLVER_SCHEME), ContextKeyExpr.notIn(chatEditingResourceContextKey.key, decidedChatEditingResourceContextKey.key)),
@@ -171,7 +171,7 @@ registerAction2(class DiscardAction extends WorkingSetAction {
 	constructor() {
 		super({
 			id: 'chatEditing.discardFile',
-			title: localize2('discard.file', 'Undo'),
+			title: localize2('discard.file', 'Desfazer'),
 			icon: Codicon.discard,
 			menu: [{
 				when: ContextKeyExpr.and(ContextKeyExpr.equals('resourceScheme', CHAT_EDITING_MULTI_DIFF_SOURCE_RESOLVER_SCHEME), ContextKeyExpr.notIn(chatEditingResourceContextKey.key, decidedChatEditingResourceContextKey.key)),
@@ -197,9 +197,9 @@ export class ChatEditingAcceptAllAction extends EditingSessionAction {
 	constructor() {
 		super({
 			id: 'chatEditing.acceptAllFiles',
-			title: localize('accept', 'Keep'),
+			title: localize('accept', 'Manter'),
 			icon: Codicon.check,
-			tooltip: localize('acceptAllEdits', 'Keep All Edits'),
+			tooltip: localize('acceptAllEdits', 'Manter Tudo'),
 			precondition: hasUndecidedChatEditingResourceContextKey,
 			keybinding: {
 				primary: KeyMod.CtrlCmd | KeyCode.Enter,
@@ -229,9 +229,9 @@ export class ChatEditingDiscardAllAction extends EditingSessionAction {
 	constructor() {
 		super({
 			id: 'chatEditing.discardAllFiles',
-			title: localize('discard', 'Undo'),
+			title: localize('discard', 'Desfazer'),
 			icon: Codicon.discard,
-			tooltip: localize('discardAllEdits', 'Undo All Edits'),
+			tooltip: localize('discardAllEdits', 'Desfazer Tudo'),
 			precondition: hasUndecidedChatEditingResourceContextKey,
 			menu: [
 				{

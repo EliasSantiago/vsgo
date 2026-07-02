@@ -84,7 +84,7 @@ import { ChatRequestVariableSet, getImageAttachmentLimit, IChatRequestVariableEn
 import { ChatMode, getModeNameForTelemetry, IChatMode, IChatModes, IChatModeService } from '../../../common/chatModes.js';
 import { IChatFollowup, IChatPlanReview, IChatQuestionCarousel, IChatToolInvocation } from '../../../common/chatService/chatService.js';
 import { IChatSessionProviderOptionGroup, IChatSessionProviderOptionItem, IChatSessionsService, isIChatSessionFileChange2, localChatSessionType } from '../../../common/chatSessionsService.js';
-import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, isChatPermissionLevel } from '../../../common/constants.js';
+import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, isChatPermissionLevel, isAutoApproveLevel } from '../../../common/constants.js';
 import { IChatEditingSession, IModifiedFileEntry, ModifiedFileEntryState } from '../../../common/editing/chatEditingService.js';
 import { ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService } from '../../../common/languageModels.js';
 import { IChatModelInputState, IChatRequestModeInfo, IInputModel } from '../../../common/model/chatModel.js';
@@ -94,7 +94,7 @@ import { IChatResponseViewModel, isResponseVM } from '../../../common/model/chat
 import { IChatAgentService } from '../../../common/participants/chatAgents.js';
 import { ILanguageModelToolsService } from '../../../common/tools/languageModelToolsService.js';
 import { ChatHistoryNavigator } from '../../../common/widget/chatWidgetHistoryService.js';
-import { ChatSessionPrimaryPickerAction, ChatSubmitAction, IChatExecuteActionContext, OpenDelegationPickerAction, OpenModelPickerAction, OpenModePickerAction, OpenPermissionPickerAction, OpenSessionTargetPickerAction, OpenWorkspacePickerAction } from '../../actions/chatExecuteActions.js';
+import { ChatSessionPrimaryPickerAction, ChatSubmitAction, IChatExecuteActionContext, OpenDelegationPickerAction, OpenModelPickerAction, OpenModePickerAction, OpenPermissionPickerAction, OpenSessionTargetPickerAction, OpenWorkspacePickerAction, ToggleChatAutoModeAction } from '../../actions/chatExecuteActions.js';
 import { AgentSessionProviders, getAgentSessionProvider } from '../../agentSessions/agentSessions.js';
 import { IAgentSessionsService } from '../../agentSessions/agentSessionsService.js';
 import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
@@ -124,6 +124,7 @@ import { IChatInputPickerOptions } from './chatInputPickerActionItem.js';
 import { ChatSelectedTools } from './chatSelectedTools.js';
 import { DelegationSessionPickerActionItem } from './delegationSessionPickerActionItem.js';
 import { ModelPickerActionItem, IModelPickerDelegate } from './modelPickerActionItem.js';
+import { AutoModeToggleActionItem, IAutoModeDelegate } from './autoModeToggleActionItem.js';
 import { IModePickerDelegate, ModePickerActionItem } from './modePickerActionItem.js';
 import { IPermissionPickerDelegate, PermissionPickerActionItem } from './permissionPickerActionItem.js';
 import { SessionTypePickerActionItem } from './sessionTargetPickerActionItem.js';
@@ -1377,14 +1378,14 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		} else {
 			switch (this.currentModeKind) {
 				case ChatModeKind.Agent:
-					modeLabel = localize('chatInput.mode.agent', "(Agent), edit files in your workspace.");
+					modeLabel = localize('chatInput.mode.agent', "(Agente), edita arquivos no seu workspace.");
 					break;
 				case ChatModeKind.Edit:
-					modeLabel = localize('chatInput.mode.edit', "(Edit), edit files in your workspace.");
+					modeLabel = localize('chatInput.mode.edit', "(Editar), edita arquivos no seu workspace.");
 					break;
 				case ChatModeKind.Ask:
 				default:
-					modeLabel = localize('chatInput.mode.ask', "(Ask), ask questions or type / for topics.");
+					modeLabel = localize('chatInput.mode.ask', "(Perguntar), faça perguntas ou digite / para tópicos.");
 					break;
 			}
 		}
@@ -2382,6 +2383,16 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 						},
 					};
 					return this.modeWidget = this.instantiationService.createInstance(ModePickerActionItem, action, delegate, pickerOptions);
+				} else if (action.id === ToggleChatAutoModeAction.ID && action instanceof MenuItemAction) {
+					const autoModeDelegate: IAutoModeDelegate = {
+						currentPermissionLevel: this._currentPermissionLevel,
+						toggle: () => {
+							const current = this._currentPermissionLevel.get();
+							const next = isAutoApproveLevel(current) ? ChatPermissionLevel.Default : ChatPermissionLevel.AutoApprove;
+							this.setPermissionLevel(next);
+						},
+					};
+					return new AutoModeToggleActionItem(undefined, action, autoModeDelegate);
 				} else if ((action.id === OpenSessionTargetPickerAction.ID || action.id === OpenDelegationPickerAction.ID) && action instanceof MenuItemAction) {
 					// Use provided delegate if available, otherwise create default delegate
 					const getActiveSessionType = () => {
@@ -3378,8 +3389,8 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			const { files, added, removed, shouldShowEditingSession } = topLevelStats.read(reader);
 
 			const buttonLabel = files === 1
-				? localize('chatEditingSession.oneFile', '1 file changed')
-				: localize('chatEditingSession.manyFiles', '{0} files changed', files);
+				? localize('chatEditingSession.oneFile', '1 arquivo alterado')
+				: localize('chatEditingSession.manyFiles', '{0} arquivos alterados', files);
 
 			button.label = buttonLabel;
 			button.element.setAttribute('aria-label', localize('chatEditingSession.ariaLabelWithCounts', '{0}, {1} lines added, {2} lines removed', buttonLabel, added, removed));

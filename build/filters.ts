@@ -70,6 +70,26 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!src/vs/base/browser/dompurify/**',
 	'!src/vs/workbench/services/keybinding/browser/keyboardLayouts/**',
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
+
+	// vsgo: features authored with intentional pt-BR content (localized strings,
+	// LLM prompt/markdown templates, build scripts) where non-ASCII is expected.
+	'!src/main.ts',
+	'!src/vs/workbench/api/common/extHostChatAgents2.ts',
+	'!src/vs/workbench/contrib/chat/common/chatModes.ts',
+	'!src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingEditorActions.ts',
+	'!src/vs/workbench/contrib/chat/browser/actions/chatExecuteActions.ts',
+	'!src/vs/workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatTerminalToolConfirmationSubPart.ts',
+	'!src/vs/workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatToolConfirmationSubPart.ts',
+	'!src/vs/workbench/contrib/chat/browser/widget/input/autoModeToggleActionItem.ts',
+	'!src/vs/workbench/contrib/chat/browser/widget/input/modePickerActionItem.ts',
+	'!src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts',
+	'!src/vs/workbench/contrib/specDriven/**',
+	'!src/vs/workbench/contrib/qa/**',
+	'!src/vs/workbench/contrib/securityScan/**',
+	'!extensions/agent-chat/**',
+	'!scripts/build-linux.sh',
+	'!scripts/build-win.sh',
+	'!scripts/release.sh',
 ]);
 
 export const indentationFilter = Object.freeze<string[]>([
@@ -132,6 +152,13 @@ export const indentationFilter = Object.freeze<string[]>([
 
 	// extensions/copilot has its own code style
 	'!extensions/copilot/**',
+
+	// vsgo: template literals embedding JS/JSON/markdown, whose content is
+	// intentionally space-indented and must not be reflowed to tabs.
+	'!extensions/qa-driver/src/qaDriver.ts',
+	'!src/vs/workbench/contrib/qa/browser/qaService.ts',
+	'!src/vs/workbench/contrib/securityScan/browser/securityScanService.ts',
+	'!src/vs/workbench/contrib/specDriven/browser/specKitTemplates.ts',
 
 	// except specific file types
 	'!src/vs/*/**/*.d.ts',

@@ -39,8 +39,9 @@ export class ScanWorkspaceAction extends Action2 {
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {
 		const viewsService = accessor.get(IViewsService);
+		const securityScanService = accessor.get(ISecurityScanService);
 		await viewsService.openView(SECURITY_SCAN_VIEW_ID, true);
-		await accessor.get(ISecurityScanService).scanWorkspace();
+		await securityScanService.scanWorkspace();
 	}
 }
 
@@ -64,12 +65,13 @@ export class ScanActiveFileAction extends Action2 {
 	async run(accessor: ServicesAccessor): Promise<void> {
 		const editorService = accessor.get(IEditorService);
 		const viewsService = accessor.get(IViewsService);
+		const securityScanService = accessor.get(ISecurityScanService);
 		const resource = editorService.activeEditor?.resource;
 		if (!resource) {
 			return;
 		}
 		await viewsService.openView(SECURITY_SCAN_VIEW_ID, true);
-		await accessor.get(ISecurityScanService).scanFile(resource);
+		await securityScanService.scanFile(resource);
 	}
 }
 
@@ -282,8 +284,11 @@ export class ExportReportAction extends Action2 {
 		const defaultUri = await fileDialogService.defaultFilePath();
 		const target = await fileDialogService.showSaveDialog({
 			title: localize('securityScan.exportTitle', "Export Security Scan Report"),
-			defaultUri: defaultUri ? URI.joinPath(defaultUri, `security-scan-${new Date().toISOString().replace(/[:.]/g, '-')}.json`) : undefined,
-			filters: [{ name: 'JSON', extensions: ['json'] }],
+			defaultUri: defaultUri ? URI.joinPath(defaultUri, `security-scan-${new Date().toISOString().replace(/[:.]/g, '-')}.sarif`) : undefined,
+			filters: [
+				{ name: 'SARIF', extensions: ['sarif'] },
+				{ name: 'JSON', extensions: ['json'] },
+			],
 		});
 		if (!target) { return; }
 		const ok = await service.exportReport(target);

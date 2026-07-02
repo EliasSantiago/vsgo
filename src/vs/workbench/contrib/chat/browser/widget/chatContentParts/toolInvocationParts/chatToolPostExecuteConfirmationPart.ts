@@ -42,8 +42,8 @@ export class ChatToolPostExecuteConfirmationPart extends AbstractToolConfirmatio
 		this.render({
 			allowActionId: AcceptToolPostConfirmationActionId,
 			skipActionId: SkipToolPostConfirmationActionId,
-			allowLabel: localize('allow', "Allow Once"),
-			skipLabel: localize('skip.post', 'Skip Results'),
+			allowLabel: localize('allow', "Permitir Uma Vez"),
+			skipLabel: localize('skip.post', 'Ignorar Resultados'),
 			partType: 'chatToolPostConfirmation',
 			subtitle: typeof subtitle === 'string' ? subtitle : subtitle?.value,
 		});

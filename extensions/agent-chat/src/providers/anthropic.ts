@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { BaseChatProvider, ModelSpec, parseSSE, toAbort } from './base.js';
+import { BaseChatProvider, IProviderUsage, ModelSpec, parseSSE, toAbort } from './base.js';
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const MODELS_ENDPOINT = 'https://api.anthropic.com/v1/models';
@@ -49,7 +49,7 @@ export class AnthropicProvider extends BaseChatProvider {
 		tools: readonly vscode.LanguageModelChatTool[] | undefined,
 		progress: vscode.Progress<vscode.LanguageModelResponsePart2>,
 		token: vscode.CancellationToken,
-	): Promise<void> {
+	): Promise<IProviderUsage | void> {
 		const { system, messages: body } = toAnthropicMessages(messages);
 		const response = await fetch(ENDPOINT, {
 			method: 'POST',
@@ -73,8 +73,17 @@ export class AnthropicProvider extends BaseChatProvider {
 		}
 
 		const currentToolCall: { id?: string; name?: string; jsonBuf: string } = { jsonBuf: '' };
+		let inputTokens = 0;
+		let outputTokens = 0;
 		for await (const evt of parseSSE(response, token)) {
-			const e = evt as { type?: string; index?: number; delta?: { type?: string; text?: string; partial_json?: string }; content_block?: { type?: string; id?: string; name?: string } };
+			const e = evt as { type?: string; index?: number; delta?: { type?: string; text?: string; partial_json?: string }; content_block?: { type?: string; id?: string; name?: string }; message?: { usage?: { input_tokens?: number; output_tokens?: number } }; usage?: { input_tokens?: number; output_tokens?: number } };
+			if (e.type === 'message_start' && e.message?.usage) {
+				inputTokens = e.message.usage.input_tokens ?? inputTokens;
+				outputTokens = e.message.usage.output_tokens ?? outputTokens;
+			} else if (e.type === 'message_delta' && e.usage) {
+				// message_delta carries the cumulative output token count.
+				outputTokens = e.usage.output_tokens ?? outputTokens;
+			}
 			if (e.type === 'content_block_start' && e.content_block?.type === 'tool_use') {
 				currentToolCall.id = e.content_block.id;
 				currentToolCall.name = e.content_block.name;
@@ -97,6 +106,7 @@ export class AnthropicProvider extends BaseChatProvider {
 				}
 			}
 		}
+		return { inputTokens, outputTokens };
 	}
 }
 

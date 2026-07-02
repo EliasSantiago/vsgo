@@ -142,7 +142,7 @@ export class ChatViewTitleControl extends Disposable {
 		const markdownTitle = new MarkdownString(this.model?.title ?? '');
 		this.title = renderAsPlaintext(markdownTitle);
 
-		this.updateTitle(this.title ?? ChatViewTitleControl.DEFAULT_TITLE);
+		this.updateTitle(this.title || ChatViewTitleControl.DEFAULT_TITLE);
 
 		const context = this.model && {
 			$mid: MarshalledId.ChatViewContext,
@@ -175,7 +175,7 @@ export class ChatViewTitleControl extends Disposable {
 	}
 
 	private shouldRender(): boolean {
-		return !!this.model?.title; // we need a chat showing and not being empty
+		return !!this.model;
 	}
 
 	getHeight(): number {

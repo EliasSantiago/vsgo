@@ -69,8 +69,8 @@ export class ToolConfirmationSubPart extends AbstractToolConfirmationSubPart {
 		this.render({
 			allowActionId: AcceptToolConfirmationActionId,
 			skipActionId: SkipToolConfirmationActionId,
-			allowLabel: state.confirmationMessages.confirmResults ? localize('allowReview', "Allow and Review Once") : localize('allow', "Allow Once"),
-			skipLabel: localize('skip.detail', 'Proceed without running this tool'),
+			allowLabel: state.confirmationMessages.confirmResults ? localize('allowReview', "Permitir e Revisar Uma Vez") : localize('allow', "Permitir Uma Vez"),
+			skipLabel: localize('skip.detail', 'Prosseguir sem executar esta ferramenta'),
 			partType: 'chatToolConfirmation',
 			subtitle: typeof toolInvocation.originMessage === 'string' ? toolInvocation.originMessage : toolInvocation.originMessage?.value,
 		});
@@ -124,7 +124,7 @@ export class ToolConfirmationSubPart extends AbstractToolConfirmationSubPart {
 		if (state.confirmationMessages?.confirmResults) {
 			actions.unshift(
 				{
-					label: localize('allowSkip', 'Allow and Skip Reviewing Result'),
+					label: localize('allowSkip', 'Permitir e Ignorar Revisão do Resultado'),
 					data: () => {
 						(state.confirmationMessages as IToolConfirmationMessages).confirmResults = undefined;
 						this.confirmWith(this.toolInvocation, { type: ToolConfirmKind.UserAction });

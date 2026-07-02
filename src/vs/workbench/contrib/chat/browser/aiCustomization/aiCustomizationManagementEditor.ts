@@ -42,6 +42,7 @@ import { IAICustomizationItemsModel, ITEMS_MODEL_SECTIONS } from './aiCustomizat
 import { McpListWidget } from './mcpListWidget.js';
 import { PluginListWidget } from './pluginListWidget.js';
 import { AIProvidersWidget } from './aiProvidersWidget.js';
+import { AIUsageWidget } from './aiUsageWidget.js';
 import {
 	AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID,
 	AI_CUSTOMIZATION_MANAGEMENT_SIDEBAR_WIDTH_KEY,
@@ -275,11 +276,13 @@ export class AICustomizationManagementEditor extends EditorPane {
 	private pluginListWidget: PluginListWidget | undefined;
 	private modelsWidget: ChatModelsWidget | undefined;
 	private aiProvidersWidget: AIProvidersWidget | undefined;
+	private aiUsageWidget: AIUsageWidget | undefined;
 	private promptsContentContainer!: HTMLElement;
 	private mcpContentContainer: HTMLElement | undefined;
 	private pluginContentContainer: HTMLElement | undefined;
 	private modelsContentContainer: HTMLElement | undefined;
 	private aiProvidersContentContainer: HTMLElement | undefined;
+	private aiUsageContentContainer: HTMLElement | undefined;
 	private modelsFooterElement: HTMLElement | undefined;
 
 	// Embedded editor state
@@ -407,6 +410,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 			[AICustomizationManagementSection.Plugins]: { label: localize('plugins', "Plugins"), icon: pluginIcon, description: localize('pluginsDesc', "Install and manage agent plugins that add additional tools, skills, and integrations.") },
 			[AICustomizationManagementSection.Models]: { label: localize('models', "Models"), icon: Codicon.vm, description: localize('modelsDesc', "Configure and manage language models available for use.") },
 			[AICustomizationManagementSection.AIProviders]: { label: localize('aiProviders', "AI Providers"), icon: Codicon.key, description: localize('aiProvidersDesc', "Configure API keys and endpoints for language model providers such as Anthropic, OpenAI, Gemini and Ollama.") },
+			[AICustomizationManagementSection.Usage]: { label: localize('aiUsage', "AI Usage"), icon: Codicon.graph, description: localize('aiUsageDesc', "Review language model token consumption by day, month and year, with provider and model filters.") },
 		};
 		for (const id of this.workspaceService.managementSections) {
 			const info = sectionInfo[id];
@@ -940,6 +944,15 @@ export class AICustomizationManagementEditor extends EditorPane {
 			this.aiProvidersContentContainer.appendChild(this.aiProvidersWidget.element);
 		}
 
+		// Container for AI Usage content
+		if (hasSections.has(AICustomizationManagementSection.Usage)) {
+			this.aiUsageContentContainer = DOM.append(contentInner, $('.ai-usage-content-container'));
+			const usageBackBar = DOM.append(this.aiUsageContentContainer, $('.section-back-bar'));
+			usageBackBar.appendChild(this.createBackArrowButton());
+			this.aiUsageWidget = this.editorDisposables.add(this.instantiationService.createInstance(AIUsageWidget));
+			this.aiUsageContentContainer.appendChild(this.aiUsageWidget.element);
+		}
+
 		// Embedded editor container
 		this.editorContentContainer = DOM.append(contentInner, $('.editor-content-container'));
 		this.createEmbeddedEditor();
@@ -1144,6 +1157,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 		const isMcpSection = this.selectedSection === AICustomizationManagementSection.McpServers;
 		const isPluginsSection = this.selectedSection === AICustomizationManagementSection.Plugins;
 		const isAIProvidersSection = this.selectedSection === AICustomizationManagementSection.AIProviders;
+		const isUsageSection = this.selectedSection === AICustomizationManagementSection.Usage;
 
 		if (this.welcomePage) {
 			this.welcomePage.container.style.display = isWelcome && !isEditorMode && !isDetailMode ? '' : 'none';
@@ -1169,6 +1183,9 @@ export class AICustomizationManagementEditor extends EditorPane {
 		if (this.aiProvidersContentContainer) {
 			this.aiProvidersContentContainer.style.display = !isEditorMode && !isDetailMode && isAIProvidersSection ? '' : 'none';
 		}
+		if (this.aiUsageContentContainer) {
+			this.aiUsageContentContainer.style.display = !isEditorMode && !isDetailMode && isUsageSection ? '' : 'none';
+		}
 		if (this.editorContentContainer) {
 			this.editorContentContainer.style.display = isEditorMode ? '' : 'none';
 		}
@@ -1179,6 +1196,11 @@ export class AICustomizationManagementEditor extends EditorPane {
 			if (this.dimension) {
 				this.layout(this.dimension);
 			}
+		}
+
+		// Refresh usage widget with the latest data when switching to it
+		if (isUsageSection && this.aiUsageWidget) {
+			this.aiUsageWidget.render();
 		}
 	}
 

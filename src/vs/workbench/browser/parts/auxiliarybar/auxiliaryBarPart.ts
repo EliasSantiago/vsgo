@@ -100,7 +100,9 @@ export class AuxiliaryBarPart extends AbstractPaneCompositePart {
 		super(
 			Parts.AUXILIARYBAR_PART,
 			{
-				hasTitle: true,
+				// The chat view renders its own header (session tabs strip), so the
+				// auxiliary bar's composite title bar is hidden to avoid a redundant title row.
+				hasTitle: false,
 				trailingSeparator: true,
 				borderWidth: () => (this.getColor(SIDE_BAR_BORDER) || this.getColor(contrastBorder)) ? 1 : 0,
 			},
@@ -260,26 +262,9 @@ export class AuxiliaryBarPart extends AbstractPaneCompositePart {
 	}
 
 	protected shouldShowCompositeBar(): boolean {
-		if (this.configuration.position === ActivityBarPosition.HIDDEN) {
-			return false;
-		}
-
-		// Check if auto-hide is enabled and there's only one visible view container
-		// while the activity bar is configured to be top or bottom.
-		if (this.configuration.position === ActivityBarPosition.TOP || this.configuration.position === ActivityBarPosition.BOTTOM) {
-			const autoHide = this.configurationService.getValue<boolean>(LayoutSettings.ACTIVITY_BAR_AUTO_HIDE);
-			if (autoHide) {
-				// Use visible composite count from the composite bar if available (considers pinned state),
-				// otherwise fall back to the tracker's count (based on active view descriptors).
-				// Note: We access paneCompositeBar directly to avoid circular calls with getVisiblePaneCompositeIds()
-				const visibleCount = this.visibleViewContainersTracker.visibleCount;
-				if (visibleCount <= 1) {
-					return false;
-				}
-			}
-		}
-
-		return true;
+		// The auxiliary bar renders without a title bar (see `hasTitle: false`). The composite
+		// bar (view switcher) is normally hosted inside the title, so it cannot be shown here.
+		return false;
 	}
 
 	protected getCompositeBarPosition(): CompositeBarPosition {

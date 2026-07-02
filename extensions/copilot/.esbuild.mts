@@ -418,7 +418,9 @@ async function main() {
 				path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
 				path.join(REPO_ROOT, 'script', 'postinstall.ts'),
 			],
-			{ cwd: REPO_ROOT, stdio: 'inherit' },
+			// Signal build context so postinstall does not delete `shims.txt` while the
+			// gulp packaging pipeline concurrently walks the same node_modules tree.
+			{ cwd: REPO_ROOT, stdio: 'inherit', env: { ...process.env, COPILOT_BUILD_POSTINSTALL: '1' } },
 		);
 
 		// Move source maps to separate directory so they're not packaged with the extension

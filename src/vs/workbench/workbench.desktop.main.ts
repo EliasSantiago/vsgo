@@ -139,6 +139,9 @@ import './contrib/remote/electron-browser/remote.contribution.js';
 // Terminal
 import './contrib/terminal/electron-browser/terminal.contribution.js';
 
+// QA (AI testing — desktop only because Playwright requires Node)
+import './contrib/qa/browser/qa.contribution.js';
+
 // Themes
 import './contrib/themes/browser/themes.test.contribution.js';
 import './services/themes/electron-browser/themes.contribution.js';

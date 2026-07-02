@@ -1060,9 +1060,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 				} else {
 					additionalMessage = defaultAgent?.metadata.additionalWelcomeMessage;
 				}
-				if (!additionalMessage && !this._lockedAgent) {
-					additionalMessage = this._getGenerateInstructionsMessage();
-				}
+
 				const welcomeContent = this.getWelcomeViewContent(additionalMessage);
 				if (!this.welcomePart.value || this.welcomePart.value.needsRerender(welcomeContent)) {
 					dom.clearNode(this.welcomeMessageContainer);
@@ -2655,7 +2653,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 
 		return {
 			modeInfo: this.input.currentModeInfo,
-			userSelectedTools: scopedTools,
+			userSelectedTools: this.input.currentModeKind === ChatModeKind.Ask ? undefined : scopedTools,
 		};
 	}
 

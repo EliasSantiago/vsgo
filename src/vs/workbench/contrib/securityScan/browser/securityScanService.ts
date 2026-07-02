@@ -22,7 +22,6 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ChatMessageRole, getTextResponseFromStream, IChatMessage, ILanguageModelsService } from '../../chat/common/languageModels.js';
-import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
 import { getExcludes, IFileQuery, ISearchConfiguration, ISearchService, QueryType } from '../../../services/search/common/search.js';
 import {
 	FindingSeverity,
@@ -40,8 +39,12 @@ import {
 
 const IGNORED_FINDINGS_STORAGE_KEY = 'securityScan.ignoredFindings';
 const REPORT_VERSION = 1;
-const REPORTS_DIR_NAME = 'securityScan';
+const VSGO_DIR_NAME = '.vsgo';
+const SECURITY_REPORTS_SUBDIR = 'security';
 const LATEST_REPORT_NAME = 'latest.json';
+const LATEST_SARIF_NAME = 'latest.sarif';
+const SARIF_SCHEMA_URI = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json';
+const SARIF_VERSION = '2.1.0';
 
 const DEFAULT_INCLUDE: string[] = ['**/*.{ts,tsx,js,jsx,mjs,cjs,py,go,rs,java,rb,php,cs,cpp,c,h,hpp,sh,sql,html,vue,svelte}'];
 const DEFAULT_EXCLUDE: string[] = ['**/node_modules/**', '**/out/**', '**/dist/**', '**/build/**', '**/.git/**', '**/.next/**', '**/coverage/**'];
@@ -127,7 +130,6 @@ export class SecurityScanService extends Disposable implements ISecurityScanServ
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@INotificationService private readonly notificationService: INotificationService,
 		@ILogService private readonly logService: ILogService,
-		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService,
 	) {
 		super();
 		this.loadIgnored();
@@ -298,7 +300,7 @@ export class SecurityScanService extends Disposable implements ISecurityScanServ
 
 		const modelId = await this.pickModel(config);
 		if (!modelId) {
-			throw new Error(localize('securityScan.noModel', "No AI model is available. Configure an AI provider first."));
+			throw new Error(localize('securityScan.noModel', "Nenhum modelo de IA está disponível. Configure um provedor de IA primeiro."));
 		}
 
 		const lines = content.split(/\r?\n/);
@@ -493,8 +495,27 @@ export class SecurityScanService extends Disposable implements ISecurityScanServ
 	}
 
 	getReportsDirectory(): URI | undefined {
-		const home = this.environmentService.workspaceStorageHome;
-		return home ? URI.joinPath(home, REPORTS_DIR_NAME) : undefined;
+		const root = this.getVsgoDirectory();
+		return root ? URI.joinPath(root, SECURITY_REPORTS_SUBDIR) : undefined;
+	}
+
+	private getVsgoDirectory(): URI | undefined {
+		const folders = this.workspaceContextService.getWorkspace().folders;
+		if (folders.length === 0) { return undefined; }
+		return URI.joinPath(folders[0].uri, VSGO_DIR_NAME);
+	}
+
+	private async ensureVsgoGitignore(): Promise<void> {
+		const root = this.getVsgoDirectory();
+		if (!root) { return; }
+		const gitignoreUri = URI.joinPath(root, '.gitignore');
+		try {
+			if (await this.fileService.exists(gitignoreUri)) { return; }
+			await this.fileService.createFolder(root);
+			await this.fileService.writeFile(gitignoreUri, VSBuffer.fromString('*\n'));
+		} catch (err) {
+			this.logService.warn('[securityScan] could not write .vsgo/.gitignore', err);
+		}
 	}
 
 	getLatestReportUri(): URI | undefined {
@@ -503,15 +524,132 @@ export class SecurityScanService extends Disposable implements ISecurityScanServ
 	}
 
 	async exportReport(targetUri: URI): Promise<boolean> {
-		const report = this.buildReport();
+		const isSarif = /\.sarif$/i.test(targetUri.path);
+		const payload = isSarif
+			? JSON.stringify(this.buildSarifReport(), null, 2)
+			: JSON.stringify(this.buildReport(), null, 2);
 		try {
-			await this.fileService.writeFile(targetUri, VSBuffer.fromString(JSON.stringify(report, null, 2)));
+			await this.fileService.writeFile(targetUri, VSBuffer.fromString(payload));
 			return true;
 		} catch (err) {
 			this.logService.error('[securityScan] export failed', err);
 			this.notificationService.error(localize('securityScan.exportFailed', "Failed to export security scan report: {0}", String(err)));
 			return false;
 		}
+	}
+
+	private buildSarifReport(): object {
+		const folders = this.workspaceContextService.getWorkspace().folders;
+		const originalUriBaseIds: Record<string, { uri: string }> = {};
+		for (let i = 0; i < folders.length; i++) {
+			const uri = folders[i].uri.toString();
+			originalUriBaseIds[`SRCROOT${i}`] = { uri: uri.endsWith('/') ? uri : `${uri}/` };
+		}
+
+		type SarifRule = { id: string; shortDescription: { text: string }; defaultConfiguration: { level: string } };
+
+		const rules = new Map<string, SarifRule>();
+		const results: object[] = [];
+
+		for (const list of this._findings.values()) {
+			for (const f of list) {
+				const ruleId = f.cwe || 'vsgo.uncategorized';
+				if (!rules.has(ruleId)) {
+					rules.set(ruleId, {
+						id: ruleId,
+						shortDescription: { text: f.cwe ? f.title : 'Uncategorized finding' },
+						defaultConfiguration: { level: severityToSarifLevel(f.severity) },
+					});
+				}
+
+				const loc = this.toSarifArtifactLocation(f.resource);
+				const artifactLocation = loc.uriBaseId !== undefined
+					? { uri: loc.uri, uriBaseId: loc.uriBaseId }
+					: { uri: loc.uri };
+
+				const result: Record<string, unknown> = {
+					ruleId,
+					level: severityToSarifLevel(f.severity),
+					message: { text: f.description || f.title },
+					locations: [{
+						physicalLocation: {
+							artifactLocation,
+							region: {
+								startLine: f.range.startLineNumber,
+								startColumn: f.range.startColumn,
+								endLine: f.range.endLineNumber,
+								endColumn: f.range.endColumn,
+							},
+						},
+					}],
+					properties: {
+						'vsgo.id': f.id,
+						'vsgo.title': f.title,
+						...(this._ignored.has(f.id) ? { 'vsgo.ignored': true } : {}),
+					},
+				};
+
+				if (f.fix) {
+					result.fixes = [{
+						description: { text: f.fix.explanation },
+						artifactChanges: [{
+							artifactLocation,
+							replacements: [{
+								deletedRegion: {
+									startLine: f.fix.range.startLineNumber,
+									startColumn: f.fix.range.startColumn,
+									endLine: f.fix.range.endLineNumber,
+									endColumn: f.fix.range.endColumn,
+								},
+								insertedContent: { text: f.fix.newText },
+							}],
+						}],
+					}];
+				}
+
+				results.push(result);
+			}
+		}
+
+		const driver: Record<string, unknown> = {
+			name: 'vsgo Security Scan',
+			informationUri: 'https://github.com/microsoft/vscode',
+			rules: Array.from(rules.values()),
+		};
+		if (this._lastModelId) {
+			driver.properties = { modelId: this._lastModelId };
+		}
+
+		const run: Record<string, unknown> = {
+			tool: { driver },
+			invocations: [{
+				executionSuccessful: true,
+				endTimeUtc: new Date(this._lastScanAt ?? Date.now()).toISOString(),
+			}],
+			results,
+		};
+		if (Object.keys(originalUriBaseIds).length > 0) {
+			run.originalUriBaseIds = originalUriBaseIds;
+		}
+
+		return {
+			$schema: SARIF_SCHEMA_URI,
+			version: SARIF_VERSION,
+			runs: [run],
+		};
+	}
+
+	private toSarifArtifactLocation(resource: URI): { uri: string; uriBaseId?: string } {
+		const folders = this.workspaceContextService.getWorkspace().folders;
+		const resPath = resource.toString();
+		for (let i = 0; i < folders.length; i++) {
+			const base = folders[i].uri.toString();
+			const baseSlash = base.endsWith('/') ? base : `${base}/`;
+			if (resPath.startsWith(baseSlash)) {
+				return { uri: resPath.slice(baseSlash.length), uriBaseId: `SRCROOT${i}` };
+			}
+		}
+		return { uri: resPath };
 	}
 
 	private buildReport(): ISecurityScanReport {
@@ -545,14 +683,17 @@ export class SecurityScanService extends Disposable implements ISecurityScanServ
 		const dir = this.getReportsDirectory();
 		const latest = this.getLatestReportUri();
 		if (!dir || !latest) { return; }
-		const report = this.buildReport();
-		const payload = VSBuffer.fromString(JSON.stringify(report, null, 2));
+		const payload = VSBuffer.fromString(JSON.stringify(this.buildReport(), null, 2));
+		const sarifPayload = VSBuffer.fromString(JSON.stringify(this.buildSarifReport(), null, 2));
 		try {
+			await this.ensureVsgoGitignore();
 			await this.fileService.createFolder(dir);
 			await this.fileService.writeFile(latest, payload);
+			await this.fileService.writeFile(URI.joinPath(dir, LATEST_SARIF_NAME), sarifPayload);
 			if (opts.archive) {
 				const stamp = new Date(this._lastScanAt ?? Date.now()).toISOString().replace(/[:.]/g, '-');
 				await this.fileService.writeFile(URI.joinPath(dir, `report-${stamp}.json`), payload);
+				await this.fileService.writeFile(URI.joinPath(dir, `report-${stamp}.sarif`), sarifPayload);
 				await this.pruneReports(dir, config.reportRetention);
 			}
 		} catch (err) {
@@ -563,12 +704,20 @@ export class SecurityScanService extends Disposable implements ISecurityScanServ
 	private async pruneReports(dir: URI, retention: number): Promise<void> {
 		try {
 			const stat = await this.fileService.resolve(dir);
-			const archives = (stat.children ?? [])
-				.filter(c => !c.isDirectory && /^report-.*\.json$/.test(c.name))
-				.sort((a, b) => a.name < b.name ? 1 : -1);
-			const toDelete = archives.slice(retention);
-			for (const c of toDelete) {
-				await this.fileService.del(c.resource, { useTrash: false });
+			const stampToFiles = new Map<string, URI[]>();
+			for (const c of stat.children ?? []) {
+				if (c.isDirectory) { continue; }
+				const m = c.name.match(/^report-(.+)\.(json|sarif)$/);
+				if (!m) { continue; }
+				const list = stampToFiles.get(m[1]) ?? [];
+				list.push(c.resource);
+				stampToFiles.set(m[1], list);
+			}
+			const sortedStamps = Array.from(stampToFiles.keys()).sort().reverse();
+			for (const stamp of sortedStamps.slice(retention)) {
+				for (const uri of stampToFiles.get(stamp) ?? []) {
+					await this.fileService.del(uri, { useTrash: false });
+				}
 			}
 		} catch (err) {
 			this.logService.warn('[securityScan] pruneReports failed', err);
@@ -642,6 +791,10 @@ export class SecurityScanService extends Disposable implements ISecurityScanServ
 
 function clamp(v: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, v));
+}
+
+function severityToSarifLevel(s: FindingSeverity): 'error' | 'warning' | 'note' {
+	return s === 'error' ? 'error' : s === 'warning' ? 'warning' : 'note';
 }
 
 function toMarker(f: IFinding): IMarkerData {

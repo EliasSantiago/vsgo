@@ -249,7 +249,7 @@ export function registerCommands(
 }
 
 async function pickProvider(placeHolder: string, allow?: readonly ProviderId[]): Promise<ProviderId | undefined> {
-	const all: ProviderId[] = ['anthropic', 'openai', 'gemini', 'ollama'];
+	const all: ProviderId[] = ['anthropic', 'openai', 'gemini', 'ollama', 'mistral', 'groq', 'deepseek', 'xai'];
 	const list = allow ?? all;
 	const items = list.map(p => ({ label: PROVIDER_LABELS[p], description: PROVIDER_KEY_HINTS[p], id: p }));
 	const picked = await vscode.window.showQuickPick(items, { placeHolder, ignoreFocusOut: true });

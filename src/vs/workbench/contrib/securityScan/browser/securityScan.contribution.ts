@@ -122,7 +122,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		[`${SECURITY_SCAN_CONFIG_SECTION}.persistReports`]: {
 			type: 'boolean',
 			default: true,
-			markdownDescription: localize('securityScan.persistReports', "Persist scan results to JSON reports inside the workspace storage area and restore them on startup."),
+			markdownDescription: localize('securityScan.persistReports', "Persist scan results as `latest.json` (internal) and `latest.sarif` (SARIF v2.1.0 interchange) inside `.vsgo/security/` in the workspace root, and restore them on startup."),
 		},
 		[`${SECURITY_SCAN_CONFIG_SECTION}.reportRetention`]: {
 			type: 'number',
@@ -183,8 +183,8 @@ class SecurityScanStatusBar extends Disposable implements IWorkbenchContribution
 			return {
 				name: localize('securityScan.statusName', "Security Scan"),
 				text: progress.total > 0
-					? localize('securityScan.statusScanningCount', "$(sync~spin) Scanning {0}/{1}", progress.current, progress.total)
-					: localize('securityScan.statusScanning', "$(sync~spin) Scanning…"),
+					? '$(sync~spin) ' + localize('securityScan.statusScanningCount', "Scanning {0}/{1}", progress.current, progress.total)
+					: '$(sync~spin) ' + localize('securityScan.statusScanning', "Scanning…"),
 				ariaLabel: localize('securityScan.statusAria', "Security scan in progress"),
 				tooltip: localize('securityScan.statusScanningTooltip', "Security scan in progress. Click to open the Security view."),
 				command: 'securityScan.openView',
@@ -195,7 +195,7 @@ class SecurityScanStatusBar extends Disposable implements IWorkbenchContribution
 		if (findings.length === 0) {
 			return undefined;
 		}
-		const counts = { error: 0, warning: 0, info: 0 } as { error: number; warning: number; info: number };
+		const counts: Record<'error' | 'warning' | 'info', number> = { error: 0, warning: 0, info: 0 };
 		for (const f of findings) { counts[f.severity]++; }
 		const text = `$(shield) ${findings.length}`;
 		return {

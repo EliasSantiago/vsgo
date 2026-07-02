@@ -58,6 +58,8 @@ import { ChatWidgetHistoryService, IChatWidgetHistoryService } from '../common/w
 import { ChatAgentLocation, ChatConfiguration, ChatNotificationMode, ChatPermissionLevel } from '../common/constants.js';
 import { ILanguageModelIgnoredFilesService, LanguageModelIgnoredFilesService } from '../common/ignoredFiles.js';
 import { ILanguageModelsService, LanguageModelsService } from '../common/languageModels.js';
+import { IAIUsageService, AIUsageService, coerceUsageEntry } from '../common/aiUsageService.js';
+import { AIUsageStatusBarContribution } from './aiCustomization/aiUsageStatusBar.js';
 import { ILanguageModelStatsService, LanguageModelStatsService } from '../common/languageModelStats.js';
 import { ILanguageModelToolsConfirmationService } from '../common/tools/languageModelToolsConfirmationService.js';
 import { ILanguageModelToolsService } from '../common/tools/languageModelToolsService.js';
@@ -197,6 +199,15 @@ import { browserChatToolReferenceNames } from '../../browserView/common/browserC
 
 CommandsRegistry.registerCommand('_chat.notifyQuestionCarouselAnswer', (accessor: ServicesAccessor, resolveId: string, answers?: import('../common/chatService/chatService.js').IChatQuestionAnswers) => {
 	accessor.get(IChatService).notifyQuestionCarouselAnswer('', resolveId, answers);
+});
+
+// Bridge used by chat extensions to report real (API-reported) token usage to
+// the AI Usage meter. Payload is untrusted and validated by coerceUsageEntry.
+CommandsRegistry.registerCommand('_vsgo.aiUsage.record', (accessor: ServicesAccessor, entry: unknown) => {
+	const coerced = coerceUsageEntry(entry);
+	if (coerced) {
+		accessor.get(IAIUsageService).record(coerced);
+	}
 });
 
 const toolReferenceNameEnumValues: string[] = [];
@@ -1018,7 +1029,7 @@ configurationRegistry.registerConfiguration({
 		[ChatConfiguration.ToolConfirmationCarousel]: {
 			type: 'boolean',
 			description: nls.localize('chat.tools.confirmationCarousel', "When enabled, multiple tool confirmations are batched into a carousel above the input."),
-			default: product.quality !== 'stable',
+			default: true,
 			tags: ['experimental'],
 		},
 		[ChatConfiguration.ToolRiskAssessmentEnabled]: {
@@ -2217,6 +2228,7 @@ registerWorkbenchContribution2(CopilotTelemetryContribution.ID, CopilotTelemetry
 registerWorkbenchContribution2(ChatResolverContribution.ID, ChatResolverContribution, WorkbenchPhase.BlockStartup);
 registerWorkbenchContribution2(ChatDebugResolverContribution.ID, ChatDebugResolverContribution, WorkbenchPhase.BlockStartup);
 registerWorkbenchContribution2(PromptsDebugContribution.ID, PromptsDebugContribution, WorkbenchPhase.BlockRestore);
+registerWorkbenchContribution2(AIUsageStatusBarContribution.ID, AIUsageStatusBarContribution, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(ChatLanguageModelsDataContribution.ID, ChatLanguageModelsDataContribution, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(ChatSlashCommandsContribution.ID, ChatSlashCommandsContribution, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(ChatSessionOptionSlashCommandsContribution.ID, ChatSessionOptionSlashCommandsContribution, WorkbenchPhase.Eventually);
@@ -2300,6 +2312,7 @@ registerSingleton(IChatAccessibilityService, ChatAccessibilityService, Instantia
 registerSingleton(IChatWidgetHistoryService, ChatWidgetHistoryService, InstantiationType.Delayed);
 registerSingleton(ILanguageModelsConfigurationService, LanguageModelsConfigurationService, InstantiationType.Delayed);
 registerSingleton(ILanguageModelsService, LanguageModelsService, InstantiationType.Delayed);
+registerSingleton(IAIUsageService, AIUsageService, InstantiationType.Delayed);
 registerSingleton(ILanguageModelStatsService, LanguageModelStatsService, InstantiationType.Delayed);
 registerSingleton(IChatSlashCommandService, ChatSlashCommandService, InstantiationType.Delayed);
 registerSingleton(IChatAgentService, ChatAgentService, InstantiationType.Delayed);

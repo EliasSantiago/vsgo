@@ -5,13 +5,17 @@
 
 import * as vscode from 'vscode';
 
-export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'ollama';
+export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'mistral' | 'groq' | 'deepseek' | 'xai';
 
 export const PROVIDER_LABELS: Record<ProviderId, string> = {
 	anthropic: 'Anthropic',
 	openai: 'OpenAI',
 	gemini: 'Google Gemini',
 	ollama: 'Ollama (local)',
+	mistral: 'Mistral AI',
+	groq: 'Groq',
+	deepseek: 'DeepSeek',
+	xai: 'xAI (Grok)',
 };
 
 export const PROVIDER_KEY_HINTS: Record<ProviderId, string> = {
@@ -19,6 +23,10 @@ export const PROVIDER_KEY_HINTS: Record<ProviderId, string> = {
 	openai: 'sk-...',
 	gemini: 'AIza...',
 	ollama: 'http://localhost:11434 (URL, not a key)',
+	mistral: 'API key from console.mistral.ai',
+	groq: 'API key from console.groq.com',
+	deepseek: 'API key from platform.deepseek.com',
+	xai: 'API key from console.x.ai',
 };
 
 const STORAGE_PREFIX = 'agent-chat.apikey.';
@@ -44,7 +52,7 @@ export class ByokStorage {
 	}
 
 	async list(): Promise<ProviderId[]> {
-		const all: ProviderId[] = ['anthropic', 'openai', 'gemini', 'ollama'];
+		const all: ProviderId[] = ['anthropic', 'openai', 'gemini', 'ollama', 'mistral', 'groq', 'deepseek', 'xai'];
 		const found: ProviderId[] = [];
 		for (const p of all) {
 			const value = await this.get(p);

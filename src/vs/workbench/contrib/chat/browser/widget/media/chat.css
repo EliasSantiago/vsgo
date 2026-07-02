@@ -1759,6 +1759,66 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	}
 }
 
+/* --- Auto Mode Toggle --- */
+
+.chat-auto-mode-toggle-container {
+	display: flex;
+	align-items: center;
+}
+
+.chat-auto-mode-toggle {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px 2px 6px;
+	border-radius: 4px;
+	border: 1px solid transparent;
+	cursor: pointer;
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--vscode-foreground);
+	background: transparent;
+	opacity: 0.8;
+	transition: opacity 0.1s, background 0.1s, border-color 0.1s;
+	text-decoration: none;
+	white-space: nowrap;
+	outline: none;
+}
+
+.chat-auto-mode-toggle:hover,
+.chat-auto-mode-toggle:focus-visible {
+	opacity: 1;
+	background: var(--vscode-toolbar-hoverBackground);
+	border-color: var(--vscode-toolbar-hoverOutline, transparent);
+}
+
+.chat-auto-mode-toggle .codicon {
+	font-size: 12px;
+	flex-shrink: 0;
+}
+
+.chat-auto-mode-toggle .chat-auto-mode-label {
+	font-size: 12px;
+}
+
+/* Interativo (default) — usa cor neutra */
+.chat-auto-mode-toggle:not(.is-auto) .codicon {
+	color: var(--vscode-icon-foreground);
+}
+
+/* Automatico — destaca em amarelo/aviso */
+.chat-auto-mode-toggle.is-auto {
+	opacity: 1;
+	border-color: var(--vscode-problemsWarningIcon-foreground);
+}
+
+.chat-auto-mode-toggle.is-auto .codicon,
+.chat-auto-mode-toggle.is-auto .chat-auto-mode-label {
+	color: var(--vscode-problemsWarningIcon-foreground);
+}
+
+/* --- Secondary toolbar pickers --- */
+
 .interactive-session .chat-secondary-toolbar .chat-input-picker-item .action-label {
 	height: 16px;
 	padding: 3px 0px 3px 6px;

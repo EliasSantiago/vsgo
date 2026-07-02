@@ -1347,8 +1347,8 @@ export class LanguageModelsService implements ILanguageModelsService {
 						inputBox.severity = Severity.Error;
 						return;
 					}
-					if (!existing && languageModelProviderGroups.some(g => g.name === value)) {
-						inputBox.validationMessage = localize('nameExists', "A language models group with this name already exists");
+					if (!existing && languageModelProviderGroups.some(g => g.vendor === vendor.vendor && g.name === value)) {
+						inputBox.validationMessage = localize('nameExists', "A language models group with this name already exists for {0}", vendor.displayName);
 						inputBox.severity = Severity.Error;
 						return;
 					}

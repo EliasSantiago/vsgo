@@ -109,6 +109,74 @@
 						"baseUrl"
 					]
 				}
+			},
+			{
+				"vendor": "mistral",
+				"displayName": "Mistral AI",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "API key from console.mistral.ai",
+							"title": "API Key"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
+			},
+			{
+				"vendor": "groq",
+				"displayName": "Groq",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "API key from console.groq.com",
+							"title": "API Key"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
+			},
+			{
+				"vendor": "deepseek",
+				"displayName": "DeepSeek",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "API key from platform.deepseek.com",
+							"title": "API Key"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
+			},
+			{
+				"vendor": "xai",
+				"displayName": "xAI (Grok)",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "API key from console.x.ai",
+							"title": "API Key"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
 			}
 		],
 		"languageModelTools": [
@@ -187,9 +255,41 @@
 				}
 			},
 			{
+				"name": "agent_search",
+				"displayName": "Search Code",
+				"modelDescription": "Search the contents of all files in the workspace for a string or regex. Use this to locate where a function, class, method, or symbol is defined or used BEFORE concluding it does not exist. Returns matches as 'relativePath:line: text'.",
+				"userDescription": "Search the workspace",
+				"icon": "$(search)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"query": {
+							"type": "string",
+							"description": "Text or regex to search for (e.g. a function name like getUserAndServiceFromProtocol)"
+						},
+						"isRegex": {
+							"type": "boolean",
+							"description": "Treat the query as a regular expression. Defaults to false (literal text)."
+						},
+						"path": {
+							"type": "string",
+							"description": "Subdirectory to limit the search to (defaults to workspace root)"
+						}
+					},
+					"required": [
+						"query"
+					]
+				}
+			},
+			{
 				"name": "agent_run_command",
 				"displayName": "Run Command",
-				"modelDescription": "Run a shell command on the user's machine. Use sparingly; the user will be asked to confirm before each invocation. Returns stdout/stderr.",
+				"modelDescription": "Run a shell command on the user's machine. Returns stdout/stderr.",
 				"userDescription": "Run a shell command",
 				"icon": "$(terminal)",
 				"tags": [
@@ -211,6 +311,35 @@
 					},
 					"required": [
 						"command"
+					]
+				}
+			},
+			{
+				"name": "agent_code_graph",
+				"displayName": "Code Graph",
+				"modelDescription": "Look up where symbols (functions, classes, interfaces, types, enums) are defined in the workspace using a tree-sitter code graph. Cheaper and more precise than reading whole files. Returns matching definitions as `kind name — path:line`. Only available when the code graph is enabled.",
+				"userDescription": "Query the code knowledge graph",
+				"icon": "$(graph)",
+				"tags": [
+					"agent-chat",
+					"code"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"query": {
+							"type": "string",
+							"description": "Symbol name or partial name to search for"
+						},
+						"kind": {
+							"type": "string",
+							"description": "Optional filter: function, class, interface, type or enum",
+							"enum": ["function", "class", "interface", "type", "enum"]
+						}
+					},
+					"required": [
+						"query"
 					]
 				}
 			}
@@ -299,6 +428,11 @@
 		"configuration": {
 			"title": "Agent Chat",
 			"properties": {
+				"agent-chat.autoApproveTools": {
+					"type": "boolean",
+					"default": true,
+					"description": "Quando ativado, o agente executa todas as ferramentas automaticamente sem pedir confirmação. Desative para que comandos perigosos exijam aprovação explícita."
+				},
 				"agent-chat.bugBot.enabled": {
 					"type": "boolean",
 					"default": false,
@@ -314,6 +448,11 @@
 					"default": "warning",
 					"enum": ["info", "warning", "error"],
 					"description": "Hide findings below this severity."
+				},
+				"agent-chat.codeGraph.enabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Build a local code knowledge graph (functions, classes, interfaces, types) using tree-sitter and expose it to the agent as a tool. Can reduce token usage and improve accuracy by letting the agent look up symbols instead of reading whole files. Opt-in."
 				}
 			}
 		},

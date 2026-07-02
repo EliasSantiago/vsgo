@@ -87,10 +87,14 @@ export class ChatEditingCodeEditorIntegration implements IModifiedFileEntryEdito
 
 	private readonly _diffLineDecorations: IEditorDecorationsCollection;
 	private readonly _diffVisualDecorations: IEditorDecorationsCollection;
+	private readonly _diffGlyphDecorations: IEditorDecorationsCollection;
 	private readonly _diffHunksRenderStore = this._store.add(new DisposableStore());
 	private readonly _diffHunkWidgetPool = this._store.add(new ObjectPool<DiffHunkWidget>());
 	private readonly _diffHunkWidgets: DiffHunkWidget[] = [];
 	private _viewZones: string[] = [];
+
+	private readonly _acceptGlyphLines = new Map<number, DiffHunkWidget>();
+	private readonly _rejectGlyphLines = new Map<number, DiffHunkWidget>();
 
 	private readonly _accessibleDiffViewVisible = observableValue<boolean>(this, false);
 
@@ -98,7 +102,6 @@ export class ChatEditingCodeEditorIntegration implements IModifiedFileEntryEdito
 		private readonly _entry: IModifiedFileEntry,
 		private readonly _editor: ICodeEditor,
 		documentDiffInfo: IObservable<IDocumentDiff2>,
-		renderDiffImmediately: boolean,
 		@IEditorService private readonly _editorService: IEditorService,
 		@IAccessibilitySignalService private readonly _accessibilitySignalsService: IAccessibilitySignalService,
 		@IContextKeyService contextKeyService: IContextKeyService,
@@ -113,6 +116,7 @@ export class ChatEditingCodeEditorIntegration implements IModifiedFileEntryEdito
 
 		this._diffLineDecorations = this._editor.createDecorationsCollection(); // tracks the line range w/o visuals (used for navigate)
 		this._diffVisualDecorations = this._editor.createDecorationsCollection(); // tracks the real diff with character level inserts
+		this._diffGlyphDecorations = this._editor.createDecorationsCollection(); // tracks gutter accept/reject glyph icons
 
 		// Create explanation widget manager and connect it to the model manager
 		this._store.add(new ChatEditingExplanationWidgetManager(
@@ -180,7 +184,7 @@ export class ChatEditingCodeEditorIntegration implements IModifiedFileEntryEdito
 			}
 		}));
 
-		// render diff decorations
+		// render diff decorations (always, including during streaming for live diff view)
 		this._store.add(autorun(r => {
 
 			if (!enabledObs.read(r)) {
@@ -188,20 +192,35 @@ export class ChatEditingCodeEditorIntegration implements IModifiedFileEntryEdito
 				return;
 			}
 
-			// done: render diff
-			if (!_entry.isCurrentlyBeingModifiedBy.read(r) || renderDiffImmediately) {
-				const isDiffEditor = this._editor.getOption(EditorOption.inDiffEditor);
+			const isDiffEditor = this._editor.getOption(EditorOption.inDiffEditor);
 
-				codeEditorObs.getOption(EditorOption.fontInfo).read(r);
-				codeEditorObs.getOption(EditorOption.lineHeight).read(r);
+			codeEditorObs.getOption(EditorOption.fontInfo).read(r);
+			codeEditorObs.getOption(EditorOption.lineHeight).read(r);
 
-				const reviewMode = _entry.reviewMode.read(r);
-				const diff = documentDiffInfo.read(r);
-				this._updateDiffRendering(diff, reviewMode, isDiffEditor);
-			}
+			const isStreaming = Boolean(_entry.isCurrentlyBeingModifiedBy.read(r));
+			const reviewMode = _entry.reviewMode.read(r);
+			const diff = documentDiffInfo.read(r);
+			this._updateDiffRendering(diff, reviewMode, isDiffEditor, isStreaming);
 		}));
 
 		const _ctxCursorInChangeRange = ctxCursorInChangeRange.bindTo(contextKeyService);
+
+		// gutter glyph click → accept/reject hunk
+		this._store.add(this._editor.onMouseDown(e => {
+			if (e.target.type !== MouseTargetType.GUTTER_GLYPH_MARGIN || !e.target.position) {
+				return;
+			}
+			const lineNumber = e.target.position.lineNumber;
+			const acceptWidget = this._acceptGlyphLines.get(lineNumber);
+			if (acceptWidget) {
+				acceptWidget.accept();
+				return;
+			}
+			const rejectWidget = this._rejectGlyphLines.get(lineNumber);
+			if (rejectWidget) {
+				rejectWidget.reject();
+			}
+		}));
 
 		// accessibility: signals while cursor changes
 		// ctx: cursor in change range
@@ -322,9 +341,12 @@ export class ChatEditingCodeEditorIntegration implements IModifiedFileEntryEdito
 			widget.remove();
 		}
 		this._diffVisualDecorations.clear();
+		this._diffGlyphDecorations.clear();
+		this._acceptGlyphLines.clear();
+		this._rejectGlyphLines.clear();
 	}
 
-	private _updateDiffRendering(diff: IDocumentDiff2, reviewMode: boolean, diffMode: boolean): void {
+	private _updateDiffRendering(diff: IDocumentDiff2, reviewMode: boolean, diffMode: boolean, isStreaming: boolean = false): void {
 
 		const chatDiffAddDecoration = ModelDecorationOptions.createDynamic({
 			...diffAddDecoration,
@@ -345,9 +367,23 @@ export class ChatEditingCodeEditorIntegration implements IModifiedFileEntryEdito
 		const addedDecoration = createOverviewDecoration(overviewRulerAddedForeground, minimapGutterAddedBackground);
 		const deletedDecoration = createOverviewDecoration(overviewRulerDeletedForeground, minimapGutterDeletedBackground);
 
+		const chatDiffAcceptGlyphDecoration = ModelDecorationOptions.createDynamic({
+			description: 'chat-diff-accept-glyph',
+			glyphMarginClassName: 'codicon codicon-check chat-editing-glyph-accept',
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		});
+		const chatDiffRejectGlyphDecoration = ModelDecorationOptions.createDynamic({
+			description: 'chat-diff-reject-glyph',
+			glyphMarginClassName: 'codicon codicon-close chat-editing-glyph-reject',
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		});
+
 		this._diffHunksRenderStore.clear();
 		this._diffHunkWidgets.length = 0;
+		this._acceptGlyphLines.clear();
+		this._rejectGlyphLines.clear();
 		const diffHunkDecorations: IModelDeltaDecoration[] = [];
+		const glyphDecorations: IModelDeltaDecoration[] = [];
 
 		this._editor.changeViewZones((viewZoneChangeAccessor) => {
 			for (const id of this._viewZones) {
@@ -421,7 +457,8 @@ export class ChatEditingCodeEditorIntegration implements IModifiedFileEntryEdito
 				}
 
 				let extraLines = 0;
-				if (reviewMode && !diffMode) {
+				// show deleted-lines view zones only when not streaming, to avoid visual chaos
+				if (reviewMode && !diffMode && !isStreaming) {
 					const domNode = document.createElement('div');
 					domNode.className = 'chat-editing-original-zone view-lines line-delete monaco-mouse-cursor-text';
 					const result = renderLines(source, renderOptions, decorations, domNode);
@@ -466,10 +503,24 @@ export class ChatEditingCodeEditorIntegration implements IModifiedFileEntryEdito
 							stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges
 						}
 					});
+
+					// gutter accept/reject glyph icons — only for non-empty modified ranges
+					if (!diffEntry.modified.isEmpty) {
+						const firstLine = diffEntry.modified.startLineNumber;
+						glyphDecorations.push({ range: new Range(firstLine, 1, firstLine, 1), options: chatDiffAcceptGlyphDecoration });
+						this._acceptGlyphLines.set(firstLine, widget);
+
+						const lastLine = diffEntry.modified.endLineNumberExclusive - 1;
+						if (lastLine > firstLine) {
+							glyphDecorations.push({ range: new Range(lastLine, 1, lastLine, 1), options: chatDiffRejectGlyphDecoration });
+							this._rejectGlyphLines.set(lastLine, widget);
+						}
+					}
 				}
 			}
 
 			this._diffVisualDecorations.set(!diffMode ? modifiedVisualDecorations : []);
+			this._diffGlyphDecorations.set(!diffMode ? glyphDecorations : []);
 		});
 
 		const diffHunkDecoCollection = this._editor.createDecorationsCollection(diffHunkDecorations);

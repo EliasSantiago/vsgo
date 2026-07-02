@@ -80,9 +80,9 @@ export class ModePickerActionItem extends ChatInputPickerActionViewItem {
 		const getCustomAgentTarget = () => delegate.customAgentTarget?.() ?? Target.Undefined;
 
 		// Category definitions
-		const builtInCategory = { label: localize('built-in', "Built-In"), order: 0 };
-		const customCategory = { label: localize('custom', "Custom"), order: 1 };
-		const policyDisabledCategory = { label: localize('managedByOrganization', "Managed by your organization"), order: 999, showHeader: true };
+		const builtInCategory = { label: localize('built-in', "Integrado"), order: 0 };
+		const customCategory = { label: localize('custom', "Personalizado"), order: 1 };
+		const policyDisabledCategory = { label: localize('managedByOrganization', "Gerenciado pela sua organização"), order: 999, showHeader: true };
 
 		const agentModeDisabledViaPolicy = configurationService.inspect<boolean>(ChatConfiguration.AgentEnabled).policyValue === false;
 
@@ -101,11 +101,11 @@ export class ModePickerActionItem extends ChatInputPickerActionViewItem {
 					if (mode.source?.storage === PromptsStorage.extension) {
 						icon = Codicon.file;
 						id = `viewAgent:${mode.id}`;
-						label = localize('viewModeConfiguration', "View {0} agent", mode.label.get());
+						label = localize('viewModeConfiguration', "Ver agente {0}", mode.label.get());
 					} else {
 						icon = Codicon.edit;
 						id = `editAgent:${mode.id}`;
-						label = localize('editModeConfiguration', "Edit {0} agent", mode.label.get());
+						label = localize('editModeConfiguration', "Editar agente {0}", mode.label.get());
 					}
 
 					const modeResource = mode.uri;
@@ -334,14 +334,13 @@ function shouldShowBuiltInMode(mode: IChatMode, assignments: { showOldAskMode: b
 		}
 	}
 
-	// The "Ask" mode is a special case - we want to show either the old or new version based on the assignment or agent disablement, but not both
-	// We still support the old "Ask" mode for conversations that already use it.
-	if (mode.id === ChatMode.Ask.id || mode.name.get().toLowerCase() === 'ask') {
-		if (mode.id === ChatMode.Ask.id) {
-			return assignments.showOldAskMode || agentModeDisabledViaPolicy;
-		} else {
-			return !(assignments.showOldAskMode || agentModeDisabledViaPolicy);
-		}
+	// Always show the built-in "Ask" mode so users can switch between Ask and Agent.
+	if (mode.id === ChatMode.Ask.id) {
+		return true;
+	}
+	// Custom modes named 'ask' (e.g. from extensions) follow the original A/B-test logic.
+	if (mode.name.get().toLowerCase() === 'ask') {
+		return !(assignments.showOldAskMode || agentModeDisabledViaPolicy);
 	}
 
 	return true;

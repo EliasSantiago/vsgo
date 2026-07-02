@@ -36,8 +36,8 @@ export class ChatMissingSandboxDepsConfirmationSubPart extends AbstractToolConfi
 		this.render({
 			allowActionId: AcceptToolConfirmationActionId,
 			skipActionId: SkipToolConfirmationActionId,
-			allowLabel: localize('missingDeps.install', "Install"),
-			skipLabel: localize('missingDeps.cancel', "Cancel"),
+			allowLabel: localize('missingDeps.install', "Instalar"),
+			skipLabel: localize('missingDeps.cancel', "Cancelar"),
 			partType: 'chatMissingSandboxDepsConfirmation',
 		});
 	}

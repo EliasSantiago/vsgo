@@ -54,6 +54,9 @@ function onExtensionCompilationEnd(): void {
 // 	ignore: ['**/out/**', '**/node_modules/**']
 // });
 const compilations = [
+	'extensions/agent-chat/tsconfig.json',
+	'extensions/agent-pr-review/tsconfig.json',
+	'extensions/qa-driver/tsconfig.json',
 	'extensions/configuration-editing/tsconfig.json',
 	'extensions/css-language-features/client/tsconfig.json',
 	'extensions/css-language-features/server/tsconfig.json',

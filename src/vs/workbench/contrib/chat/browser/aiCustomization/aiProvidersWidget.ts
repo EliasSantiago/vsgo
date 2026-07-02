@@ -58,7 +58,7 @@ export class AIProvidersWidget extends Disposable {
 	private create(): void {
 		const header = DOM.append(this.element, $('.ai-providers-header'));
 		const headerText = DOM.append(header, $('p.ai-providers-description'));
-		headerText.textContent = localize('aiProvidersInfo', "Attach API keys to AI providers to enable Anthropic (Claude), OpenAI, Gemini, Ollama and other models in chat. Each provider can have multiple named configurations.");
+		headerText.textContent = localize('aiProvidersInfo', "Attach API keys to AI providers to enable Anthropic, OpenAI, Gemini, Mistral, Groq, DeepSeek, xAI and other models in chat. Each provider can have multiple named configurations.");
 
 		this.listContainer = DOM.append(this.element, $('.ai-providers-list'));
 		this.refresh();
@@ -127,8 +127,8 @@ export class AIProvidersWidget extends Disposable {
 
 		const primaryBtn = this.listDisposables.add(new Button(actions, { ...defaultButtonStyles, supportIcons: true, secondary: groups.length > 0 }));
 		primaryBtn.label = groups.length === 0
-			? localize('configureProvider', "$(add) Configure")
-			: localize('addAnotherProvider', "$(add) Add Configuration");
+			? '$(add) ' + localize('configureProvider', "Configure")
+			: '$(add) ' + localize('addAnotherProvider', "Add Configuration");
 		this.listDisposables.add(primaryBtn.onDidClick(() => {
 			void this.languageModelsService.configureLanguageModelsProviderGroup(vendor.vendor);
 		}));

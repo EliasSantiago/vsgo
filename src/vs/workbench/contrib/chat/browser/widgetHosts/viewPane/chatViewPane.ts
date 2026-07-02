@@ -33,7 +33,6 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../../../
 import { ITelemetryService } from '../../../../../../platform/telemetry/common/telemetry.js';
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { editorBackground } from '../../../../../../platform/theme/common/colorRegistry.js';
-import { ChatViewTitleControl } from './chatViewTitleControl.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { IViewPaneOptions, ViewPane } from '../../../../../browser/parts/views/viewPane.js';
 import { Memento } from '../../../../../common/memento.js';
@@ -51,6 +50,7 @@ import { LocalChatSessionUri, getChatSessionType } from '../../../common/model/c
 import { ChatAgentLocation, ChatConfiguration, ChatModeKind } from '../../../common/constants.js';
 import { AgentSessionsControl } from '../../agentSessions/agentSessionsControl.js';
 import { ACTION_ID_NEW_CHAT } from '../../actions/chatActions.js';
+import { ChatSessionTabsControl } from './chatSessionTabs.js';
 import { ChatWidget } from '../../widget/chatWidget.js';
 import { ChatViewWelcomeController, IViewWelcomeDelegate } from '../../viewsWelcome/chatViewWelcomeController.js';
 import { IChatViewsWelcomeDescriptor } from '../../viewsWelcome/chatViewsWelcome.js';
@@ -64,7 +64,6 @@ import { AgentSessionsFilter, AgentSessionsGrouping } from '../../agentSessions/
 import { IAgentSessionsService } from '../../agentSessions/agentSessionsService.js';
 import { HoverPosition } from '../../../../../../base/browser/ui/hover/hoverWidget.js';
 import { IAgentSession } from '../../agentSessions/agentSessionsModel.js';
-import { IChatEntitlementService } from '../../../../../services/chat/common/chatEntitlementService.js';
 import { toErrorMessage } from '../../../../../../base/common/errorMessage.js';
 import { IWorkbenchEnvironmentService } from '../../../../../services/environment/common/environmentService.js';
 import { IHostService } from '../../../../../services/host/browser/host.js';
@@ -125,7 +124,6 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 		@ILifecycleService lifecycleService: ILifecycleService,
 		@IProgressService private readonly progressService: IProgressService,
 		@IAgentSessionsService private readonly agentSessionsService: IAgentSessionsService,
-		@IChatEntitlementService private readonly chatEntitlementService: IChatEntitlementService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IActivityService private readonly activityService: IActivityService,
 		@IWorkbenchEnvironmentService private readonly workbenchEnvironmentService: IWorkbenchEnvironmentService,
@@ -321,6 +319,9 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 
 	private createControls(parent: HTMLElement): void {
 
+		// Sessions Tabs (horizontal tab strip with a trailing "New Chat" button)
+		this.createSessionTabsControl(parent);
+
 		// Sessions Control
 		const sessionsControl = this.createSessionsControl(parent);
 
@@ -351,8 +352,40 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 	private sessionsNewButtonContainer: HTMLElement | undefined;
 	private sessionsControlContainer: HTMLElement | undefined;
 	private sessionsControl: AgentSessionsControl | undefined;
+	private sessionTabsControl: ChatSessionTabsControl | undefined;
+
+	// When true, the chat area shows the session history list (grouped by date) instead of the conversation
+	private historyVisible = false;
 
 	get agentSessionsControl(): AgentSessionsControl | undefined { return this.sessionsControl; }
+
+	private createSessionTabsControl(parent: HTMLElement): void {
+		this.sessionTabsControl = this._register(this.instantiationService.createInstance(ChatSessionTabsControl, parent, {
+			openSession: resource => { this.loadSession(resource); },
+			createNewChat: () => { this.commandService.executeCommand(ACTION_ID_NEW_CHAT); },
+			showHistory: () => { this.setHistoryVisible(!this.historyVisible); }
+		}));
+
+		// The strip collapses to zero height when there are no sessions, so relayout when that changes
+		this._register(this.sessionTabsControl.onDidChangeHeight(() => this.relayout()));
+	}
+
+	private setHistoryVisible(visible: boolean): void {
+		if (this.historyVisible === visible) {
+			return;
+		}
+
+		this.historyVisible = visible;
+		const { changed } = this.updateSessionsControlVisibility();
+		if (changed) {
+			this.relayout();
+		}
+		if (visible) {
+			this.sessionsControl?.focus();
+		} else {
+			this._widget?.focusInput();
+		}
+	}
 
 	private sessionsViewerVisible: boolean;
 	private sessionsViewerOrientation = AgentSessionsViewerOrientation.Stacked;
@@ -385,7 +418,7 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 		// Sessions Filter
 		const sessionsFilter = this._register(this.instantiationService.createInstance(AgentSessionsFilter, {
 			filterMenuId: MenuId.AgentSessionsViewerFilterSubMenu,
-			groupResults: () => this.sessionsViewerOrientation === AgentSessionsViewerOrientation.Stacked ? AgentSessionsGrouping.Capped : AgentSessionsGrouping.Date
+			groupResults: () => AgentSessionsGrouping.Date
 		}));
 		this._register(Event.runAndSubscribe(sessionsFilter.onDidChange, () => {
 			sessionsToolbarContainer.classList.toggle('filtered', !sessionsFilter.isDefault());
@@ -478,10 +511,11 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 
 			// Sessions control: stacked
 			if (this.sessionsViewerOrientation === AgentSessionsViewerOrientation.Stacked) {
-				newSessionsContainerVisible =
-					!!this.chatEntitlementService.sentiment.completed &&																// chat is setup (otherwise make room for terms and welcome)
-					(!this._widget || (this._widget.isEmpty() && !!this._widget.viewModel && !this._widget.viewModel.model.title)) &&	// chat widget empty (but not when model is loading or has a title)
-					!this.welcomeController?.isShowingWelcome.get();																	// welcome not showing
+				// In stacked mode the recent sessions are surfaced through the horizontal
+				// session tab strip at the top of the chat view (see ChatSessionTabsControl).
+				// The full vertical history list is only shown on demand when the user toggles
+				// it via the history button in that strip.
+				newSessionsContainerVisible = this.historyVisible;
 			}
 
 			// Sessions control: sidebar
@@ -518,8 +552,6 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 	private _widget!: ChatWidget;
 	get widget(): ChatWidget { return this._widget; }
 
-	private titleControl: ChatViewTitleControl | undefined;
-
 	private createChatControl(parent: HTMLElement): ChatWidget {
 		const chatControlsContainer = append(parent, $('.chat-controls-container'));
 
@@ -527,11 +559,6 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 
 		const editorOverflowWidgetsDomNode = this.layoutService.getContainer(getWindow(chatControlsContainer)).appendChild($('.chat-editor-overflow.monaco-editor'));
 		this._register(toDisposable(() => editorOverflowWidgetsDomNode.remove()));
-
-		// Chat Title (unless we are hosted in the chat bar)
-		if (this.viewDescriptorService.getViewLocationById(this.id) !== ViewContainerLocation.ChatBar) {
-			this.createChatTitleControl(chatControlsContainer);
-		}
 
 		// Chat Widget
 		const scopedInstantiationService = this._register(this.instantiationService.createChild(new ServiceCollection([IContextKeyService, this.scopedContextKeyService])));
@@ -577,19 +604,6 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 		return this._widget;
 	}
 
-	private createChatTitleControl(parent: HTMLElement): void {
-		this.titleControl = this._register(this.instantiationService.createInstance(ChatViewTitleControl,
-			parent,
-			{
-				focusChat: () => this._widget.focusInput()
-			}
-		));
-
-		this._register(this.titleControl.onDidChangeHeight(() => {
-			this.relayout();
-		}));
-	}
-
 	//#endregion
 
 	private registerControlsListeners(sessionsControl: AgentSessionsControl, chatWidget: ChatWidget, welcomeController: ChatViewWelcomeController): void {
@@ -615,7 +629,10 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 		// Track the active chat model and reveal it in the sessions control if side-by-side
 		this._register(chatWidget.onDidChangeViewModel(() => {
 			const model = chatWidget.viewModel?.model;
-			this.titleControl?.update(model);
+			this.sessionTabsControl?.setActiveSession(model?.sessionResource);
+
+			// Opening a session (or starting a new chat) dismisses the in-chat history list
+			this.setHistoryVisible(false);
 
 			if (this.sessionsViewerOrientation === AgentSessionsViewerOrientation.Stacked) {
 				return; // only reveal in side-by-side mode
@@ -757,9 +774,6 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 		}
 
 		this._widget.setModel(model);
-
-		// Update title control
-		this.titleControl?.update(model);
 
 		// Update the toolbar context with new sessionId
 		this.updateActions();
@@ -938,9 +952,10 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 		let remainingHeight = height;
 		const remainingWidth = width;
 
-		// Title Control
-		const titleHeight = this.titleControl?.getHeight() ?? 0;
-		remainingHeight -= titleHeight;
+		// Session Tabs Control
+		const sessionTabsHeight = this.sessionTabsControl?.height ?? 0;
+		remainingHeight -= sessionTabsHeight;
+		this.sessionTabsControl?.layout();
 
 		// Sessions Control
 		const { heightReduction, widthReduction } = this.layoutSessionsControl(remainingHeight, remainingWidth);

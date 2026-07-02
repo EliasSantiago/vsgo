@@ -179,14 +179,14 @@ abstract class KeepOrUndoAction extends ChatEditingEditorAction {
 		super({
 			id,
 			title: _keep
-				? localize2('accept', 'Keep Chat Edits')
-				: localize2('discard', 'Undo Chat Edits'),
+				? localize2('accept', 'Manter Edições do Chat')
+				: localize2('discard', 'Desfazer Edições do Chat'),
 			shortTitle: _keep
-				? localize2('accept2', 'Keep')
-				: localize2('discard2', 'Undo'),
+				? localize2('accept2', 'Manter')
+				: localize2('discard2', 'Desfazer'),
 			tooltip: _keep
-				? localize2('accept3', 'Keep Chat Edits in this File')
-				: localize2('discard3', 'Undo Chat Edits in this File'),
+				? localize2('accept3', 'Manter Edições do Chat Neste Arquivo')
+				: localize2('discard3', 'Desfazer Edições do Chat Neste Arquivo'),
 			precondition: ContextKeyExpr.and(ctxHasEditorModification, ctxIsCurrentlyBeingModified.negate()),
 			icon: _keep
 				? Codicon.check
@@ -251,8 +251,8 @@ abstract class AcceptRejectHunkAction extends ChatEditingEditorAction {
 		super(
 			{
 				id: _accept ? acceptHunkId : undoHunkId,
-				title: _accept ? localize2('acceptHunk', 'Keep this Change') : localize2('undo', 'Undo this Change'),
-				shortTitle: _accept ? localize2('acceptHunkShort', 'Keep') : localize2('undoShort', 'Undo'),
+				title: _accept ? localize2('acceptHunk', 'Manter Esta Alteração') : localize2('undo', 'Desfazer Esta Alteração'),
+				shortTitle: _accept ? localize2('acceptHunkShort', 'Manter') : localize2('undoShort', 'Desfazer'),
 				precondition: ContextKeyExpr.and(ctxHasEditorModification, ctxIsCurrentlyBeingModified.negate()),
 				f1: true,
 				keybinding: {
@@ -388,8 +388,8 @@ export class AcceptAllEditsAction extends ChatEditingEditorAction {
 	constructor() {
 		super({
 			id: AcceptAllEditsAction.ID,
-			title: localize2('acceptAllEdits', 'Keep All Chat Edits'),
-			tooltip: localize2('acceptAllEditsTooltip', 'Keep All Chat Edits in this Session'),
+			title: localize2('acceptAllEdits', 'Manter Todas as Edições do Chat'),
+			tooltip: localize2('acceptAllEditsTooltip', 'Manter Todas as Edições do Chat Nesta Sessão'),
 			precondition: ContextKeyExpr.and(ctxHasEditorModification, ctxIsCurrentlyBeingModified.negate()),
 			icon: Codicon.checkAll,
 			f1: true,
@@ -414,7 +414,7 @@ abstract class MultiDiffAcceptDiscardAction extends Action2 {
 	constructor(readonly accept: boolean) {
 		super({
 			id: accept ? 'chatEditing.multidiff.acceptAllFiles' : 'chatEditing.multidiff.discardAllFiles',
-			title: accept ? localize('accept4', 'Keep All Edits') : localize('discard4', 'Undo All Edits'),
+			title: accept ? localize('accept4', 'Manter Tudo') : localize('discard4', 'Desfazer Tudo'),
 			icon: accept ? Codicon.check : Codicon.discard,
 			menu: {
 				when: ContextKeyExpr.equals('resourceScheme', CHAT_EDITING_MULTI_DIFF_SOURCE_RESOLVER_SCHEME),

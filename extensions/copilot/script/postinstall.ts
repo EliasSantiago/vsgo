@@ -62,6 +62,15 @@ const treeSitterGrammars: ITreeSitterGrammar[] = [
 const REPO_ROOT = path.join(__dirname, '..');
 
 async function removeCopilotCLIShim() {
+	// When invoked as part of the packaging build (see `.esbuild.mts`), the gulp
+	// pipeline concurrently walks `node_modules/@github/copilot` to collect files.
+	// Deleting `shims.txt` here races with that walk (readdir sees it, lstat fails
+	// with ENOENT) and breaks `vscode-*` packaging. In the packaged extension the
+	// marker is expected to exist anyway (it makes the runtime skip shimming), so
+	// skip the removal in build context and only clean it up for the dev tree.
+	if (process.env['COPILOT_BUILD_POSTINSTALL'] === '1') {
+		return;
+	}
 	const shimsPath = path.join(REPO_ROOT, 'node_modules', '@github', 'copilot', 'shims.txt');
 	await fs.promises.rm(shimsPath, { force: true }).catch(() => { /* ignore */ });
 }
