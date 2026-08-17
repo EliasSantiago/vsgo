@@ -12,7 +12,8 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import { ISpecDrivenService, SPEC_DRIVEN_VIEW_ID } from '../common/spec.js';
+import { selectAiFeatureModel } from '../../chat/common/aiFeatureModel.js';
+import { ISpecDrivenService, SPEC_DRIVEN_FEATURE, SPEC_DRIVEN_VIEW_ID } from '../common/spec.js';
 
 const SPEC_DRIVEN_CATEGORY = localize2('specDriven.category', "Spec Driven");
 
@@ -73,7 +74,9 @@ export class SetUpSpecDrivenAction extends Action2 {
 		if (result.constitutionUri) {
 			await editorService.openEditor({ resource: result.constitutionUri });
 		}
-		if (!result.created && result.constitutionUri) {
+		if (result.migrated) {
+			notificationService.info(localize('specDriven.migratedConstitution', "A constituição foi movida de `memory/` para `.specify/memory/`, seguindo o layout do spec-kit."));
+		} else if (!result.created && result.constitutionUri) {
 			notificationService.info(localize('specDriven.alreadySetUp', "Spec Driven Development já está configurado neste projeto."));
 		}
 	}
@@ -106,5 +109,28 @@ export class OpenSpecsFolderAction extends Action2 {
 			return;
 		}
 		await openerService.open(dir, { openExternal: true });
+	}
+}
+
+/** Lets the user say which model generates the spec, plan and tasks documents. */
+export class SelectSpecDrivenModelAction extends Action2 {
+	static readonly ID = 'specDriven.selectModel';
+	constructor() {
+		super({
+			id: SelectSpecDrivenModelAction.ID,
+			title: localize2('specDriven.selectModel', "Select Model for Spec Driven"),
+			category: SPEC_DRIVEN_CATEGORY,
+			f1: true,
+			icon: Codicon.chip,
+			menu: {
+				id: MenuId.ViewTitle,
+				when: ContextKeyExpr.equals('view', SPEC_DRIVEN_VIEW_ID),
+				group: 'navigation',
+				order: 3,
+			},
+		});
+	}
+	run(accessor: ServicesAccessor): Promise<void> {
+		return selectAiFeatureModel(accessor, SPEC_DRIVEN_FEATURE);
 	}
 }

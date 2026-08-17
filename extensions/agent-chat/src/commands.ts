@@ -16,6 +16,11 @@ import { applyFinding, BugBotProvider } from './bugBot/bugBotProvider.js';
 import { collectChanges } from './splitPR/changes.js';
 import { suggestGroups, SuggestedGroup } from './splitPR/groupClassifier.js';
 import { SplitService } from './splitPR/splitService.js';
+import { ServerManager } from './localModels/serverManager.js';
+
+/** Section id of the AI Providers page in the AI Customizations editor. */
+const AI_PROVIDERS_SECTION = 'aiProviders';
+const OPEN_AI_CUSTOMIZATIONS = 'aiCustomization.openManagementEditor';
 
 export function registerCommands(
 	storage: ByokStorage,
@@ -24,8 +29,19 @@ export function registerCommands(
 	agentSessionsStore: AgentSessionsStore,
 	agentSessionsService: AgentSessionsService,
 	bugBotProvider: BugBotProvider,
+	serverManager: ServerManager,
 ): vscode.Disposable {
 	const subs: vscode.Disposable[] = [];
+
+	// Also the vendor's `manageModelsCommand`: managing local models is a page in
+	// the AI Customizations editor, not a picker of its own.
+	subs.push(vscode.commands.registerCommand('agent-chat.localModels.manage', () =>
+		vscode.commands.executeCommand(OPEN_AI_CUSTOMIZATIONS, AI_PROVIDERS_SECTION)));
+
+	subs.push(vscode.commands.registerCommand('agent-chat.localModels.stopServer', () => {
+		serverManager.stop();
+		vscode.window.showInformationMessage('Local model server stopped.');
+	}));
 
 	subs.push(vscode.commands.registerCommand('agent-chat.reloadRules', async () => {
 		const count = await rulesLoader.reload();

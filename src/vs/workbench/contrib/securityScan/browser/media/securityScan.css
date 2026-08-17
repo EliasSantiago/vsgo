@@ -183,3 +183,13 @@
 .security-scan-view .security-scan-finding .finding-actions .codicon:hover {
 	background-color: var(--vscode-toolbar-hoverBackground);
 }
+
+/* Count of findings hidden by the ignore filter; a link because it toggles them. */
+.security-scan-header .security-scan-hidden-count {
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+}
+
+.security-scan-header .security-scan-hidden-count:hover {
+	text-decoration: underline;
+}

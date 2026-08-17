@@ -10,75 +10,89 @@ import { INotificationService, Severity } from '../../../../platform/notificatio
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
-import { ISpecDrivenService } from '../common/spec.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
+import { ISpecDrivenService, SPEC_DRIVEN_VIEW_ID } from '../common/spec.js';
 import { SetUpSpecDrivenAction } from './specDrivenActions.js';
 
-const DISMISSED_STORAGE_KEY = 'specDriven.onboarding.dismissed';
+/** Set when the user answers "not now" — scoped to the workspace that was declined. */
+const DISMISSED_WORKSPACE_KEY = 'specDriven.onboarding.dismissed';
+/** Set when the user answers "don't ask again" — suppresses the prompt everywhere. */
+const DISMISSED_PROFILE_KEY = 'specDriven.onboarding.dismissedGlobally';
 
 /**
- * Offers to set up Spec Driven Development when a workspace folder is open and the structure
- * is not yet present. The prompt is suppressed once the user chooses "don't ask again"
- * (remembered per workspace) or dismisses it for the current session.
+ * Offers to set up Spec Driven Development the first time the user opens the Spec Driven view
+ * in a workspace that does not have the structure yet. Scaffolding creates folders in the
+ * project root, so the offer waits for the user to show interest instead of greeting every
+ * folder that gets opened.
  */
 export class SpecDrivenOnboarding extends Disposable implements IWorkbenchContribution {
 	static readonly ID = 'workbench.contrib.specDrivenOnboarding';
 
-	private dismissedThisSession = false;
-	private offering = false;
+	private offered = false;
 
 	constructor(
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@INotificationService private readonly notificationService: INotificationService,
 		@IStorageService private readonly storageService: IStorageService,
 		@ICommandService private readonly commandService: ICommandService,
+		@IViewsService private readonly viewsService: IViewsService,
 		@ISpecDrivenService private readonly specDrivenService: ISpecDrivenService,
 	) {
 		super();
-		this.maybeOffer();
-		this._register(this.workspaceContextService.onDidChangeWorkspaceFolders(() => this.maybeOffer()));
+		this._register(this.viewsService.onDidChangeViewVisibility(e => {
+			if (e.id === SPEC_DRIVEN_VIEW_ID && e.visible) {
+				this.maybeOffer();
+			}
+		}));
+		if (this.viewsService.isViewVisible(SPEC_DRIVEN_VIEW_ID)) {
+			this.maybeOffer();
+		}
 	}
 
 	private async maybeOffer(): Promise<void> {
-		if (this.offering || this.dismissedThisSession) {
+		if (this.offered) {
 			return;
 		}
 		if (this.workspaceContextService.getWorkbenchState() === WorkbenchState.EMPTY) {
 			return;
 		}
-		if (this.storageService.getBoolean(DISMISSED_STORAGE_KEY, StorageScope.WORKSPACE, false)) {
+		if (this.storageService.getBoolean(DISMISSED_PROFILE_KEY, StorageScope.PROFILE, false)) {
+			return;
+		}
+		if (this.storageService.getBoolean(DISMISSED_WORKSPACE_KEY, StorageScope.WORKSPACE, false)) {
 			return;
 		}
 
-		this.offering = true;
-		try {
-			if (await this.specDrivenService.isSpecKitConfigured()) {
-				return;
-			}
-
-			this.notificationService.prompt(
-				Severity.Info,
-				localize('specDriven.onboardingPrompt', "Deseja usar Spec Driven Development (SDD) neste projeto? Será criada a estrutura de constituição, modelos e specs."),
-				[
-					{
-						label: localize('specDriven.onboardingSetUp', "Configurar SDD"),
-						run: () => { this.commandService.executeCommand(SetUpSpecDrivenAction.ID); },
-					},
-					{
-						label: localize('specDriven.onboardingLater', "Agora não"),
-						run: () => { this.dismissedThisSession = true; },
-					},
-					{
-						label: localize('specDriven.onboardingNever', "Não perguntar novamente"),
-						run: () => {
-							this.dismissedThisSession = true;
-							this.storageService.store(DISMISSED_STORAGE_KEY, true, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-						},
-					},
-				],
-				{ sticky: false },
-			);
-		} finally {
-			this.offering = false;
+		this.offered = true;
+		if (await this.specDrivenService.isSpecKitConfigured()) {
+			return;
 		}
+
+		this.notificationService.prompt(
+			Severity.Info,
+			localize(
+				'specDriven.onboardingPrompt',
+				"Deseja usar Spec Driven Development (SDD) neste projeto? Seguindo o layout do spec-kit, serão criadas `.specify/` (constituição e modelos) e `specs/` na raiz do projeto."
+			),
+			[
+				{
+					label: localize('specDriven.onboardingSetUp', "Configurar SDD"),
+					run: () => { this.commandService.executeCommand(SetUpSpecDrivenAction.ID); },
+				},
+				{
+					label: localize('specDriven.onboardingLater', "Agora não"),
+					run: () => {
+						this.storageService.store(DISMISSED_WORKSPACE_KEY, true, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+					},
+				},
+				{
+					label: localize('specDriven.onboardingNever', "Não perguntar novamente"),
+					run: () => {
+						this.storageService.store(DISMISSED_PROFILE_KEY, true, StorageScope.PROFILE, StorageTarget.MACHINE);
+					},
+				},
+			],
+			{ sticky: false },
+		);
 	}
 }

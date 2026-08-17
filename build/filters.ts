@@ -83,11 +83,16 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!src/vs/workbench/contrib/chat/browser/widget/input/autoModeToggleActionItem.ts',
 	'!src/vs/workbench/contrib/chat/browser/widget/input/modePickerActionItem.ts',
 	'!src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts',
+	'!src/vs/workbench/contrib/chat/browser/aiCustomization/**',
+	'!src/vs/workbench/contrib/chat/common/aiFeatureModel.ts',
+	'!src/vs/workbench/api/browser/mainThreadChatAgents2.ts',
 	'!src/vs/workbench/contrib/specDriven/**',
 	'!src/vs/workbench/contrib/qa/**',
 	'!src/vs/workbench/contrib/securityScan/**',
 	'!extensions/agent-chat/**',
 	'!scripts/build-linux.sh',
+	'!scripts/dev.sh',
+	'!scripts/watch-dev.sh',
 	'!scripts/build-win.sh',
 	'!scripts/release.sh',
 ]);
@@ -155,10 +160,12 @@ export const indentationFilter = Object.freeze<string[]>([
 
 	// vsgo: template literals embedding JS/JSON/markdown, whose content is
 	// intentionally space-indented and must not be reflowed to tabs.
-	'!extensions/qa-driver/src/qaDriver.ts',
 	'!src/vs/workbench/contrib/qa/browser/qaService.ts',
 	'!src/vs/workbench/contrib/securityScan/browser/securityScanService.ts',
+	'!src/vs/workbench/contrib/securityScan/browser/securityScanActions.ts',
 	'!src/vs/workbench/contrib/specDriven/browser/specKitTemplates.ts',
+	'!src/vs/workbench/contrib/specDriven/browser/specDrivenService.ts',
+	'!extensions/agent-chat/src/agentProfile.ts',
 
 	// except specific file types
 	'!src/vs/*/**/*.d.ts',

@@ -37,9 +37,9 @@ export class AIUsageStatusBarContribution extends Disposable implements IWorkben
 		const text = `$(graph) ${formatCompact(lastTokens)}`;
 
 		return {
-			name: localize('aiUsageStatus', "AI Token Usage"),
+			name: localize('aiUsageStatus', "Uso de Tokens de IA"),
 			text,
-			ariaLabel: localize('aiUsageStatusAria', "Last request used {0} tokens", lastTokens),
+			ariaLabel: localize('aiUsageStatusAria', "A última requisição usou {0} tokens", lastTokens),
 			tooltip: this.buildTooltip(),
 			command: ShowTooltipCommand,
 		};
@@ -52,10 +52,10 @@ export class AIUsageStatusBarContribution extends Disposable implements IWorkben
 		const all = this.aiUsageService.getTotals();
 
 		const md = new MarkdownString('', { supportThemeIcons: true });
-		md.appendMarkdown(`**${localize('aiUsageTooltipTitle', "AI Token Usage")}**\n\n`);
-		md.appendMarkdown(`${line(localize('aiUsageTooltipToday', "Today"), today)}\n\n`);
-		md.appendMarkdown(`${line(localize('aiUsageTooltipAll', "All time"), all)}\n\n`);
-		md.appendMarkdown(localize('aiUsageTooltipHint', "Open _AI Usage_ in the AI Customization editor for a full breakdown."));
+		md.appendMarkdown(`**${localize('aiUsageTooltipTitle', "Uso de Tokens de IA")}**\n\n`);
+		md.appendMarkdown(`${line(localize('aiUsageTooltipToday', "Hoje"), today)}\n\n`);
+		md.appendMarkdown(`${line(localize('aiUsageTooltipAll', "Desde o início"), all)}\n\n`);
+		md.appendMarkdown(localize('aiUsageTooltipHint', "Abra _Uso de IA_ no editor de Personalizações do Agente para ver o detalhamento completo."));
 		return md;
 	}
 }
@@ -63,7 +63,7 @@ export class AIUsageStatusBarContribution extends Disposable implements IWorkben
 function line(label: string, totals: IAIUsageTotals): string {
 	return localize(
 		'aiUsageTooltipLine',
-		"{0}: {1} tokens ({2} in / {3} out) · {4} requests",
+		"{0}: {1} tokens ({2} entrada / {3} saída) · {4} requisições",
 		label,
 		(totals.inputTokens + totals.outputTokens).toLocaleString(),
 		totals.inputTokens.toLocaleString(),

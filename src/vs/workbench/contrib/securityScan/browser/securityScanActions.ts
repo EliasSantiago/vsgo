@@ -3,19 +3,24 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, MenuId } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ViewAction } from '../../../browser/parts/views/viewPane.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { ISecurityScanService, SECURITY_SCAN_VIEW_ID } from '../common/securityScan.js';
+import { selectAiFeatureModel } from '../../chat/common/aiFeatureModel.js';
+import { ISecurityScanService, SECURITY_SCAN_CONFIG_SECTION, SECURITY_SCAN_FEATURE, SECURITY_SCAN_VIEW_ID } from '../common/securityScan.js';
 import { SecurityScanView } from './securityScanView.js';
 
 const SECURITY_SCAN_CATEGORY = localize2('securityScan.category', "Security Scan");
@@ -284,8 +289,12 @@ export class ExportReportAction extends Action2 {
 		const defaultUri = await fileDialogService.defaultFilePath();
 		const target = await fileDialogService.showSaveDialog({
 			title: localize('securityScan.exportTitle', "Export Security Scan Report"),
-			defaultUri: defaultUri ? URI.joinPath(defaultUri, `security-scan-${new Date().toISOString().replace(/[:.]/g, '-')}.sarif`) : undefined,
+			// Markdown first: exporting is something a person does to read or to
+			// send the result to someone. SARIF stays for the tools that consume
+			// it — GitHub code scanning and CI gates — and JSON for scripts.
+			defaultUri: defaultUri ? URI.joinPath(defaultUri, `security-scan-${new Date().toISOString().replace(/[:.]/g, '-')}.md`) : undefined,
 			filters: [
+				{ name: 'Markdown', extensions: ['md'] },
 				{ name: 'SARIF', extensions: ['sarif'] },
 				{ name: 'JSON', extensions: ['json'] },
 			],
@@ -319,3 +328,98 @@ export class RevealFindingCommand extends Action2 {
 		});
 	}
 }
+
+/**
+ * Lets the user say which model the scan runs on. Without it the choice lived
+ * only in `security.scan.modelId`, and an empty setting quietly meant whichever
+ * provider registered first.
+ */
+export class SelectSecurityScanModelAction extends Action2 {
+	static readonly ID = 'securityScan.selectModel';
+	constructor() {
+		super({
+			id: SelectSecurityScanModelAction.ID,
+			title: localize2('securityScan.selectModel', "Select Model for Security Scan"),
+			category: SECURITY_SCAN_CATEGORY,
+			f1: true,
+			icon: Codicon.chip,
+			menu: {
+				id: MenuId.ViewTitle,
+				when: ContextKeyExpr.equals('view', SECURITY_SCAN_VIEW_ID),
+				group: 'navigation',
+				order: 8,
+			},
+		});
+	}
+	run(accessor: ServicesAccessor): Promise<void> {
+		return selectAiFeatureModel(accessor, SECURITY_SCAN_FEATURE);
+	}
+}
+
+/**
+ * Opens the project's own scan instructions, creating them from a template the
+ * first time. The built-in prompt is not editable — it owns the JSON contract
+ * the parser depends on — so what a project gets to add is guidance appended
+ * after it.
+ */
+export class EditScanInstructionsAction extends Action2 {
+	static readonly ID = 'securityScan.editInstructions';
+	constructor() {
+		super({
+			id: EditScanInstructionsAction.ID,
+			title: localize2('securityScan.editInstructions', "Edit Scan Instructions"),
+			category: SECURITY_SCAN_CATEGORY,
+			f1: true,
+			icon: Codicon.book,
+			menu: {
+				id: MenuId.ViewTitle,
+				when: ContextKeyExpr.equals('view', SECURITY_SCAN_VIEW_ID),
+				group: 'navigation',
+				order: 9,
+			},
+		});
+	}
+	async run(accessor: ServicesAccessor): Promise<void> {
+		const configurationService = accessor.get(IConfigurationService);
+		const workspaceContextService = accessor.get(IWorkspaceContextService);
+		const fileService = accessor.get(IFileService);
+		const editorService = accessor.get(IEditorService);
+		const notificationService = accessor.get(INotificationService);
+
+		const folder = workspaceContextService.getWorkspace().folders[0];
+		if (!folder) {
+			notificationService.info(localize('securityScan.instructionsNoWorkspace', "Abra uma pasta para definir instruções de scan."));
+			return;
+		}
+		const relative = configurationService.getValue<string>(`${SECURITY_SCAN_CONFIG_SECTION}.instructionsFile`) || '.vsgo/security/instructions.md';
+		const target = URI.joinPath(folder.uri, relative);
+		if (!(await fileService.exists(target))) {
+			await fileService.createFile(target, VSBuffer.fromString(INSTRUCTIONS_TEMPLATE));
+		}
+		await editorService.openEditor({ resource: target });
+	}
+}
+
+const INSTRUCTIONS_TEMPLATE = `# Instruções de scan de segurança
+
+O texto deste arquivo é anexado ao prompt da revisão por IA, depois das instruções
+padrão. O formato da resposta continua fixo — descreva contexto, não formato.
+
+## Modelo de ameaças
+
+<!-- Quem é o atacante e o que ele quer. Ex.: usuário autenticado tentando ler
+     dados de outro tenant; visitante anônimo em rotas públicas. -->
+
+## O que é confiável neste projeto
+
+<!-- Ex.: tudo que passa por \`withAuth()\` já teve a sessão validada.
+     \`db.query\` recebe sempre parâmetros posicionais. -->
+
+## O que merece atenção redobrada
+
+<!-- Ex.: qualquer rota sob /api/admin; o fluxo de upload; o webhook de pagamento. -->
+
+## Falsos positivos conhecidos
+
+<!-- Ex.: \`renderMarkdown()\` já sanitiza; não reportar o innerHTML dentro dela. -->
+`;

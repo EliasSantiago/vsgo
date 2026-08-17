@@ -170,7 +170,7 @@ Uma pasta \`NNN-slug\` por domínio (ex.: \`001-autenticacao\`, \`002-pagamentos
 Cada pasta contém \`spec.md\`, \`plan.md\` e \`tasks.md\`.
 
 Fluxo: escreva e aprove a \`spec.md\` → escreva e aprove o \`plan.md\` → só então execute as \`tasks.md\`.
-Modelos em branco ficam em \`.specify/templates/\`. Princípios do projeto em \`memory/constitution.md\`.
+Modelos em branco ficam em \`.specify/templates/\`. Princípios do projeto em \`.specify/memory/constitution.md\`.
 `;
 
 export const EXAMPLE_SPEC_SLUG = '001-exemplo';

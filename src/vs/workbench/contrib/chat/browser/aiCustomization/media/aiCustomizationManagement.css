@@ -1611,6 +1611,494 @@
 	overflow: hidden;
 }
 
+/* --- Local Models drill-down (shown in place of the provider list) --- */
+
+.ai-customization-management-editor .ai-providers-drilldown {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+}
+
+.ai-customization-management-editor .local-models-back-bar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.ai-customization-management-editor .local-models-back-bar .monaco-button {
+	flex: 0 0 auto;
+	/* Buttons are full-width by default, which would eat the whole bar and push */
+	/* the breadcrumb out of the panel. */
+	width: auto;
+	border-radius: 8px;
+	padding: 2px 10px;
+}
+
+.ai-customization-management-editor .local-models-breadcrumb {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex: 1 1 auto;
+	overflow: hidden;
+	min-width: 0;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .local-models-breadcrumb-separator {
+	font-size: 12px;
+	opacity: 0.7;
+}
+
+.ai-customization-management-editor .local-models-breadcrumb-current {
+	color: var(--vscode-foreground);
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ai-customization-management-editor .local-models-widget {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	min-width: 0;
+}
+
+.ai-customization-management-editor .local-models-header {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.ai-customization-management-editor .local-models-description {
+	margin: 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+	line-height: 1.6;
+}
+
+.ai-customization-management-editor .local-models-hardware {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	align-self: flex-start;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.15));
+	color: var(--vscode-foreground);
+	font-size: 11px;
+}
+
+.ai-customization-management-editor .local-models-hardware-icon {
+	font-size: 13px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .local-models-error {
+	padding: 12px 14px;
+	border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+	border-radius: 8px;
+	background: var(--vscode-inputValidation-errorBackground, transparent);
+	color: var(--vscode-errorForeground);
+	font-size: 12px;
+}
+
+/* Runtime card */
+
+.ai-customization-management-editor .local-models-runtime-card {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 14px;
+	border: 1px solid var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35));
+	border-radius: 10px;
+	background-color: var(--vscode-editorWidget-background);
+}
+
+.ai-customization-management-editor .local-models-runtime-dot {
+	flex: 0 0 auto;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .local-models-runtime-card.state-ready .local-models-runtime-dot {
+	background: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+}
+
+.ai-customization-management-editor .local-models-runtime-card.state-error .local-models-runtime-dot {
+	background: var(--vscode-errorForeground);
+}
+
+.ai-customization-management-editor .local-models-runtime-card.state-missing .local-models-runtime-dot,
+.ai-customization-management-editor .local-models-runtime-card.state-busy .local-models-runtime-dot,
+.ai-customization-management-editor .local-models-runtime-card.state-starting .local-models-runtime-dot {
+	background: var(--vscode-charts-orange, var(--vscode-editorWarning-foreground));
+}
+
+.ai-customization-management-editor .local-models-runtime-details {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.ai-customization-management-editor .local-models-runtime-title {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.ai-customization-management-editor .local-models-runtime-status {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ai-customization-management-editor .local-models-runtime-status.not-configured {
+	color: var(--vscode-disabledForeground);
+}
+
+.ai-customization-management-editor .local-models-runtime-actions {
+	flex: 0 0 auto;
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+
+.ai-customization-management-editor .local-models-runtime-actions .monaco-button {
+	border-radius: 8px;
+}
+
+/* Inline configuration */
+
+.ai-customization-management-editor .local-models-settings {
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35));
+	border-radius: 10px;
+	background-color: var(--vscode-editorWidget-background);
+	overflow: hidden;
+}
+
+.ai-customization-management-editor .local-models-settings-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 14px;
+	cursor: pointer;
+	user-select: none;
+}
+
+.ai-customization-management-editor .local-models-settings-header:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.ai-customization-management-editor .local-models-settings-header:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+.ai-customization-management-editor .local-models-settings-chevron {
+	flex: 0 0 auto;
+	font-size: 14px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .local-models-settings-title {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.ai-customization-management-editor .local-models-settings-summary {
+	flex: 1 1 auto;
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ai-customization-management-editor .local-models-settings-body {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 4px 14px 14px 36px;
+	border-top: 1px solid var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35));
+}
+
+.ai-customization-management-editor .local-models-setting {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.ai-customization-management-editor .local-models-setting-label {
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--vscode-foreground);
+}
+
+.ai-customization-management-editor .local-models-setting-input {
+	max-width: 520px;
+}
+
+.ai-customization-management-editor .local-models-setting-hint {
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .local-models-settings-footer {
+	display: flex;
+}
+
+.ai-customization-management-editor .local-models-settings-footer .monaco-button {
+	border-radius: 8px;
+	padding: 2px 10px;
+}
+
+/* Model catalog */
+
+.ai-customization-management-editor .local-models-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.ai-customization-management-editor .local-models-section-heading {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .local-models-section-count {
+	padding: 0 6px;
+	border-radius: 999px;
+	background: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0;
+}
+
+.ai-customization-management-editor .local-models-empty {
+	padding: 20px 16px;
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+	text-align: center;
+}
+
+.ai-customization-management-editor .local-model-card {
+	border: 1px solid var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35));
+	border-radius: 10px;
+	background-color: var(--vscode-editorWidget-background);
+	transition: border-color 0.15s ease;
+}
+
+.ai-customization-management-editor .local-model-card:hover {
+	border-color: var(--vscode-focusBorder, var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35)));
+}
+
+.ai-customization-management-editor .local-model-card.fit-unsupported {
+	opacity: 0.75;
+}
+
+.ai-customization-management-editor .local-model-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 12px 14px;
+}
+
+.ai-customization-management-editor .local-model-icon {
+	flex: 0 0 auto;
+	width: 28px;
+	height: 28px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 6px;
+	background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.15));
+	font-size: 15px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .local-model-card.installed .local-model-icon,
+.ai-customization-management-editor .local-model-card.fit-ideal .local-model-icon {
+	color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+}
+
+.ai-customization-management-editor .local-model-card.fit-tight .local-model-icon {
+	color: var(--vscode-editorWarning-foreground, var(--vscode-charts-orange));
+}
+
+.ai-customization-management-editor .local-model-card.fit-unsupported .local-model-icon {
+	color: var(--vscode-errorForeground);
+}
+
+.ai-customization-management-editor .local-model-details {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.ai-customization-management-editor .local-model-name-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.ai-customization-management-editor .local-model-name {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.ai-customization-management-editor .local-model-badge {
+	padding: 1px 6px;
+	border-radius: 4px;
+	background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.15));
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+.ai-customization-management-editor .local-model-badge.warning {
+	background: transparent;
+	border: 1px solid var(--vscode-editorWarning-foreground, var(--vscode-charts-orange));
+	color: var(--vscode-editorWarning-foreground, var(--vscode-charts-orange));
+}
+
+.ai-customization-management-editor .local-model-fit {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .local-model-fit.ideal {
+	color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+}
+
+.ai-customization-management-editor .local-model-fit.tight {
+	color: var(--vscode-editorWarning-foreground, var(--vscode-charts-orange));
+}
+
+.ai-customization-management-editor .local-model-fit.unsupported {
+	color: var(--vscode-errorForeground);
+}
+
+.ai-customization-management-editor .local-model-description {
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .local-model-actions {
+	flex: 0 0 auto;
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+
+.ai-customization-management-editor .local-model-actions .monaco-button {
+	border-radius: 8px;
+}
+
+/* Progress (model download and runtime install share this) */
+
+.ai-customization-management-editor .local-model-progress {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 4px;
+}
+
+.ai-customization-management-editor .local-model-progress-track {
+	flex: 1 1 auto;
+	height: 4px;
+	border-radius: 999px;
+	background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.3));
+	overflow: hidden;
+}
+
+.ai-customization-management-editor .local-model-progress-bar {
+	height: 100%;
+	border-radius: 999px;
+	background: var(--vscode-progressBar-background, var(--vscode-charts-blue));
+	transition: width 0.3s ease;
+}
+
+.ai-customization-management-editor .local-model-progress-label {
+	flex: 0 0 auto;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	color: var(--vscode-descriptionForeground);
+}
+
+/* Confirmation asked inside the card it belongs to, instead of a modal. */
+.ai-customization-management-editor .local-model-confirm {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	margin: 0 14px 12px;
+	padding: 10px 12px;
+	border-radius: 8px;
+	border: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-editorWarning-foreground));
+	background-color: var(--vscode-inputValidation-warningBackground, var(--vscode-editorWidget-background));
+}
+
+.ai-customization-management-editor .local-model-confirm-icon {
+	flex: 0 0 auto;
+	margin-top: 1px;
+	color: var(--vscode-editorWarning-foreground, var(--vscode-charts-orange));
+}
+
+.ai-customization-management-editor .local-model-confirm-body {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.ai-customization-management-editor .local-model-confirm-message {
+	font-weight: 600;
+}
+
+.ai-customization-management-editor .local-model-confirm-detail {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .local-model-confirm-actions {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.ai-customization-management-editor .local-model-confirm-actions .monaco-button {
+	width: auto;
+	padding: 2px 12px;
+	border-radius: 6px;
+}
+
 /* --- AI Usage section --- */
 
 .ai-customization-management-editor .ai-usage-content-container {

@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import { BaseChatProvider, ModelSpec, parseJSONL, toAbort } from './base.js';
 
-interface OllamaTagsResponse { models?: Array<{ name: string }>; }
+interface OllamaTagsResponse { models?: Array<{ name: string }> }
 
 const DEFAULT_BASE_URL = 'http://localhost:11434';
 
@@ -53,6 +53,10 @@ export class OllamaProvider extends BaseChatProvider {
 				messages: body,
 				stream: true,
 				tools: tools ? tools.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.inputSchema } })) : undefined,
+				// Same reason as the local provider: these are small models whose
+				// tool calls often have to be recovered from plain text, and that
+				// only works while decoding stays close to greedy.
+				options: { temperature: 0.1, top_p: 0.9 },
 			}),
 			signal: toAbort(token),
 		});

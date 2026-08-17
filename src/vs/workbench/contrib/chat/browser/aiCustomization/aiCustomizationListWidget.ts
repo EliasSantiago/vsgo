@@ -285,9 +285,9 @@ class AICustomizationItemRenderer implements IListRenderer<IFileItemEntry, IAICu
 		templateData.elementDisposables.add(this.hoverService.setupDelayedHover(templateData.container, () => {
 			let content: string;
 			if (element.isBuiltin) {
-				content = `${element.name}\n${localize('builtinSource', "Built-in")}`;
+				content = `${element.name}\n${localize('builtinSource', "Nativo")}`;
 			} else if (element.extensionId) {
-				content = `${element.name}\n${localize('fromExtension', "Extension: {0}", element.extensionId)}`;
+				content = `${element.name}\n${localize('fromExtension', "Extensão: {0}", element.extensionId)}`;
 			} else {
 				const isWorkspaceItem = element.storage === PromptsStorage.local;
 				const uriLabel = this.labelService.getUriLabel(element.uri, { relative: isWorkspaceItem });
@@ -466,48 +466,48 @@ export function getCountAnnouncement(section: AICustomizationManagementSection, 
 	switch (section) {
 		case AICustomizationManagementSection.Agents:
 			if (isFiltering) {
-				if (count === 0) { return localize('countAgentsNoResults', "No agents found"); }
-				if (count === 1) { return localize('countAgentsOneResult', "1 agent found"); }
-				return localize('countAgentsResults', "{0} agents found", count);
+				if (count === 0) { return localize('countAgentsNoResults', "Nenhum agente encontrado"); }
+				if (count === 1) { return localize('countAgentsOneResult', "1 agente encontrado"); }
+				return localize('countAgentsResults', "{0} agentes encontrados", count);
 			}
-			if (count === 0) { return localize('countAgentsNone', "No agents"); }
-			if (count === 1) { return localize('countAgentsOne', "1 agent"); }
-			return localize('countAgents', "{0} agents", count);
+			if (count === 0) { return localize('countAgentsNone', "Nenhum agente"); }
+			if (count === 1) { return localize('countAgentsOne', "1 agente"); }
+			return localize('countAgents', "{0} agentes", count);
 		case AICustomizationManagementSection.Skills:
 			if (isFiltering) {
-				if (count === 0) { return localize('countSkillsNoResults', "No skills found"); }
-				if (count === 1) { return localize('countSkillsOneResult', "1 skill found"); }
-				return localize('countSkillsResults', "{0} skills found", count);
+				if (count === 0) { return localize('countSkillsNoResults', "Nenhuma skill encontrada"); }
+				if (count === 1) { return localize('countSkillsOneResult', "1 skill encontrada"); }
+				return localize('countSkillsResults', "{0} skills encontradas", count);
 			}
-			if (count === 0) { return localize('countSkillsNone', "No skills"); }
+			if (count === 0) { return localize('countSkillsNone', "Nenhuma skill"); }
 			if (count === 1) { return localize('countSkillsOne', "1 skill"); }
 			return localize('countSkills', "{0} skills", count);
 		case AICustomizationManagementSection.Instructions:
 			if (isFiltering) {
-				if (count === 0) { return localize('countInstructionsNoResults', "No instructions found"); }
-				if (count === 1) { return localize('countInstructionsOneResult', "1 instruction file found"); }
-				return localize('countInstructionsResults', "{0} instruction files found", count);
+				if (count === 0) { return localize('countInstructionsNoResults', "Nenhuma instrução encontrada"); }
+				if (count === 1) { return localize('countInstructionsOneResult', "1 arquivo de instruções encontrado"); }
+				return localize('countInstructionsResults', "{0} arquivos de instruções encontrados", count);
 			}
-			if (count === 0) { return localize('countInstructionsNone', "No instructions"); }
-			if (count === 1) { return localize('countInstructionsOne', "1 instruction file"); }
-			return localize('countInstructions', "{0} instruction files", count);
+			if (count === 0) { return localize('countInstructionsNone', "Nenhuma instrução"); }
+			if (count === 1) { return localize('countInstructionsOne', "1 arquivo de instruções"); }
+			return localize('countInstructions', "{0} arquivos de instruções", count);
 		case AICustomizationManagementSection.Hooks:
 			if (isFiltering) {
-				if (count === 0) { return localize('countHooksNoResults', "No hooks found"); }
-				if (count === 1) { return localize('countHooksOneResult', "1 hook found"); }
-				return localize('countHooksResults', "{0} hooks found", count);
+				if (count === 0) { return localize('countHooksNoResults', "Nenhum hook encontrado"); }
+				if (count === 1) { return localize('countHooksOneResult', "1 hook encontrado"); }
+				return localize('countHooksResults', "{0} hooks encontrados", count);
 			}
-			if (count === 0) { return localize('countHooksNone', "No hooks"); }
+			if (count === 0) { return localize('countHooksNone', "Nenhum hook"); }
 			if (count === 1) { return localize('countHooksOne', "1 hook"); }
 			return localize('countHooks', "{0} hooks", count);
 		case AICustomizationManagementSection.Prompts:
 		default:
 			if (isFiltering) {
-				if (count === 0) { return localize('countPromptsNoResults', "No prompts found"); }
-				if (count === 1) { return localize('countPromptsOneResult', "1 prompt found"); }
-				return localize('countPromptsResults', "{0} prompts found", count);
+				if (count === 0) { return localize('countPromptsNoResults', "Nenhum prompt encontrado"); }
+				if (count === 1) { return localize('countPromptsOneResult', "1 prompt encontrado"); }
+				return localize('countPromptsResults', "{0} prompts encontrados", count);
 			}
-			if (count === 0) { return localize('countPromptsNone', "No prompts"); }
+			if (count === 0) { return localize('countPromptsNone', "Nenhum prompt"); }
 			if (count === 1) { return localize('countPromptsOne', "1 prompt"); }
 			return localize('countPrompts', "{0} prompts", count);
 	}
@@ -618,7 +618,7 @@ export class AICustomizationListWidget extends Disposable {
 		// Search container
 		this.searchContainer = DOM.append(this.searchAndButtonContainer, $('.list-search-container'));
 		this.searchInput = this._register(new InputBox(this.searchContainer, this.contextViewService, {
-			placeholder: localize('searchPlaceholder', "Type to search..."),
+			placeholder: localize('searchPlaceholder', "Digite para buscar..."),
 			inputBoxStyles: defaultInputBoxStyles,
 		}));
 
@@ -687,7 +687,7 @@ export class AICustomizationListWidget extends Disposable {
 				accessibilityProvider: {
 					getAriaLabel: (entry: IListEntry) => {
 						if (entry.type === 'group-header') {
-							return localize('groupAriaLabel', "{0}, {1} items, {2}", entry.label, entry.count, entry.collapsed ? localize('collapsed', "collapsed") : localize('expanded', "expanded"));
+							return localize('groupAriaLabel', "{0}, {1} itens, {2}", entry.label, entry.count, entry.collapsed ? localize('collapsed', "recolhido") : localize('expanded', "expandido"));
 						}
 						const displayName = entry.item.displayName ?? formatDisplayName(entry.item.name);
 						const secondaryText = getCustomizationSecondaryText(entry.item.description, entry.item.filename, entry.item.promptType);
@@ -695,10 +695,10 @@ export class AICustomizationListWidget extends Disposable {
 							? localize('itemAriaLabel', "{0}. {1}", displayName, secondaryText)
 							: displayName;
 						return entry.item.disabled
-							? localize('itemAriaLabelDisabled', "{0}, disabled", nameAndDesc)
+							? localize('itemAriaLabelDisabled', "{0}, desabilitado", nameAndDesc)
 							: nameAndDesc;
 					},
-					getWidgetAriaLabel: () => localize('listAriaLabel', "Agent Customizations"),
+					getWidgetAriaLabel: () => localize('listAriaLabel', "Personalizações do Agente"),
 				},
 				keyboardNavigationLabelProvider: {
 					getKeyboardNavigationLabel: (entry: IListEntry) => entry.type === 'group-header' ? entry.label : entry.item.name,
@@ -788,10 +788,10 @@ export class AICustomizationListWidget extends Disposable {
 		// Add copy path actions (not shown for built-in items where the path is an implementation detail)
 		const copyActions = item.isBuiltin ? [] : [
 			new Separator(),
-			new Action('copyFullPath', localize('copyFullPath', "Copy Full Path"), undefined, true, async () => {
+			new Action('copyFullPath', localize('copyFullPath', "Copiar Caminho Completo"), undefined, true, async () => {
 				await this.clipboardService.writeText(item.uri.fsPath);
 			}),
-			new Action('copyRelativePath', localize('copyRelativePath', "Copy Relative Path"), undefined, true, async () => {
+			new Action('copyRelativePath', localize('copyRelativePath', "Copiar Caminho Relativo"), undefined, true, async () => {
 				const basePath = this.workspaceService.getActiveProjectRoot();
 				if (basePath && item.uri.fsPath.startsWith(basePath.fsPath)) {
 					const relative = item.uri.fsPath.substring(basePath.fsPath.length + 1);
@@ -865,30 +865,30 @@ export class AICustomizationListWidget extends Disposable {
 		let learnMoreLabel: string;
 		switch (this.currentSection) {
 			case AICustomizationManagementSection.Agents:
-				description = localize('agentsDescription', "Configure the AI to adopt different personas tailored to specific development tasks. Each agent has its own instructions, tools, and behavior.");
+				description = localize('agentsDescription', "Configure a IA para assumir personas diferentes, sob medida para tarefas específicas de desenvolvimento. Cada agente tem suas próprias instruções, ferramentas e comportamento.");
 				docsUrl = 'https://code.visualstudio.com/docs/copilot/customization/custom-agents';
-				learnMoreLabel = localize('learnMoreAgents', "Learn more about custom agents");
+				learnMoreLabel = localize('learnMoreAgents', "Saiba mais sobre agentes personalizados");
 				break;
 			case AICustomizationManagementSection.Skills:
-				description = localize('skillsDescription', "Folders of instructions, scripts, and resources that Copilot loads when relevant to perform specialized tasks.");
+				description = localize('skillsDescription', "Pastas de instruções, scripts e recursos que o Copilot carrega quando são relevantes para executar tarefas especializadas.");
 				docsUrl = 'https://code.visualstudio.com/docs/copilot/customization/agent-skills';
-				learnMoreLabel = localize('learnMoreSkills', "Learn more about agent skills");
+				learnMoreLabel = localize('learnMoreSkills', "Saiba mais sobre skills do agente");
 				break;
 			case AICustomizationManagementSection.Instructions:
-				description = localize('instructionsDescription', "Define common guidelines and rules that automatically influence how AI generates code and handles development tasks.");
+				description = localize('instructionsDescription', "Defina diretrizes e regras comuns que influenciam automaticamente como a IA gera código e conduz as tarefas de desenvolvimento.");
 				docsUrl = 'https://code.visualstudio.com/docs/copilot/customization/custom-instructions';
-				learnMoreLabel = localize('learnMoreInstructions', "Learn more about custom instructions");
+				learnMoreLabel = localize('learnMoreInstructions', "Saiba mais sobre instruções personalizadas");
 				break;
 			case AICustomizationManagementSection.Hooks:
-				description = localize('hooksDescription', "Prompts executed at specific points during an agentic lifecycle.");
+				description = localize('hooksDescription', "Prompts executados em pontos específicos do ciclo de vida do agente.");
 				docsUrl = 'https://code.visualstudio.com/docs/copilot/customization/hooks';
-				learnMoreLabel = localize('learnMoreHooks', "Learn more about hooks");
+				learnMoreLabel = localize('learnMoreHooks', "Saiba mais sobre hooks");
 				break;
 			case AICustomizationManagementSection.Prompts:
 			default:
-				description = localize('promptsDescription', "Reusable prompts for common development tasks like generating code, performing reviews, or scaffolding components.");
+				description = localize('promptsDescription', "Prompts reutilizáveis para tarefas comuns de desenvolvimento, como gerar código, revisar ou criar a estrutura de componentes.");
 				docsUrl = 'https://code.visualstudio.com/docs/copilot/customization/prompt-files';
-				learnMoreLabel = localize('learnMorePrompts', "Learn more about prompt files");
+				learnMoreLabel = localize('learnMorePrompts', "Saiba mais sobre arquivos de prompt");
 				break;
 		}
 		this.sectionDescription.textContent = description;
@@ -1002,7 +1002,7 @@ export class AICustomizationListWidget extends Disposable {
 				});
 				if (hasWorkspace) {
 					actions.push({
-						label: `$(${Codicon.add.id}) ${localize('configureHooks', "Configure Hooks")}`,
+						label: `$(${Codicon.add.id}) ${localize('configureHooks', "Configurar Hooks")}`,
 						enabled: true,
 						run: () => { this._onDidRequestCreateManual.fire({ type: promptType, target: 'workspace' }); },
 					});
@@ -1010,9 +1010,9 @@ export class AICustomizationListWidget extends Disposable {
 			} else if (!override?.commandId) {
 				// Sessions / non-local: configure hooks (view + create)
 				actions.push({
-					label: `$(${Codicon.add.id}) ${localize('configureHooks', "Configure Hooks")}`,
+					label: `$(${Codicon.add.id}) ${localize('configureHooks', "Configurar Hooks")}`,
 					enabled: hasWorkspace,
-					tooltip: hasWorkspace ? undefined : localize('configureHooksDisabled', "Open a workspace folder to configure hooks."),
+					tooltip: hasWorkspace ? undefined : localize('configureHooksDisabled', "Abra uma pasta de workspace para configurar hooks."),
 					run: () => { this._onDidRequestCreateManual.fire({ type: promptType, target: 'workspace' }); },
 				});
 			}
@@ -1116,11 +1116,11 @@ export class AICustomizationListWidget extends Disposable {
 	private getTypeLabel(): string {
 		switch (this.currentSection) {
 			case AICustomizationManagementSection.Agents:
-				return localize('agent', "Agent");
+				return localize('agent', "Agente");
 			case AICustomizationManagementSection.Skills:
 				return localize('skill', "Skill");
 			case AICustomizationManagementSection.Instructions:
-				return localize('instructions', "Instructions");
+				return localize('instructions', "Instruções");
 			case AICustomizationManagementSection.Hooks:
 				return localize('hook', "Hook");
 			case AICustomizationManagementSection.Prompts:
@@ -1267,20 +1267,20 @@ export class AICustomizationListWidget extends Disposable {
 		const groups: { groupKey: string; label: string; icon: ThemeIcon; description: string; items: IAICustomizationListItem[] }[] =
 			this.currentSection === AICustomizationManagementSection.Instructions
 				? [
-					{ groupKey: 'agent-instructions', label: localize('agentInstructionsGroup', "Agent Instructions"), icon: instructionsIcon, description: localize('agentInstructionsGroupDescription', "Instruction files automatically loaded for all agent interactions (e.g. AGENTS.md, CLAUDE.md, copilot-instructions.md)."), items: [] },
-					{ groupKey: 'context-instructions', label: localize('contextInstructionsGroup', "Included Based on Context"), icon: instructionsIcon, description: localize('contextInstructionsGroupDescription', "Instructions automatically loaded when matching files are part of the context."), items: [] },
-					{ groupKey: 'on-demand-instructions', label: localize('onDemandInstructionsGroup', "Loaded on Demand"), icon: instructionsIcon, description: localize('onDemandInstructionsGroupDescription', "Instructions loaded only when explicitly referenced."), items: [] },
-					{ groupKey: PromptsStorage.local, label: localize('workspaceGroup', "Workspace"), icon: workspaceIcon, description: localize('workspaceGroupDescription', "Customizations stored as files in your project folder and shared with your team via version control."), items: [] },
-					{ groupKey: PromptsStorage.user, label: localize('userGroup', "User"), icon: userIcon, description: localize('userGroupDescription', "Customizations stored locally on your machine in a central location. Private to you and available across all projects."), items: [] },
-					{ groupKey: PromptsStorage.plugin, label: localize('pluginGroup', "Plugins"), icon: pluginIcon, description: localize('pluginGroupDescription', "Read-only customizations provided by installed plugins."), items: [] },
-					{ groupKey: BUILTIN_STORAGE, label: localize('builtinGroup', "Built-in"), icon: builtinIcon, description: localize('builtinGroupDescription', "Built-in customizations shipped with the application."), items: [] },
+					{ groupKey: 'agent-instructions', label: localize('agentInstructionsGroup', "Instruções do Agente"), icon: instructionsIcon, description: localize('agentInstructionsGroupDescription', "Arquivos de instruções carregados automaticamente em todas as interações do agente (por exemplo, AGENTS.md, CLAUDE.md, copilot-instructions.md)."), items: [] },
+					{ groupKey: 'context-instructions', label: localize('contextInstructionsGroup', "Incluídas Conforme o Contexto"), icon: instructionsIcon, description: localize('contextInstructionsGroupDescription', "Instruções carregadas automaticamente quando os arquivos correspondentes fazem parte do contexto."), items: [] },
+					{ groupKey: 'on-demand-instructions', label: localize('onDemandInstructionsGroup', "Carregadas Sob Demanda"), icon: instructionsIcon, description: localize('onDemandInstructionsGroupDescription', "Instruções carregadas apenas quando referenciadas explicitamente."), items: [] },
+					{ groupKey: PromptsStorage.local, label: localize('workspaceGroup', "Workspace"), icon: workspaceIcon, description: localize('workspaceGroupDescription', "Personalizações guardadas como arquivos na pasta do projeto e compartilhadas com o time pelo controle de versão."), items: [] },
+					{ groupKey: PromptsStorage.user, label: localize('userGroup', "Usuário"), icon: userIcon, description: localize('userGroupDescription', "Personalizações guardadas localmente na sua máquina, num local central. São privadas e valem para todos os projetos."), items: [] },
+					{ groupKey: PromptsStorage.plugin, label: localize('pluginGroup', "Plugins"), icon: pluginIcon, description: localize('pluginGroupDescription', "Personalizações somente leitura fornecidas pelos plugins instalados."), items: [] },
+					{ groupKey: BUILTIN_STORAGE, label: localize('builtinGroup', "Nativas"), icon: builtinIcon, description: localize('builtinGroupDescription', "Personalizações nativas que já vêm com o aplicativo."), items: [] },
 				]
 				: [
-					{ groupKey: PromptsStorage.local, label: localize('workspaceGroup', "Workspace"), icon: workspaceIcon, description: localize('workspaceGroupDescription', "Customizations stored as files in your project folder and shared with your team via version control."), items: [] },
-					{ groupKey: PromptsStorage.user, label: localize('userGroup', "User"), icon: userIcon, description: localize('userGroupDescription', "Customizations stored locally on your machine in a central location. Private to you and available across all projects."), items: [] },
-					{ groupKey: PromptsStorage.plugin, label: localize('pluginGroup', "Plugins"), icon: pluginIcon, description: localize('pluginGroupDescription', "Read-only customizations provided by installed plugins."), items: [] },
-					{ groupKey: PromptsStorage.extension, label: localize('extensionGroup', "Extensions"), icon: extensionIcon, description: localize('extensionGroupDescription', "Read-only customizations provided by installed extensions."), items: [] },
-					{ groupKey: BUILTIN_STORAGE, label: localize('builtinGroup', "Built-in"), icon: builtinIcon, description: localize('builtinGroupDescription', "Built-in customizations shipped with the application."), items: [] },
+					{ groupKey: PromptsStorage.local, label: localize('workspaceGroup', "Workspace"), icon: workspaceIcon, description: localize('workspaceGroupDescription', "Personalizações guardadas como arquivos na pasta do projeto e compartilhadas com o time pelo controle de versão."), items: [] },
+					{ groupKey: PromptsStorage.user, label: localize('userGroup', "Usuário"), icon: userIcon, description: localize('userGroupDescription', "Personalizações guardadas localmente na sua máquina, num local central. São privadas e valem para todos os projetos."), items: [] },
+					{ groupKey: PromptsStorage.plugin, label: localize('pluginGroup', "Plugins"), icon: pluginIcon, description: localize('pluginGroupDescription', "Personalizações somente leitura fornecidas pelos plugins instalados."), items: [] },
+					{ groupKey: PromptsStorage.extension, label: localize('extensionGroup', "Extensões"), icon: extensionIcon, description: localize('extensionGroupDescription', "Personalizações somente leitura fornecidas pelas extensões instaladas."), items: [] },
+					{ groupKey: BUILTIN_STORAGE, label: localize('builtinGroup', "Nativas"), icon: builtinIcon, description: localize('builtinGroupDescription', "Personalizações nativas que já vêm com o aplicativo."), items: [] },
 				];
 
 		for (const item of matchedItems) {
@@ -1291,7 +1291,7 @@ export class AICustomizationListWidget extends Disposable {
 				let label: string;
 				switch (key) {
 					case 'remote-host':
-						label = localize('remoteHostGroupShort', "Remote");
+						label = localize('remoteHostGroupShort', "Remoto");
 						break;
 					case 'remote-client':
 						label = localize('remoteClientGroupShort', "Local");
@@ -1351,8 +1351,8 @@ export class AICustomizationListWidget extends Disposable {
 
 			if (this.searchQuery.trim()) {
 				// Search with no results
-				this.emptyStateText.textContent = localize('noMatchingItems', "No items match '{0}'", this.searchQuery);
-				this.emptyStateSubtext.textContent = localize('tryDifferentSearch', "Try a different search term");
+				this.emptyStateText.textContent = localize('noMatchingItems', "Nenhum item corresponde a '{0}'", this.searchQuery);
+				this.emptyStateSubtext.textContent = localize('tryDifferentSearch', "Tente outro termo de busca");
 			} else {
 				// No items at all - show empty state with create hint
 				const emptyInfo = this.getEmptyStateInfo();
@@ -1385,29 +1385,29 @@ export class AICustomizationListWidget extends Disposable {
 		switch (this.currentSection) {
 			case AICustomizationManagementSection.Agents:
 				return {
-					title: localize('noAgents', "No agents yet"),
-					description: localize('createFirstAgent', "Create your first custom agent to get started"),
+					title: localize('noAgents', "Nenhum agente ainda"),
+					description: localize('createFirstAgent', "Crie seu primeiro agente personalizado para começar"),
 				};
 			case AICustomizationManagementSection.Skills:
 				return {
-					title: localize('noSkills', "No skills yet"),
-					description: localize('createFirstSkill', "Create your first skill to extend agent capabilities"),
+					title: localize('noSkills', "Nenhuma skill ainda"),
+					description: localize('createFirstSkill', "Crie sua primeira skill para ampliar o que o agente sabe fazer"),
 				};
 			case AICustomizationManagementSection.Instructions:
 				return {
-					title: localize('noInstructions', "No instructions yet"),
-					description: localize('createFirstInstructions', "Add instructions to teach Copilot about your codebase"),
+					title: localize('noInstructions', "Nenhuma instrução ainda"),
+					description: localize('createFirstInstructions', "Adicione instruções para ensinar o Copilot sobre a sua base de código"),
 				};
 			case AICustomizationManagementSection.Hooks:
 				return {
-					title: localize('noHooks', "No hooks yet"),
-					description: localize('createFirstHook', "Create hooks to execute commands at agent lifecycle events"),
+					title: localize('noHooks', "Nenhum hook ainda"),
+					description: localize('createFirstHook', "Crie hooks para executar comandos nos eventos do ciclo de vida do agente"),
 				};
 			case AICustomizationManagementSection.Prompts:
 			default:
 				return {
-					title: localize('noPrompts', "No prompts yet"),
-					description: localize('createFirstPrompt', "Create reusable prompts for common tasks"),
+					title: localize('noPrompts', "Nenhum prompt ainda"),
+					description: localize('createFirstPrompt', "Crie prompts reutilizáveis para tarefas do dia a dia"),
 				};
 		}
 	}

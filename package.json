@@ -1,6 +1,6 @@
 {
   "name": "code-oss-dev",
-  "version": "1.120.0",
+  "version": "1.120.2",
   "distro": "adf5d4ef5d36b1829d04e2a6f5255c5344cb0316",
   "author": {
     "name": "Microsoft Corporation"
@@ -36,9 +36,11 @@
     "watch-client-transpiled": "deemon npm run watch-client-transpile",
     "kill-watch-client-transpiled": "deemon --kill npm run watch-client-transpile",
     "watch-extensions": "npm run gulp watch-extensions watch-extension-media",
+    "watch-extensions-lean": "node --experimental-strip-types --max-old-space-size=2048 ./node_modules/gulp/bin/gulp.js watch-extensions watch-extension-media",
     "watch-extensionsd": "deemon npm run watch-extensions",
     "kill-watch-extensionsd": "deemon --kill npm run watch-extensions",
     "watch-copilot": "npm --prefix extensions/copilot run watch",
+    "watch-copilot-esbuild": "npm --prefix extensions/copilot run watch:esbuild",
     "watch-copilotd": "deemon npm run watch-copilot",
     "kill-watch-copilotd": "deemon --kill npm run watch-copilot",
     "precommit": "node --experimental-strip-types build/hygiene.ts",

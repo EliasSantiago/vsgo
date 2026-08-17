@@ -21,10 +21,19 @@ import { IViewDescriptorService } from '../../../common/views.js';
 import { IViewPaneOptions, ViewPane } from '../../../browser/parts/views/viewPane.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { ISpecDrivenService, ISpecRun } from '../common/spec.js';
+import { trackAiFeatureModel } from '../../chat/common/aiFeatureModel.js';
+import { ILanguageModelsService } from '../../chat/common/languageModels.js';
+import { ISpecDrivenService, ISpecRun, SPEC_DRIVEN_FEATURE } from '../common/spec.js';
 import { SDD_AGENT_ID } from './specDrivenAgent.js';
 
-const OPEN_CHAT_COMMAND = 'workbench.action.chat.openInSidebar';
+/**
+ * Opens the chat with a query already in the box.
+ *
+ * Not `workbench.action.chat.openInSidebar`, which both buttons used to call:
+ * that one is "Move Chat into Side Bar", it needs a chat editor to move, and
+ * with none open it does nothing at all — which is exactly what the buttons did.
+ */
+const OPEN_CHAT_COMMAND = 'workbench.action.chat.open';
 
 export class SpecDrivenView extends ViewPane {
 
@@ -48,6 +57,7 @@ export class SpecDrivenView extends ViewPane {
 		@ISpecDrivenService private readonly specDrivenService: ISpecDrivenService,
 		@IEditorService private readonly editorService: IEditorService,
 		@ICommandService private readonly commandService: ICommandService,
+		@ILanguageModelsService languageModelsService: ILanguageModelsService,
 		@ITelemetryService _telemetryService: ITelemetryService,
 	) {
 		super(options, keybindingService, contextMenuService, configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
@@ -57,6 +67,9 @@ export class SpecDrivenView extends ViewPane {
 			this.refreshRunsList();
 		}));
 		this._register(this.specDrivenService.onDidChangeRun(() => this.refreshCurrentRun()));
+		// Beside the title, so which model writes the documents is answerable
+		// without opening the settings.
+		this._register(trackAiFeatureModel(languageModelsService, configurationService, SPEC_DRIVEN_FEATURE, label => this.updateTitleDescription(label)));
 	}
 
 	protected override renderBody(container: HTMLElement): void {
@@ -86,14 +99,14 @@ export class SpecDrivenView extends ViewPane {
 		const desc = dom.append(card, dom.$('p.spec-driven-howto-desc'));
 		desc.textContent = localize(
 			'specDriven.howtoDesc',
-			"Gere especificações completas para qualquer projeto usando o agente @sdd no chat. Ele produz requisitos, histórias de usuário, arquitetura e tasks em markdown."
+			"Gere especificações completas para qualquer projeto usando o agente @sdd no chat. Ele produz spec.md, plan.md e tasks.md no formato do spec-kit."
 		);
 
 		const steps = dom.append(card, dom.$('ol.spec-driven-howto-steps'));
 		const stepTexts = [
 			localize('specDriven.step1', "Abra o chat com o botão abaixo"),
 			localize('specDriven.step2', "Digite @sdd e descreva seu projeto"),
-			localize('specDriven.step3', "Os documentos são salvos em .vsgo/specs/"),
+			localize('specDriven.step3', "Os documentos são salvos em specs/NNN-slug/"),
 		];
 		for (const text of stepTexts) {
 			dom.append(steps, dom.$('li', undefined, text));
@@ -103,8 +116,10 @@ export class SpecDrivenView extends ViewPane {
 		const openChatBtn = dom.append(btnRow, dom.$('button.spec-driven-btn.spec-driven-btn-primary')) as HTMLButtonElement;
 		dom.append(openChatBtn, dom.$('span.codicon.codicon-comment-discussion'));
 		dom.append(openChatBtn, dom.$('span', undefined, ` ${localize('specDriven.openChatBtn', "Abrir Chat com @sdd")}`));
+		openChatBtn.title = localize('specDriven.openChatBtnTooltip', "Abre o chat com @{0} já digitado, pronto para você descrever o recurso", SDD_AGENT_ID);
 		this._register(dom.addDisposableListener(openChatBtn, dom.EventType.CLICK, async () => {
-			await this.commandService.executeCommand(OPEN_CHAT_COMMAND);
+			// Partial: the mention is typed for the user, the description is not.
+			await this.commandService.executeCommand(OPEN_CHAT_COMMAND, { query: `@${SDD_AGENT_ID} `, isPartialQuery: true });
 		}));
 
 		const helpBtn = dom.append(btnRow, dom.$('button.spec-driven-btn.spec-driven-btn-secondary')) as HTMLButtonElement;
@@ -112,7 +127,8 @@ export class SpecDrivenView extends ViewPane {
 		dom.append(helpBtn, dom.$('span.codicon.codicon-question'));
 		dom.append(helpBtn, dom.$('span', undefined, ` ${localize('specDriven.helpBtn', "Guia SDD")}`));
 		this._register(dom.addDisposableListener(helpBtn, dom.EventType.CLICK, async () => {
-			await this.commandService.executeCommand(OPEN_CHAT_COMMAND);
+			// Submitted, not partial: the guide is the whole request.
+			await this.commandService.executeCommand(OPEN_CHAT_COMMAND, { query: `@${SDD_AGENT_ID} /ajuda` });
 		}));
 
 		const badge = dom.append(card, dom.$('.spec-driven-agent-badge'));
@@ -145,9 +161,8 @@ export class SpecDrivenView extends ViewPane {
 
 		const PHASE_LABELS: Record<string, string> = {
 			context: localize('specDriven.phCtx', "Contexto"),
-			requirements: localize('specDriven.phReq', "Requisitos"),
-			stories: localize('specDriven.phStories', "Histórias"),
-			architecture: localize('specDriven.phArch', "Arquitetura"),
+			spec: localize('specDriven.phSpec', "Spec"),
+			plan: localize('specDriven.phPlan', "Plano"),
 			tasks: localize('specDriven.phTasks', "Tarefas"),
 		};
 		const currentLabel = PHASE_LABELS[running.currentPhase] ?? running.currentPhase;
@@ -202,10 +217,9 @@ export class SpecDrivenView extends ViewPane {
 
 		if (run.status === 'done') {
 			const filesRow = dom.append(body, dom.$('.spec-driven-run-files'));
-			if (run.artifacts.requirementsUri) { this.renderFileLink(filesRow, run.artifacts.requirementsUri, 'REQUIREMENTS.md'); }
-			if (run.artifacts.storiesUri) { this.renderFileLink(filesRow, run.artifacts.storiesUri, 'USER_STORIES.md'); }
-			if (run.artifacts.architectureUri) { this.renderFileLink(filesRow, run.artifacts.architectureUri, 'ARCHITECTURE.md'); }
-			if (run.artifacts.tasksUri) { this.renderFileLink(filesRow, run.artifacts.tasksUri, 'TASKS.md'); }
+			if (run.artifacts.specUri) { this.renderFileLink(filesRow, run.artifacts.specUri, 'spec.md'); }
+			if (run.artifacts.planUri) { this.renderFileLink(filesRow, run.artifacts.planUri, 'plan.md'); }
+			if (run.artifacts.tasksUri) { this.renderFileLink(filesRow, run.artifacts.tasksUri, 'tasks.md'); }
 		}
 	}
 

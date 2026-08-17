@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { ByokStorage } from '../byokStorage.js';
+import { LocalProvider } from './local.js';
 import { AnthropicProvider } from './anthropic.js';
 import { OpenAIProvider } from './openai.js';
 import { GeminiProvider } from './gemini.js';
@@ -14,8 +15,9 @@ import { GroqProvider } from './groq.js';
 import { DeepSeekProvider } from './deepseek.js';
 import { XAIProvider } from './xai.js';
 
-export function registerAllProviders(storage: ByokStorage): vscode.Disposable {
+export function registerAllProviders(storage: ByokStorage, local: LocalProvider): vscode.Disposable {
 	const subs: vscode.Disposable[] = [];
+	subs.push(vscode.lm.registerLanguageModelChatProvider('local', local));
 	subs.push(vscode.lm.registerLanguageModelChatProvider('anthropic', new AnthropicProvider('anthropic', storage)));
 	subs.push(vscode.lm.registerLanguageModelChatProvider('openai', new OpenAIProvider('openai', storage)));
 	subs.push(vscode.lm.registerLanguageModelChatProvider('gemini', new GeminiProvider('gemini', storage)));

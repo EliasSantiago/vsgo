@@ -83,6 +83,13 @@ export function prepareBuiltInCopilotRipgrepShim(platform: string, arch: string,
 	const { nodePlatform, nodeArch } = toNodePlatformArch(platform, arch);
 	const platformArch = `${nodePlatform}-${nodeArch}`;
 
+	// The copilot extension is not bundled in this product. When it is absent there is
+	// nothing to shim, so skip silently instead of failing the packaging step.
+	if (!fs.existsSync(builtInCopilotExtensionDir)) {
+		console.log(`[prepareBuiltInCopilotRipgrepShim] Copilot extension not present at ${builtInCopilotExtensionDir}, skipping ripgrep shim.`);
+		return;
+	}
+
 	const extensionNodeModules = path.join(builtInCopilotExtensionDir, 'node_modules');
 	const copilotBase = path.join(extensionNodeModules, '@github', 'copilot');
 	const copilotSdkBase = path.join(copilotBase, 'sdk');

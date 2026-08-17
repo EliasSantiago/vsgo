@@ -1954,30 +1954,6 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	position: relative;
 }
 
-/* Dividers: only in the workbench chat input toolbar (not in the agents app) */
-.interactive-session .chat-input-toolbar .chat-input-picker-item .action-label.model-picker-split::before,
-.interactive-session .chat-input-toolbar .chat-input-picker-item .action-label.model-picker-split::after {
-	content: '';
-	position: absolute;
-	top: 25%;
-	bottom: 25%;
-	width: 1px;
-	background-color: var(--vscode-editorWidget-border);
-}
-
-.interactive-session .chat-input-toolbar .chat-input-picker-item .action-label.model-picker-split::before {
-	left: 0;
-}
-
-.interactive-session .chat-input-toolbar .chat-input-picker-item .action-label.model-picker-split::after {
-	right: 0;
-}
-
-/* Hide right divider when the model picker is the last item (e.g. Copilot CLI with no tool config button) */
-.interactive-session .chat-input-toolbar .chat-input-picker-item:last-child .action-label.model-picker-split::after {
-	content: none;
-}
-
 .chat-input-picker-item .action-label.model-picker-split .model-picker-section {
 	display: flex;
 	align-items: center;

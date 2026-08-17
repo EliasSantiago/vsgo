@@ -357,6 +357,8 @@ export class MainThreadChatAgents2 extends Disposable implements MainThreadChatA
 						initialSessionOptions: ChatSessionOptionsMap.toStrValueArray(this._chatSessionService.getSessionOptions(chatSessionResource)),
 					};
 
+					reportOversizedRequestPayload(request, history, this._logService);
+
 					const rpcResult: IChatAgentInvokeResult | undefined = await this._proxy.$invokeAgent(handle, request, {
 						history,
 						chatSessionContext,
@@ -847,4 +849,45 @@ namespace ChatNotebookEdit {
 			edits: part.edits.map(NotebookDto.fromCellEditOperationDto)
 		};
 	}
+}
+
+/**
+ * Roughly a tenth of V8's maximum string length: far past any legitimate request, and still with
+ * room to log before the serialization that would throw.
+ */
+const OVERSIZED_PAYLOAD_WARN_CHARS = 50_000_000;
+
+/**
+ * Serializing the agent request can exceed V8's maximum string length, which surfaces to the user
+ * as a bare `RangeError: Invalid string length` from deep inside the RPC protocol — with nothing
+ * saying which attachment caused it. Measuring the parts individually finds the offender without
+ * stringifying the whole payload, which is the very thing that throws.
+ */
+function reportOversizedRequestPayload(request: IChatAgentRequest, history: readonly unknown[], logService: ILogService): void {
+	const parts: Array<{ label: string; size: number }> = [];
+
+	const measure = (label: string, value: unknown): void => {
+		try {
+			parts.push({ label, size: JSON.stringify(value)?.length ?? 0 });
+		} catch (err) {
+			// The part alone is already past the limit — that is the answer we are looking for.
+			parts.push({ label: `${label} (não serializável: ${err instanceof Error ? err.message : String(err)})`, size: Number.MAX_SAFE_INTEGER });
+		}
+	};
+
+	measure('message', request.message);
+	for (const variable of request.variables?.variables ?? []) {
+		measure(`variable ${variable.kind}:${variable.name}`, variable);
+	}
+	measure('history', history);
+
+	const total = parts.reduce((sum, part) => sum + part.size, 0);
+	if (total < OVERSIZED_PAYLOAD_WARN_CHARS) {
+		return;
+	}
+
+	const worst = parts.sort((a, b) => b.size - a.size).slice(0, 5)
+		.map(part => `${part.label}=${part.size}`)
+		.join(', ');
+	logService.error(`[chat] request payload is ${total} chars and may fail to serialize. Largest parts: ${worst}`);
 }

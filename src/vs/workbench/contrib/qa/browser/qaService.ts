@@ -14,7 +14,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { resolveAiFeatureModel } from '../../chat/common/aiFeatureModel.js';
 import { ChatMessageRole, getTextResponseFromStream, IChatMessage, ILanguageModelsService } from '../../chat/common/languageModels.js';
 import {
 	ICaptureResult,
@@ -26,11 +26,14 @@ import {
 	IQaStep,
 	IQaToolCall,
 	QA_CONFIG_SECTION,
-	QA_DIR_NAME,
 	QA_SUBDIR,
 	QaVerdict,
 } from '../common/qa.js';
+import { IVsgoWorkspaceService } from '../../vsgo/common/vsgoWorkspace.js';
 import { IQaDriver } from './qaDriver.js';
+
+/** Folder under `.vsgo/qa` holding one sub-folder per run. */
+const RUNS_SUBDIR = 'runs';
 
 const SYSTEM_PROMPT = `You are a QA test agent driving a real browser. You receive a test intent in natural language and execute it step by step.
 
@@ -79,9 +82,9 @@ export class QaService extends Disposable implements IQaService {
 		@ILanguageModelsService private readonly languageModelsService: ILanguageModelsService,
 		@IFileService private readonly fileService: IFileService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
-		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@INotificationService private readonly notificationService: INotificationService,
 		@ILogService private readonly logService: ILogService,
+		@IVsgoWorkspaceService private readonly vsgoWorkspaceService: IVsgoWorkspaceService,
 	) {
 		super();
 	}
@@ -95,15 +98,8 @@ export class QaService extends Disposable implements IQaService {
 	}
 
 	getRunsDirectory(): URI | undefined {
-		const folders = this.workspaceContextService.getWorkspace().folders;
-		if (folders.length === 0) { return undefined; }
-		return URI.joinPath(folders[0].uri, QA_DIR_NAME, QA_SUBDIR, 'runs');
-	}
-
-	private getVsgoDirectory(): URI | undefined {
-		const folders = this.workspaceContextService.getWorkspace().folders;
-		if (folders.length === 0) { return undefined; }
-		return URI.joinPath(folders[0].uri, QA_DIR_NAME);
+		const qaDir = this.vsgoWorkspaceService.getArtifactsRoot(QA_SUBDIR);
+		return qaDir ? URI.joinPath(qaDir, RUNS_SUBDIR) : undefined;
 	}
 
 	async openLatestReport(): Promise<URI | undefined> {
@@ -150,7 +146,6 @@ export class QaService extends Disposable implements IQaService {
 
 	private async executeRun(run: IQaRun, opts: IQaRunOpts, config: IQaConfiguration, token: CancellationToken): Promise<void> {
 		const maxSteps = opts.maxSteps ?? config.maxSteps;
-		const headless = opts.headless ?? config.headless;
 		const timeoutMs = opts.timeoutMs ?? config.timeoutMs;
 		const deadline = Date.now() + timeoutMs;
 
@@ -161,11 +156,10 @@ export class QaService extends Disposable implements IQaService {
 		run.modelId = modelId;
 
 		try {
-			// `driver.launch` proxies to a utility process. If that worker fails to
-			// load Playwright/Chromium it can stay sleeping with no response, which
-			// would leave the run stuck on "step 0" indefinitely. Time-box it so the
-			// outer catch surfaces a notification instead.
-			await raceLaunch(this.driver.launch({ headless }), 30000);
+			// Opening the browser view crosses into the shared process; if that never answers
+			// the run would sit on "step 0" forever. Time-box it so the outer catch surfaces a
+			// notification instead.
+			await raceLaunch(this.driver.launch(), 30000);
 			if (opts.startUrl) {
 				await this.driver.navigate(opts.startUrl);
 			}
@@ -325,20 +319,21 @@ export class QaService extends Disposable implements IQaService {
 	}
 
 	private async pickModel(config: IQaConfiguration): Promise<string | undefined> {
-		const filter: { vendor?: string; id?: string } = {};
-		if (config.modelVendor) { filter.vendor = config.modelVendor; }
-		if (config.modelId) { filter.id = config.modelId; }
-		const models = await this.languageModelsService.selectLanguageModels(filter);
-		if (models.length > 0) { return models[0]; }
-		const fallback = await this.languageModelsService.selectLanguageModels({});
-		return fallback[0];
+		const resolved = await resolveAiFeatureModel(this.languageModelsService, { vendor: config.modelVendor, id: config.modelId });
+		if (!resolved) {
+			return undefined;
+		}
+		if (resolved.isSubstitute) {
+			const name = this.languageModelsService.lookupLanguageModel(resolved.identifier)?.name ?? resolved.identifier;
+			this.notificationService.warn(localize('qa.modelSubstituted', "O modelo configurado para o QA não está disponível. Usando {0}.", name));
+		}
+		return resolved.identifier;
 	}
 
 	private getConfig(): IQaConfiguration {
 		const c = this.configurationService.getValue<Partial<IQaConfiguration>>(QA_CONFIG_SECTION) || {};
 		return {
 			defaultStartUrl: typeof c.defaultStartUrl === 'string' ? c.defaultStartUrl : '',
-			headless: Boolean(c.headless),
 			maxSteps: typeof c.maxSteps === 'number' ? Math.max(1, c.maxSteps) : 30,
 			timeoutMs: typeof c.timeoutMs === 'number' ? Math.max(1000, c.timeoutMs) : 300000,
 			modelVendor: typeof c.modelVendor === 'string' ? c.modelVendor : '',
@@ -349,19 +344,6 @@ export class QaService extends Disposable implements IQaService {
 		};
 	}
 
-	private async ensureVsgoGitignore(): Promise<void> {
-		const root = this.getVsgoDirectory();
-		if (!root) { return; }
-		const gitignoreUri = URI.joinPath(root, '.gitignore');
-		try {
-			if (await this.fileService.exists(gitignoreUri)) { return; }
-			await this.fileService.createFolder(root);
-			await this.fileService.writeFile(gitignoreUri, VSBuffer.fromString('*\n'));
-		} catch (err) {
-			this.logService.warn('[qa] could not write .vsgo/.gitignore', err);
-		}
-	}
-
 	private runFolderName(run: IQaRun): string {
 		const stamp = new Date(run.startedAt).toISOString().replace(/[:.]/g, '-');
 		const slug = run.prompt.slice(0, 40).replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
@@ -369,13 +351,12 @@ export class QaService extends Disposable implements IQaService {
 	}
 
 	private async persistScreenshot(run: IQaRun, stepIndex: number, dataBase64: string): Promise<string | undefined> {
-		const runsDir = this.getRunsDirectory();
-		if (!runsDir) { return undefined; }
-		const folder = URI.joinPath(runsDir, this.runFolderName(run), 'screenshots');
 		const name = `step-${String(stepIndex).padStart(3, '0')}.png`;
-		const uri = URI.joinPath(folder, name);
 		try {
-			await this.ensureVsgoGitignore();
+			const qaDir = await this.vsgoWorkspaceService.ensureArtifactsRoot(QA_SUBDIR);
+			if (!qaDir) { return undefined; }
+			const folder = URI.joinPath(qaDir, RUNS_SUBDIR, this.runFolderName(run), 'screenshots');
+			const uri = URI.joinPath(folder, name);
 			await this.fileService.createFolder(folder);
 			await this.fileService.writeFile(uri, VSBuffer.wrap(base64ToBytes(dataBase64)));
 			return `screenshots/${name}`;
@@ -387,11 +368,11 @@ export class QaService extends Disposable implements IQaService {
 
 	private async persistRun(run: IQaRun, config: IQaConfiguration): Promise<void> {
 		if (!config.persistRuns) { return; }
-		const runsDir = this.getRunsDirectory();
-		if (!runsDir) { return; }
-		const folder = URI.joinPath(runsDir, this.runFolderName(run));
 		try {
-			await this.ensureVsgoGitignore();
+			const qaDir = await this.vsgoWorkspaceService.ensureArtifactsRoot(QA_SUBDIR);
+			if (!qaDir) { return; }
+			const runsDir = URI.joinPath(qaDir, RUNS_SUBDIR);
+			const folder = URI.joinPath(runsDir, this.runFolderName(run));
 			await this.fileService.createFolder(folder);
 
 			const reportUri = URI.joinPath(folder, 'report.json');
@@ -402,11 +383,10 @@ export class QaService extends Disposable implements IQaService {
 			await this.fileService.writeFile(transcriptUri, VSBuffer.fromString(this.buildTranscript(run)));
 			run.artifacts = { ...run.artifacts, transcriptPath: transcriptUri.fsPath };
 
-			const parentDir = URI.joinPath(runsDir, '..');
-			const latestUri = URI.joinPath(parentDir, 'latest.json');
+			const latestUri = URI.joinPath(qaDir, 'latest.json');
 			await this.fileService.writeFile(latestUri, VSBuffer.fromString(JSON.stringify(run, null, 2)));
 
-			const junitUri = URI.joinPath(parentDir, 'latest.junit.xml');
+			const junitUri = URI.joinPath(qaDir, 'latest.junit.xml');
 			await this.fileService.writeFile(junitUri, VSBuffer.fromString(this.buildJUnit(run)));
 			run.artifacts = { ...run.artifacts, junitPath: junitUri.fsPath };
 

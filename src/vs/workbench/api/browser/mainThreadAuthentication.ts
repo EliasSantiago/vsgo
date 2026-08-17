@@ -154,7 +154,7 @@ export class MainThreadAuthentication extends Disposable implements MainThreadAu
 		this._register(authenticationService.registerAuthenticationProviderHostDelegate({
 			// Prefer Node.js extension hosts when they're available. No CORS issues etc.
 			priority: extHostContext.extensionHostKind === ExtensionHostKind.LocalWebWorker ? 0 : 1,
-			create: async (authorizationServer, serverMetadata, resource, overrideClientId) => {
+			create: async (authorizationServer, serverMetadata, resource, overrideClientId, errorOnUserInteraction) => {
 				// Auth Provider Id is a combination of the authorization server and the resource, if provided.
 				const authProviderId = resource ? `${authorizationServer.toString(true)} ${resource.resource}` : authorizationServer.toString(true);
 				const clientDetails = await this.dynamicAuthProviderStorageService.getClientRegistration(authProviderId);
@@ -174,7 +174,8 @@ export class MainThreadAuthentication extends Disposable implements MainThreadAu
 					resource,
 					clientId,
 					clientSecret,
-					initialTokens
+					initialTokens,
+					errorOnUserInteraction
 				);
 			}
 		}));
@@ -591,14 +592,30 @@ export class MainThreadAuthentication extends Disposable implements MainThreadAu
 		return false;
 	}
 
-	async $promptForClientRegistration(authorizationServerUrl: string): Promise<{ clientId: string; clientSecret?: string } | undefined> {
+	async $promptForClientRegistration(authorizationServerUrl: string, registrationFailure?: string): Promise<{ clientId: string; clientSecret?: string } | undefined> {
 		const redirectUrls = 'http://127.0.0.1:33418\nhttps://vscode.dev/redirect';
 
-		// Show modal dialog first to explain the situation and get user consent
-		const result = await this.dialogService.prompt({
+		// Two different problems reach this prompt, and saying "not supported" for
+		// both is actively misleading: a server whose registration endpoint answered
+		// with an error does support registration, it just refused this client. The
+		// refusal text is the only clue to why, so it travels into the dialog —
+		// without it the only way to the real reason is the extension host log.
+		const message = registrationFailure
+			? nls.localize('dcrFailed', "Automatic Client Registration failed")
+			: nls.localize('dcrNotSupported', "Dynamic Client Registration not supported");
+		const detail = registrationFailure
+			? nls.localize('dcrFailedDetail', "The authorization server '{0}' refused to register this client automatically:\n{1}\n\nDo you want to proceed by manually providing a client registration (client ID)?\n\nNote: When registering your OAuth application, make sure to include these redirect URIs:\n{2}", authorizationServerUrl, registrationFailure, redirectUrls)
+			: nls.localize('dcrNotSupportedDetail', "The authorization server '{0}' does not support automatic client registration. Do you want to proceed by manually providing a client registration (client ID)?\n\nNote: When registering your OAuth application, make sure to include these redirect URIs:\n{1}", authorizationServerUrl, redirectUrls);
+
+		// Show modal dialog first to explain the situation and get user consent.
+		// Note the destructuring: prompt() resolves to an envelope, so testing the
+		// awaited value itself is testing an object that is always truthy — Cancel
+		// would fall straight through to the client id input below, which is the
+		// one thing the button exists to prevent.
+		const { result } = await this.dialogService.prompt({
 			type: Severity.Info,
-			message: nls.localize('dcrNotSupported', "Dynamic Client Registration not supported"),
-			detail: nls.localize('dcrNotSupportedDetail', "The authorization server '{0}' does not support automatic client registration. Do you want to proceed by manually providing a client registration (client ID)?\n\nNote: When registering your OAuth application, make sure to include these redirect URIs:\n{1}", authorizationServerUrl, redirectUrls),
+			message,
+			detail,
 			buttons: [
 				{
 					label: nls.localize('dcrCopyUrlsAndProceed', "Copy URIs & Proceed"),

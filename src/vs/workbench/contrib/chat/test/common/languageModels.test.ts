@@ -56,8 +56,8 @@ suite('LanguageModels', function () {
 		);
 
 		languageModels.deltaLanguageModelChatProviderDescriptors([
-			{ vendor: 'test-vendor', displayName: 'Test Vendor', configuration: undefined, managementCommand: undefined, when: undefined },
-			{ vendor: 'actual-vendor', displayName: 'Actual Vendor', configuration: undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'test-vendor', displayName: 'Test Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined },
+			{ vendor: 'actual-vendor', displayName: 'Actual Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		], []);
 
 		store.add(languageModels.registerLanguageModelProvider('test-vendor', {
@@ -185,7 +185,7 @@ suite('LanguageModels', function () {
 
 		// Register the extension point for the actual vendor
 		languageModels.deltaLanguageModelChatProviderDescriptors([
-			{ vendor: 'actual-vendor', displayName: 'Actual Vendor', configuration: undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'actual-vendor', displayName: 'Actual Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		], []);
 
 		const models = await languageModels.selectLanguageModels({ id: 'actual-lm' });
@@ -259,9 +259,9 @@ suite('LanguageModels - When Clause', function () {
 		);
 
 		languageModelsWithWhen.deltaLanguageModelChatProviderDescriptors([
-			{ vendor: 'visible-vendor', displayName: 'Visible Vendor', configuration: undefined, managementCommand: undefined, when: undefined },
-			{ vendor: 'conditional-vendor', displayName: 'Conditional Vendor', configuration: undefined, managementCommand: undefined, when: 'testKey' },
-			{ vendor: 'hidden-vendor', displayName: 'Hidden Vendor', configuration: undefined, managementCommand: undefined, when: 'falseKey' }
+			{ vendor: 'visible-vendor', displayName: 'Visible Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined },
+			{ vendor: 'conditional-vendor', displayName: 'Conditional Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: 'testKey' },
+			{ vendor: 'hidden-vendor', displayName: 'Hidden Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: 'falseKey' }
 		], []);
 	});
 
@@ -323,7 +323,7 @@ suite('LanguageModels - Model Change Events', function () {
 
 		// Register the vendor first
 		languageModelsService.deltaLanguageModelChatProviderDescriptors([
-			{ vendor: 'test-vendor', displayName: 'Test Vendor', configuration: undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'test-vendor', displayName: 'Test Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		], []);
 	});
 
@@ -687,7 +687,7 @@ suite('LanguageModels - Vendor Change Events', function () {
 		});
 
 		languageModelsService.deltaLanguageModelChatProviderDescriptors([
-			{ vendor: 'added-vendor', displayName: 'Added Vendor', configuration: undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'added-vendor', displayName: 'Added Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		], []);
 
 		const vendors = await eventPromise;
@@ -696,7 +696,7 @@ suite('LanguageModels - Vendor Change Events', function () {
 
 	test('fires onDidChangeLanguageModelVendors when a vendor is removed', async function () {
 		languageModelsService.deltaLanguageModelChatProviderDescriptors([
-			{ vendor: 'removed-vendor', displayName: 'Removed Vendor', configuration: undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'removed-vendor', displayName: 'Removed Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		], []);
 
 		const eventPromise = new Promise<readonly string[]>((resolve) => {
@@ -704,7 +704,7 @@ suite('LanguageModels - Vendor Change Events', function () {
 		});
 
 		languageModelsService.deltaLanguageModelChatProviderDescriptors([], [
-			{ vendor: 'removed-vendor', displayName: 'Removed Vendor', configuration: undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'removed-vendor', displayName: 'Removed Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		]);
 
 		const vendors = await eventPromise;
@@ -718,8 +718,8 @@ suite('LanguageModels - Vendor Change Events', function () {
 		});
 
 		languageModelsService.deltaLanguageModelChatProviderDescriptors([
-			{ vendor: 'vendor-a', displayName: 'Vendor A', configuration: undefined, managementCommand: undefined, when: undefined },
-			{ vendor: 'vendor-b', displayName: 'Vendor B', configuration: undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'vendor-a', displayName: 'Vendor A', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined },
+			{ vendor: 'vendor-b', displayName: 'Vendor B', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		], []);
 
 		const addedVendors = await addEventPromise;
@@ -732,7 +732,7 @@ suite('LanguageModels - Vendor Change Events', function () {
 		});
 
 		languageModelsService.deltaLanguageModelChatProviderDescriptors([], [
-			{ vendor: 'vendor-a', displayName: 'Vendor A', configuration: undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'vendor-a', displayName: 'Vendor A', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		]);
 
 		const removedVendors = await removeEventPromise;
@@ -742,7 +742,7 @@ suite('LanguageModels - Vendor Change Events', function () {
 	test('does not fire onDidChangeLanguageModelVendors when no vendors are added or removed', async function () {
 		// Add initial vendor
 		languageModelsService.deltaLanguageModelChatProviderDescriptors([
-			{ vendor: 'stable-vendor', displayName: 'Stable Vendor', configuration: undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'stable-vendor', displayName: 'Stable Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		], []);
 
 		// Listen for change event
@@ -796,7 +796,7 @@ suite('LanguageModels - Per-Model Configuration', function () {
 		);
 
 		languageModelsService.deltaLanguageModelChatProviderDescriptors([
-			{ vendor: 'config-vendor', displayName: 'Config Vendor', configuration: undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'config-vendor', displayName: 'Config Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		], []);
 
 		disposables.add(languageModelsService.registerLanguageModelProvider('config-vendor', {
@@ -948,7 +948,7 @@ suite('LanguageModels - Provider Group Detail Fallback', function () {
 			// field to `undefined`, but the runtime value must be truthy so the
 			// service treats this vendor as a configurable (BYOK) provider and
 			// resolves models for every group rather than stopping after the first.
-			{ vendor: 'multi-vendor', displayName: 'Multi Vendor', configuration: {} as unknown as undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'multi-vendor', displayName: 'Multi Vendor', configuration: {} as unknown as undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		], []);
 
 		disposables.add(languageModelsService.registerLanguageModelProvider('multi-vendor', {
@@ -1017,7 +1017,7 @@ suite('LanguageModels - Provider Group Detail Fallback', function () {
 		));
 
 		languageModelsService.deltaLanguageModelChatProviderDescriptors([
-			{ vendor: 'single-vendor', displayName: 'Single Vendor', configuration: undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'single-vendor', displayName: 'Single Vendor', configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		], []);
 
 		disposables.add(languageModelsService.registerLanguageModelProvider('single-vendor', {
@@ -1080,7 +1080,7 @@ suite('LanguageModels - Provider Group Detail Fallback', function () {
 
 		languageModelsService.deltaLanguageModelChatProviderDescriptors([
 			// Cast needed: see equivalent comment in the multi-vendor test above.
-			{ vendor: 'detail-vendor', displayName: 'Detail Vendor', configuration: {} as unknown as undefined, managementCommand: undefined, when: undefined }
+			{ vendor: 'detail-vendor', displayName: 'Detail Vendor', configuration: {} as unknown as undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined }
 		], []);
 
 		disposables.add(languageModelsService.registerLanguageModelProvider('detail-vendor', {

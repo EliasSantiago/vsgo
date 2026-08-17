@@ -12,7 +12,8 @@ import { ServicesAccessor } from '../../../../platform/instantiation/common/inst
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import { IQaService, QA_VIEW_ID } from '../common/qa.js';
+import { selectAiFeatureModel } from '../../chat/common/aiFeatureModel.js';
+import { IQaService, QA_FEATURE, QA_VIEW_ID } from '../common/qa.js';
 
 const QA_CATEGORY = localize2('qa.category', "QA");
 
@@ -129,5 +130,31 @@ export class OpenQaRunsFolderAction extends Action2 {
 			return;
 		}
 		await opener.open(dir, { openExternal: true });
+	}
+}
+
+/**
+ * Lets the user say which model drives the browser. Vision matters here — the
+ * agent reads a screenshot every step — so the choice is worth making by hand.
+ */
+export class SelectQaModelAction extends Action2 {
+	static readonly ID = 'vsgo.qa.selectModel';
+	constructor() {
+		super({
+			id: SelectQaModelAction.ID,
+			title: localize2('qa.selectModel', "Select Model for QA"),
+			category: QA_CATEGORY,
+			f1: true,
+			icon: Codicon.chip,
+			menu: {
+				id: MenuId.ViewTitle,
+				when: ContextKeyExpr.equals('view', QA_VIEW_ID),
+				group: 'navigation',
+				order: 3,
+			},
+		});
+	}
+	run(accessor: ServicesAccessor): Promise<void> {
+		return selectAiFeatureModel(accessor, QA_FEATURE);
 	}
 }

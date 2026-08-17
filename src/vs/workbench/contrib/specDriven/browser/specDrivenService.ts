@@ -15,6 +15,7 @@ import { FileOperationResult, IFileService, toFileOperationResult } from '../../
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { resolveAiFeatureModel } from '../../chat/common/aiFeatureModel.js';
 import { ChatMessageRole, getTextResponseFromStream, IChatMessage, ILanguageModelsService } from '../../chat/common/languageModels.js';
 import {
 	ALL_DOC_PHASES,
@@ -26,9 +27,9 @@ import {
 	ISpecRunOpts,
 	SpecDocPhase,
 	SpecProjectType,
+	ISpecFolderInfo,
 	SPEC_DRIVEN_CONFIG_SECTION,
-	SPEC_DRIVEN_DIR_NAME,
-	SPEC_DRIVEN_SUBDIR,
+	SPEC_DRIVEN_STATE_SUBDIR,
 	SPEC_KIT_CONSTITUTION_FILE,
 	SPEC_KIT_MEMORY_DIR,
 	SPEC_KIT_SPECIFY_DIR,
@@ -43,8 +44,12 @@ import {
 	SPEC_TEMPLATE_CONTENT,
 	TASKS_TEMPLATE_CONTENT,
 } from './specKitTemplates.js';
+import { IVsgoWorkspaceService } from '../../vsgo/common/vsgoWorkspace.js';
 
-const RUNS_VERSION = 1;
+// 2: runs produce spec-kit documents (spec/plan/tasks) instead of the old four-document set,
+// so indexes written by earlier versions are dropped rather than migrated — the documents they
+// point at stay on disk.
+const RUNS_VERSION = 2;
 const RUNS_INDEX_FILE = 'index.json';
 const MAX_CONTEXT_FILE_SIZE_BYTES = 32 * 1024;
 const MAX_CONTEXT_FILES = 10;
@@ -54,115 +59,144 @@ interface IRunsIndex {
 	readonly runs: ISpecRun[];
 }
 
-const SYSTEM_PROMPT_REQUIREMENTS = `Você é um analista de requisitos especializado em Spec Driven Development (SDD).
-Gere um documento REQUIREMENTS.md completo com base na descrição do projeto e no contexto do workspace.
+const SYSTEM_PROMPT_MATCH = `Você classifica pedidos de especificação em um projeto que usa spec-kit.
+Recebe a lista de specs existentes e um novo pedido do usuário.
+
+Responda APENAS com o identificador da pasta (ex.: \`002-autenticacao\`) da spec que o pedido
+claramente CONTINUA, DETALHA ou ATUALIZA.
+
+Responda exatamente \`NENHUMA\` quando o pedido tratar de uma funcionalidade nova, quando apenas
+tangenciar uma spec existente, ou quando houver qualquer dúvida. Na dúvida, prefira \`NENHUMA\` —
+criar uma spec a mais é barato, sobrescrever a spec errada não é.
+
+Sem explicação, sem pontuação, apenas o identificador ou \`NENHUMA\`.`;
+
+const SYSTEM_PROMPT_SPEC = `Você é um analista de requisitos especializado em Spec Driven Development.
+Gere o conteúdo de \`spec.md\` no formato do spec-kit, com base na descrição e no contexto do workspace.
 Escreva TODO o conteúdo em português do Brasil (pt-BR).
 
-Use esta estrutura:
-# Requisitos
+REGRA CENTRAL: a spec descreve **o quê** e **o porquê**, nunca o **como**. É proibido citar
+linguagens, frameworks, bibliotecas, bancos de dados, endpoints, esquemas ou nomes de arquivo —
+tudo isso pertence ao \`plan.md\`. Informação que faltar vira \`[NEEDS CLARIFICATION: pergunta]\`,
+nunca uma invenção plausível.
 
-## 1. Visão Geral
+Use exatamente esta estrutura, mantendo os prefixos de numeração:
+# Spec: <identificador> — <título>
 
-## 2. Objetivos
+**Status:** Rascunho
+**Depende de:** <identificadores de outras specs, ou "nenhuma">
 
-## 3. Não-Objetivos
+## Resumo
+_(Uma a três frases descrevendo o domínio.)_
 
-## 4. Requisitos Funcionais
-RF-001: <requisito> [Prioridade: MUST|SHOULD|COULD]
-...
+## Problema e objetivo
 
-## 5. Requisitos Não-Funcionais
-RNF-001 (Desempenho): ...
-RNF-002 (Segurança): ...
-RNF-003 (Disponibilidade): ...
-RNF-004 (Manutenibilidade): ...
-RNF-005 (Usabilidade): ...
+## Papéis
 
-## 6. Restrições e Premissas
+## Histórias de usuário
+- Como <papel>, quero <ação>, para que <benefício>.
 
+## Requisitos funcionais (RF)
+- **RF-001:** <comportamento observável>
+
+## Requisitos não-funcionais (RNF)
+- **RNF-001:** <desempenho, segurança, privacidade, disponibilidade, usabilidade...>
+
+## Regras de negócio (RN)
+- **RN-001:** <invariante ou política do domínio>
+
+## Critérios de aceitação (Given/When/Then)
+- **CA-001** (cobre RF-001):
+  - **Dado** <pré-condição>
+  - **Quando** <ação>
+  - **Então** <resultado esperado>
+
+## Fora de escopo
+
+## Dependências
+
+## Questões em aberto
+
+Todo RF precisa de ao menos um CA que o cubra, e cada CA declara qual RF cobre.
 Gere APENAS o conteúdo markdown. Sem preâmbulo nem explicações fora do documento.`;
 
-const SYSTEM_PROMPT_STORIES = `Você é um especialista em práticas ágeis com foco em BDD e escrita de histórias de usuário.
-Gere um documento USER_STORIES.md completo com base nos requisitos fornecidos.
+const SYSTEM_PROMPT_PLAN = `Você é um arquiteto de software especializado em Spec Driven Development.
+Gere o conteúdo de \`plan.md\` no formato do spec-kit, a partir da spec fornecida.
 Escreva TODO o conteúdo em português do Brasil (pt-BR).
 
-Use esta estrutura:
-# Histórias de Usuário
+REGRA CENTRAL: o plano é o **como**. Toda escolha técnica — linguagem, framework, banco,
+contratos, topologia — vive aqui e em nenhum outro documento. Cada decisão relevante registra as
+alternativas consideradas e o motivo da escolha. Não reescreva requisitos: referencie-os por RF/RNF.
 
-## Personas
-Defina de 2 a 4 personas-chave relevantes para o sistema.
+Use exatamente esta estrutura:
+# Plan: <identificador> — <título>
 
-## Épicos e Histórias
-Para cada épico, liste suas histórias:
+**Status:** Rascunho
+**Spec:** ./spec.md
 
-### Épico E-001: <título>
-#### HU-001: <título>
-**Como** <persona>, **quero** <objetivo>, **para que** <benefício>.
-**Prioridade:** MUST|SHOULD|COULD
-**Story Points:** 1|2|3|5|8
-**Critérios de Aceite:**
-- Dado <pré-condição>, quando <ação>, então <resultado>.
+## Checklist de conformidade com a constituição
+- [ ] Spec correspondente está Aprovada e livre de implementação
+- [ ] Critérios de aceitação mapeados para testes
+- [ ] Tipagem estrita
+- [ ] Domínio isolado de frameworks/infra
+- [ ] Simplicidade / YAGNI respeitados
+- [ ] Privacidade por padrão considerada
 
+## Abordagem / arquitetura
+_(Visão geral da solução. Diagrama ASCII ou Mermaid se ajudar.)_
+
+## Modelo de dados
+
+## Contratos / API
+
+## Componentes de frontend
+_(Se não se aplicar, escreva "Não se aplica".)_
+
+## Decisões e alternativas
+- **Decisão:** <escolha> — **Alternativas consideradas:** <...> — **Motivo:** <...>
+
+## Riscos e mitigações
+- **Risco:** <...> — **Mitigação:** <...>
+
+## Estratégia de testes
+_(Unidade, integração, e2e; quais critérios de aceitação cada nível cobre.)_
+
+Marque \`[x]\` na checklist apenas o que o plano realmente garante; deixe \`[ ]\` no que ficou pendente.
 Gere APENAS o conteúdo markdown. Sem preâmbulo nem explicações fora do documento.`;
 
-const SYSTEM_PROMPT_ARCHITECTURE = `Você é um arquiteto de software especializado em design de sistemas escaláveis.
-Gere um documento ARCHITECTURE.md completo com base nos requisitos e histórias de usuário fornecidos.
+const SYSTEM_PROMPT_TASKS = `Você é um tech lead especializado em Spec Driven Development.
+Gere o conteúdo de \`tasks.md\` no formato do spec-kit, a partir da spec e do plano fornecidos.
 Escreva TODO o conteúdo em português do Brasil (pt-BR).
 
-Use esta estrutura:
-# Arquitetura
+REGRA CENTRAL: cada tarefa é executável e rastreável. Numere como \`Tnnn\`, marque \`[P]\` nas que
+podem rodar em paralelo e referencie o RF ou CA que a tarefa cobre. Todo CA da spec precisa de ao
+menos uma tarefa de teste que o cubra.
 
-## Visão Geral do Sistema
-Descrição de alto nível. Inclua um diagrama ASCII ou Mermaid.
+Use exatamente esta estrutura:
+# Tasks: <identificador> — <título>
 
-## Componentes
-Descreva cada componente, serviço ou módulo principal.
+**Status:** Rascunho
+**Spec:** ./spec.md · **Plan:** ./plan.md
 
-## Modelo de Dados
-Entidades principais, seus atributos e relacionamentos.
+## Fase 1 — Preparação
+- [ ] **T001** <descrição> — _(ref: —)_
 
-## Stack Tecnológico
-Tecnologias recomendadas com justificativas baseadas nos requisitos.
+## Fase 2 — Domínio / dados
+- [ ] **T010** <descrição> — _(ref: RF-001)_
 
-## Pontos de Integração
-Sistemas externos, APIs, barramentos de eventos e padrões de comunicação.
+## Fase 3 — Backend / API
+- [ ] **T020** <descrição> — _(ref: RF-001)_
 
-## Registros de Decisão de Arquitetura (ADR)
-### ADR-001: <decisão>
-**Status:** Aceito
-**Contexto:** ...
-**Decisão:** ...
-**Consequências:** ...
+## Fase 4 — Frontend
+- [ ] **T030 [P]** <descrição> — _(ref: RF-001)_
 
-Gere APENAS o conteúdo markdown. Sem preâmbulo nem explicações fora do documento.`;
+## Fase 5 — Testes
+- [ ] **T040** <teste que cobre CA-001> — _(ref: CA-001)_
 
-const SYSTEM_PROMPT_TASKS = `Você é um gerente de projetos especializado em planejamento ágil e breakdown de tarefas.
-Gere um documento TASKS.md completo com base em todos os documentos de especificação fornecidos.
-Escreva TODO o conteúdo em português do Brasil (pt-BR).
+## Fase 6 — Finalização
+- [ ] **T050** <documentação, revisão, release> — _(ref: —)_
 
-Use esta estrutura:
-# Tarefas
-
-## Marcos (Milestones)
-| ID | Nome | Prazo | Descrição |
-|----|------|-------|-----------|
-| M1 | ... | Semana 2 | ... |
-
-## Backlog de Tarefas
-Para cada tarefa:
-### T-001: <título>
-**Marco:** M1
-**Esforço:** P (<4h) | M (4–8h) | G (1–2d) | GG (>2d)
-**Dependências:** T-XXX
-**Descrição:** ...
-**Concluído quando:** ...
-
-## Plano de Sprints (Sugerido)
-Agrupe as tarefas em sprints de 2 semanas.
-
-## Definição de Pronto
-- [ ] ...
-
+Fases sem tarefa aplicável podem ser omitidas.
 Gere APENAS o conteúdo markdown. Sem preâmbulo nem explicações fora do documento.`;
 
 export class SpecDrivenService extends Disposable implements ISpecDrivenService {
@@ -184,6 +218,7 @@ export class SpecDrivenService extends Disposable implements ISpecDrivenService 
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@INotificationService private readonly notificationService: INotificationService,
 		@ILogService private readonly logService: ILogService,
+		@IVsgoWorkspaceService private readonly vsgoWorkspaceService: IVsgoWorkspaceService,
 	) {
 		super();
 		this.rehydrate().catch(err => this.logService.warn('[specDriven] rehydrate failed', err));
@@ -200,7 +235,7 @@ export class SpecDrivenService extends Disposable implements ISpecDrivenService 
 	getSpecsDirectory(): URI | undefined {
 		const root = this.getWorkspaceRoot();
 		if (!root) { return undefined; }
-		return URI.joinPath(root, SPEC_DRIVEN_DIR_NAME, SPEC_DRIVEN_SUBDIR);
+		return URI.joinPath(root, SPEC_KIT_SPECS_DIR);
 	}
 
 	private getWorkspaceRoot(): URI | undefined {
@@ -212,8 +247,8 @@ export class SpecDrivenService extends Disposable implements ISpecDrivenService 
 		const root = this.getWorkspaceRoot();
 		if (!root) { return false; }
 		const markers = [
-			URI.joinPath(root, SPEC_KIT_MEMORY_DIR, SPEC_KIT_CONSTITUTION_FILE),
 			URI.joinPath(root, SPEC_KIT_SPECIFY_DIR),
+			this.legacyConstitutionUri(root),
 		];
 		for (const marker of markers) {
 			if (await this.fileService.exists(marker)) { return true; }
@@ -228,16 +263,20 @@ export class SpecDrivenService extends Disposable implements ISpecDrivenService 
 			return { created: false };
 		}
 
-		const constitutionUri = URI.joinPath(root, SPEC_KIT_MEMORY_DIR, SPEC_KIT_CONSTITUTION_FILE);
-		const templatesDir = URI.joinPath(root, SPEC_KIT_SPECIFY_DIR, SPEC_KIT_TEMPLATES_DIR);
+		const specifyDir = URI.joinPath(root, SPEC_KIT_SPECIFY_DIR);
+		const memoryDir = URI.joinPath(specifyDir, SPEC_KIT_MEMORY_DIR);
+		const constitutionUri = this.constitutionUri(root);
+		const templatesDir = URI.joinPath(specifyDir, SPEC_KIT_TEMPLATES_DIR);
 		const specsDir = URI.joinPath(root, SPEC_KIT_SPECS_DIR);
 		const exampleDir = URI.joinPath(specsDir, EXAMPLE_SPEC_SLUG);
 
 		try {
-			await this.ensureDirectory(URI.joinPath(root, SPEC_KIT_MEMORY_DIR));
+			await this.ensureDirectory(memoryDir);
 			await this.ensureDirectory(templatesDir);
 			await this.ensureDirectory(specsDir);
 			await this.ensureDirectory(exampleDir);
+
+			const migrated = await this.migrateLegacyConstitution(root, constitutionUri);
 
 			const writes: Array<Promise<boolean>> = [
 				this.writeFileIfAbsent(constitutionUri, CONSTITUTION_CONTENT),
@@ -250,12 +289,159 @@ export class SpecDrivenService extends Disposable implements ISpecDrivenService 
 				this.writeFileIfAbsent(URI.joinPath(exampleDir, 'tasks.md'), TASKS_TEMPLATE_CONTENT),
 			];
 			const results = await Promise.all(writes);
-			return { created: results.some(Boolean), constitutionUri };
+			return { created: results.some(Boolean) || migrated, constitutionUri, migrated };
 		} catch (err) {
 			const msg = String(err instanceof Error ? err.message : err);
 			this.logService.error('[specDriven] scaffold error', err);
 			this.notificationService.error(localize('specDriven.scaffoldFailed', "Falha ao configurar Spec Driven Development: {0}", msg));
 			return { created: false };
+		}
+	}
+
+	async listSpecFolders(): Promise<readonly ISpecFolderInfo[]> {
+		const specsDir = this.getSpecsDirectory();
+		if (!specsDir) { return []; }
+		const folders: ISpecFolderInfo[] = [];
+		try {
+			const stat = await this.fileService.resolve(specsDir);
+			for (const child of stat.children ?? []) {
+				if (!child.isDirectory || !/^\d{3,}-/.test(child.name)) { continue; }
+				const spec = await this.readDocIfPresent(child.resource, 'spec.md');
+				if (!spec) { continue; }
+				folders.push({ folder: child.name, ...describeSpec(spec) });
+			}
+		} catch (err) {
+			this.logService.warn('[specDriven] could not list spec folders', err);
+		}
+		return folders.sort((a, b) => b.folder.localeCompare(a.folder));
+	}
+
+	async matchSpecFolder(description: string, token?: CancellationToken): Promise<string | undefined> {
+		const folders = await this.listSpecFolders();
+		if (folders.length === 0 || !description.trim()) { return undefined; }
+
+		const modelId = await this.pickModel(this.getConfig());
+		if (!modelId) { return undefined; }
+
+		const catalog = folders
+			.map(f => `- ${f.folder} — ${f.title}${f.summary ? `: ${f.summary}` : ''}`)
+			.join('\n');
+		const userContent = `## Specs existentes\n\n${catalog}\n\n## Novo pedido\n\n${description}`;
+
+		try {
+			const answer = await this.generateDocument(
+				SYSTEM_PROMPT_MATCH,
+				userContent,
+				modelId,
+				token ?? CancellationToken.None,
+			);
+			const candidate = answer.trim().split(/\s|`/).find(Boolean) ?? '';
+			return folders.some(f => f.folder === candidate) ? candidate : undefined;
+		} catch (err) {
+			// Matching is an optimisation: a failure must not block the generation itself.
+			this.logService.warn('[specDriven] spec matching failed', err);
+			return undefined;
+		}
+	}
+
+	private async readDocIfPresent(dir: URI, name: string): Promise<string> {
+		try {
+			const buf = await this.fileService.readFile(URI.joinPath(dir, name));
+			return buf.value.toString().slice(0, MAX_CONTEXT_FILE_SIZE_BYTES);
+		} catch {
+			return '';
+		}
+	}
+
+	/**
+	 * Next `NNN-slug` folder name, continuing spec-kit's numbering. The existing folders are
+	 * scanned so a new feature never collides with the seed `001-exemplo` or with a spec someone
+	 * created by hand.
+	 */
+	private async nextSpecFolderName(specsDir: URI, slug: string): Promise<string> {
+		let highest = 0;
+		try {
+			const stat = await this.fileService.resolve(specsDir);
+			for (const child of stat.children ?? []) {
+				const match = /^(\d{3,})-/.exec(child.name);
+				if (child.isDirectory && match) {
+					highest = Math.max(highest, parseInt(match[1], 10));
+				}
+			}
+		} catch {
+			// specs/ does not exist yet — start the sequence at 001
+		}
+
+		// Two runs started close together would otherwise pick the same number and overwrite each
+		// other, so keep going until the folder is actually free.
+		let next = highest + 1;
+		while (await this.fileService.exists(URI.joinPath(specsDir, `${String(next).padStart(3, '0')}-${slug}`))) {
+			next++;
+		}
+		return `${String(next).padStart(3, '0')}-${slug}`;
+	}
+
+	private constitutionUri(root: URI): URI {
+		return URI.joinPath(root, SPEC_KIT_SPECIFY_DIR, SPEC_KIT_MEMORY_DIR, SPEC_KIT_CONSTITUTION_FILE);
+	}
+
+	/** Where earlier versions of vsgo put the constitution, before the `.specify` layout. */
+	private legacyConstitutionUri(root: URI): URI {
+		return URI.joinPath(root, SPEC_KIT_MEMORY_DIR, SPEC_KIT_CONSTITUTION_FILE);
+	}
+
+	/**
+	 * Reads the project constitution, the principles every generated document has to respect.
+	 * Falls back to the pre-`.specify` location so projects that never re-ran the setup still
+	 * get their principles honoured. Returns an empty string when there is none.
+	 */
+	private async readConstitution(): Promise<string> {
+		const root = this.getWorkspaceRoot();
+		if (!root) { return ''; }
+		for (const uri of [this.constitutionUri(root), this.legacyConstitutionUri(root)]) {
+			try {
+				const buf = await this.fileService.readFile(uri);
+				const text = buf.value.toString().trim();
+				if (text) {
+					return text.slice(0, MAX_CONTEXT_FILE_SIZE_BYTES);
+				}
+			} catch {
+				// not found at this location — try the next one
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * Moves a constitution left at the project root by an earlier version into `.specify/memory`,
+	 * so a project never ends up with two of them. The file is moved rather than recreated —
+	 * it is a document the team edits, and the default content would overwrite their principles.
+	 * Returns true when a move happened.
+	 */
+	private async migrateLegacyConstitution(root: URI, constitutionUri: URI): Promise<boolean> {
+		const legacyUri = this.legacyConstitutionUri(root);
+		try {
+			if (!await this.fileService.exists(legacyUri) || await this.fileService.exists(constitutionUri)) {
+				return false;
+			}
+			await this.fileService.move(legacyUri, constitutionUri);
+			await this.deleteIfEmpty(URI.joinPath(root, SPEC_KIT_MEMORY_DIR));
+			this.logService.info('[specDriven] migrated constitution to .specify/memory');
+			return true;
+		} catch (err) {
+			this.logService.warn('[specDriven] could not migrate legacy constitution', err);
+			return false;
+		}
+	}
+
+	private async deleteIfEmpty(uri: URI): Promise<void> {
+		try {
+			const stat = await this.fileService.resolve(uri);
+			if (stat.isDirectory && (stat.children ?? []).length === 0) {
+				await this.fileService.del(uri, { useTrash: false });
+			}
+		} catch {
+			// ignore — the folder may already be gone
 		}
 	}
 
@@ -280,6 +466,8 @@ export class SpecDrivenService extends Disposable implements ISpecDrivenService 
 			description,
 			projectType: opts?.projectType ?? 'existing',
 			selectedPhases,
+			targetFolder: opts?.targetFolder,
+			requestedModelId: opts?.modelId,
 			startedAt: Date.now(),
 			status: 'running',
 			currentPhase: 'context',
@@ -312,69 +500,68 @@ export class SpecDrivenService extends Disposable implements ISpecDrivenService 
 			const workspaceContext = await this.gatherWorkspaceContext(token);
 			if (token.isCancellationRequested) { this.finishRun(run.id, 'cancelled'); return; }
 
-			const modelId = await this.pickModel(config);
+			// What the chat had selected wins over the feature's setting; the
+			// setting is what the view's own button runs on.
+			const modelId = run.requestedModelId ?? await this.pickModel(config);
 			if (!modelId) {
 				throw new Error(localize('specDriven.noModel', "Nenhum modelo de IA está disponível. Configure um provedor de IA primeiro."));
 			}
 
+			// One `NNN-slug` folder per run, in the project tree next to the rest of the spec-kit
+			// structure, so the team reviews and commits it like any other source file.
 			const specsDir = this.getSpecsDirectory();
 			if (!specsDir) { throw new Error('No workspace'); }
-			const stamp = new Date(run.startedAt).toISOString().replace(/[:.]/g, '-').slice(0, 19);
-			const runDir = URI.joinPath(specsDir, `${stamp}-${run.name}`);
 			await this.ensureDirectory(specsDir);
+			const folderName = run.targetFolder ?? await this.nextSpecFolderName(specsDir, run.name);
+			const runDir = URI.joinPath(specsDir, folderName);
 			await this.ensureDirectory(runDir);
 			this.updateRun(run.id, { artifacts: { dirUri: runDir.toString() }, modelId, phaseIndex: 1 });
 
-			const baseContext = buildBaseContext(run.description, run.projectType, workspaceContext);
+			// Read per run rather than once per session: the team edits the constitution, and the
+			// next run should honour the edit without a reload.
+			const constitution = await this.readConstitution();
+			const baseContext = buildBaseContext(run.description, run.projectType, workspaceContext, constitution, folderName);
 
-			// Accumulated doc content — only populated when a phase is actually run
-			let requirements = '';
-			let stories = '';
-			let architecture = '';
+			// Documents already in the folder: they seed the context so a partial run can reference
+			// them, and a regenerated document revises them instead of replacing them blindly.
+			let spec = run.targetFolder ? await this.readDocIfPresent(runDir, 'spec.md') : '';
+			let plan = run.targetFolder ? await this.readDocIfPresent(runDir, 'plan.md') : '';
 			let completedCount = 1; // context already done
 
-			// Phase 1: Requirements
-			if (sel.includes('requirements')) {
-				this.updateRun(run.id, { currentPhase: 'requirements', phaseIndex: completedCount });
-				requirements = await this.generateDocument(SYSTEM_PROMPT_REQUIREMENTS, baseContext, modelId, token);
+			// Phase 1: spec.md — what and why
+			if (sel.includes('spec')) {
+				this.updateRun(run.id, { currentPhase: 'spec', phaseIndex: completedCount });
+				const ctx = spec ? buildRevisionContext(baseContext, 'spec.md', spec) : baseContext;
+				spec = await this.generateDocument(SYSTEM_PROMPT_SPEC, ctx, modelId, token);
 				if (token.isCancellationRequested) { this.finishRun(run.id, 'cancelled'); return; }
-				const reqUri = URI.joinPath(runDir, 'REQUIREMENTS.md');
-				await this.fileService.writeFile(reqUri, VSBuffer.fromString(requirements));
+				const specUri = URI.joinPath(runDir, 'spec.md');
+				await this.fileService.writeFile(specUri, VSBuffer.fromString(spec));
 				completedCount++;
-				this.updateRun(run.id, { artifacts: { ...this.getArtifacts(run.id), requirementsUri: reqUri.toString() }, phaseIndex: completedCount });
+				this.updateRun(run.id, { artifacts: { ...this.getArtifacts(run.id), specUri: specUri.toString() }, phaseIndex: completedCount });
 			}
 
-			// Phase 2: User Stories
-			if (sel.includes('stories')) {
-				this.updateRun(run.id, { currentPhase: 'stories', phaseIndex: completedCount });
-				const ctx = buildDocContext(baseContext, { requirements });
-				stories = await this.generateDocument(SYSTEM_PROMPT_STORIES, ctx, modelId, token);
+			// Phase 2: plan.md — how
+			if (sel.includes('plan')) {
+				this.updateRun(run.id, { currentPhase: 'plan', phaseIndex: completedCount });
+				const withSpec = buildDocContext(baseContext, { spec });
+				const ctx = plan ? buildRevisionContext(withSpec, 'plan.md', plan) : withSpec;
+				plan = await this.generateDocument(SYSTEM_PROMPT_PLAN, ctx, modelId, token);
 				if (token.isCancellationRequested) { this.finishRun(run.id, 'cancelled'); return; }
-				const storiesUri = URI.joinPath(runDir, 'USER_STORIES.md');
-				await this.fileService.writeFile(storiesUri, VSBuffer.fromString(stories));
+				const planUri = URI.joinPath(runDir, 'plan.md');
+				await this.fileService.writeFile(planUri, VSBuffer.fromString(plan));
 				completedCount++;
-				this.updateRun(run.id, { artifacts: { ...this.getArtifacts(run.id), storiesUri: storiesUri.toString() }, phaseIndex: completedCount });
+				this.updateRun(run.id, { artifacts: { ...this.getArtifacts(run.id), planUri: planUri.toString() }, phaseIndex: completedCount });
 			}
 
-			// Phase 3: Architecture
-			if (sel.includes('architecture')) {
-				this.updateRun(run.id, { currentPhase: 'architecture', phaseIndex: completedCount });
-				const ctx = buildDocContext(baseContext, { requirements, stories });
-				architecture = await this.generateDocument(SYSTEM_PROMPT_ARCHITECTURE, ctx, modelId, token);
-				if (token.isCancellationRequested) { this.finishRun(run.id, 'cancelled'); return; }
-				const archUri = URI.joinPath(runDir, 'ARCHITECTURE.md');
-				await this.fileService.writeFile(archUri, VSBuffer.fromString(architecture));
-				completedCount++;
-				this.updateRun(run.id, { artifacts: { ...this.getArtifacts(run.id), architectureUri: archUri.toString() }, phaseIndex: completedCount });
-			}
-
-			// Phase 4: Tasks
+			// Phase 3: tasks.md — the work
 			if (sel.includes('tasks')) {
 				this.updateRun(run.id, { currentPhase: 'tasks', phaseIndex: completedCount });
-				const ctx = buildDocContext(baseContext, { requirements, stories, architecture });
+				const withDocs = buildDocContext(baseContext, { spec, plan });
+				const existingTasks = run.targetFolder ? await this.readDocIfPresent(runDir, 'tasks.md') : '';
+				const ctx = existingTasks ? buildRevisionContext(withDocs, 'tasks.md', existingTasks) : withDocs;
 				const tasks = await this.generateDocument(SYSTEM_PROMPT_TASKS, ctx, modelId, token);
 				if (token.isCancellationRequested) { this.finishRun(run.id, 'cancelled'); return; }
-				const tasksUri = URI.joinPath(runDir, 'TASKS.md');
+				const tasksUri = URI.joinPath(runDir, 'tasks.md');
 				await this.fileService.writeFile(tasksUri, VSBuffer.fromString(tasks));
 				completedCount++;
 				this.updateRun(run.id, { artifacts: { ...this.getArtifacts(run.id), tasksUri: tasksUri.toString() }, phaseIndex: completedCount });
@@ -480,13 +667,15 @@ export class SpecDrivenService extends Disposable implements ISpecDrivenService 
 	}
 
 	private async pickModel(config: ISpecDrivenConfiguration): Promise<string | undefined> {
-		const filter: { vendor?: string; id?: string } = {};
-		if (config.modelVendor) { filter.vendor = config.modelVendor; }
-		if (config.modelId) { filter.id = config.modelId; }
-		const models = await this.languageModelsService.selectLanguageModels(filter);
-		if (models.length > 0) { return models[0]; }
-		const fallback = await this.languageModelsService.selectLanguageModels({});
-		return fallback[0];
+		const resolved = await resolveAiFeatureModel(this.languageModelsService, { vendor: config.modelVendor, id: config.modelId });
+		if (!resolved) {
+			return undefined;
+		}
+		if (resolved.isSubstitute) {
+			const name = this.languageModelsService.lookupLanguageModel(resolved.identifier)?.name ?? resolved.identifier;
+			this.notificationService.warn(localize('specDriven.modelSubstituted', "O modelo configurado para o Spec Driven não está disponível. Usando {0}.", name));
+		}
+		return resolved.identifier;
 	}
 
 	private getConfig(): ISpecDrivenConfiguration {
@@ -507,24 +696,24 @@ export class SpecDrivenService extends Disposable implements ISpecDrivenService 
 		}
 	}
 
+	/** Where the run index lives — machine state, not a document, so it stays under `.vsgo`. */
 	private getIndexUri(): URI | undefined {
-		const dir = this.getSpecsDirectory();
+		const dir = this.vsgoWorkspaceService.getArtifactsRoot(SPEC_DRIVEN_STATE_SUBDIR);
 		return dir ? URI.joinPath(dir, RUNS_INDEX_FILE) : undefined;
 	}
 
 	private async persistIndex(): Promise<void> {
 		const config = this.getConfig();
 		if (!config.persistRuns) { return; }
-		const indexUri = this.getIndexUri();
-		if (!indexUri) { return; }
 		const runs = Array.from(this._runs.values())
 			.filter(r => r.status !== 'running')
 			.sort((a, b) => b.startedAt - a.startedAt)
 			.slice(0, config.runRetention);
 		const index: IRunsIndex = { version: RUNS_VERSION, runs };
 		try {
-			await this.ensureDirectory(this.getSpecsDirectory()!);
-			await this.fileService.writeFile(indexUri, VSBuffer.fromString(JSON.stringify(index, null, 2)));
+			const dir = await this.vsgoWorkspaceService.ensureArtifactsRoot(SPEC_DRIVEN_STATE_SUBDIR);
+			if (!dir) { return; }
+			await this.fileService.writeFile(URI.joinPath(dir, RUNS_INDEX_FILE), VSBuffer.fromString(JSON.stringify(index, null, 2)));
 		} catch (err) {
 			this.logService.warn('[specDriven] persistIndex failed', err);
 		}
@@ -567,23 +756,76 @@ function slugify(text: string): string {
 		.slice(0, 40);
 }
 
-function buildBaseContext(description: string, projectType: SpecProjectType, workspaceContext: string): string {
+function buildBaseContext(description: string, projectType: SpecProjectType, workspaceContext: string, constitution: string, specId: string): string {
 	const typeLabel = projectType === 'new'
 		? 'Novo projeto (greenfield — sem base de código existente)'
 		: 'Projeto existente (brownfield — estender ou modificar base de código existente)';
-	return `## Descrição do Projeto\n\n${description}\n\n## Tipo de Projeto\n\n${typeLabel}\n\n${workspaceContext}`;
+	const parts: string[] = [];
+	// The constitution comes first and states its own authority: it is the project's law, and
+	// the model has to be told that it outranks the request when the two disagree.
+	if (constitution) {
+		parts.push(
+			'## Constituição do Projeto\n\n' +
+			'Princípios não-negociáveis deste projeto. Todo documento gerado DEVE respeitá-los.\n' +
+			'Se a descrição do projeto conflitar com a constituição, a constituição prevalece —\n' +
+			'registre o conflito no documento em vez de violá-la.\n\n' +
+			constitution
+		);
+	}
+	parts.push(`## Identificador desta Spec\n\n\`${specId}\` — use este identificador no título dos documentos.`);
+	parts.push(`## Descrição do Projeto\n\n${description}`);
+	parts.push(`## Tipo de Projeto\n\n${typeLabel}`);
+	parts.push(workspaceContext);
+	return parts.join('\n\n');
 }
 
 interface IDocContext {
-	requirements?: string;
-	stories?: string;
-	architecture?: string;
+	spec?: string;
+	plan?: string;
 }
 
 function buildDocContext(base: string, docs: IDocContext): string {
 	const parts: string[] = [base];
-	if (docs.requirements) { parts.push(`---\n\n## Requirements\n\n${docs.requirements}`); }
-	if (docs.stories) { parts.push(`---\n\n## User Stories\n\n${docs.stories}`); }
-	if (docs.architecture) { parts.push(`---\n\n## Architecture\n\n${docs.architecture}`); }
+	if (docs.spec) { parts.push(`---\n\n## spec.md\n\n${docs.spec}`); }
+	if (docs.plan) { parts.push(`---\n\n## plan.md\n\n${docs.plan}`); }
 	return parts.join('\n\n');
+}
+
+/**
+ * Context for regenerating a document that already exists. Without this the model rewrites from
+ * scratch and silently drops decisions the team had already made, along with the RF/CA numbering
+ * that the other documents reference.
+ */
+function buildRevisionContext(base: string, file: string, existing: string): string {
+	return `${base}\n\n---\n\n## Versão atual de ${file}\n\n` +
+		`Revise o documento abaixo incorporando o pedido acima. Preserve as decisões que continuam\n` +
+		`válidas e a numeração existente (RF, RNF, RN, CA, T) — outros documentos referenciam esses\n` +
+		`identificadores. Não recomece do zero.\n\n${existing}`;
+}
+
+/** Pulls a title and a one-line summary out of a `spec.md`, for matching against a new request. */
+function describeSpec(content: string): { title: string; summary: string } {
+	const lines = content.split(/\r?\n/);
+	let title = '';
+	for (const line of lines) {
+		const match = /^#\s+(.*)$/.exec(line.trim());
+		if (match) {
+			title = match[1].replace(/^Spec:\s*/i, '').trim();
+			break;
+		}
+	}
+	let summary = '';
+	const summaryIndex = lines.findIndex(line => /^##\s+Resumo\s*$/i.test(line.trim()));
+	if (summaryIndex >= 0) {
+		for (const line of lines.slice(summaryIndex + 1)) {
+			const text = line.trim();
+			if (text.startsWith('#')) { break; }
+			// Skip the template's own placeholder, which says nothing about the feature.
+			if (text && !text.startsWith('_(')) {
+				summary = text;
+				break;
+			}
+		}
+	}
+	return { title: title || '(sem título)', summary: summary.slice(0, 200) };
 }

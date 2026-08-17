@@ -169,7 +169,7 @@ type CustomizationEditorSaveItemClassification = {
 export const aiCustomizationManagementSashBorder = registerColor(
 	'aiCustomizationManagement.sashBorder',
 	PANEL_BORDER,
-	localize('aiCustomizationManagementSashBorder', "The color of the Agent Customizations editor splitview sash border.")
+	localize('aiCustomizationManagementSashBorder', "A cor da borda do divisor do editor de Personalizações do Agente.")
 );
 
 //#region Sidebar Section Item
@@ -401,16 +401,16 @@ export class AICustomizationManagementEditor extends EditorPane {
 
 		// Build sections from the workspace service configuration
 		const sectionInfo: Record<string, { label: string; icon: ThemeIcon; description: string }> = {
-			[AICustomizationManagementSection.Agents]: { label: localize('agents', "Agents"), icon: agentIcon, description: localize('agentsDesc', "Define custom agents with specialized personas, tool access, and instructions for specific tasks.") },
-			[AICustomizationManagementSection.Skills]: { label: localize('skills', "Skills"), icon: skillIcon, description: localize('skillsDesc', "Create reusable skill files that provide domain-specific knowledge and workflows.") },
-			[AICustomizationManagementSection.Instructions]: { label: localize('instructions', "Instructions"), icon: instructionsIcon, description: localize('instructionsDesc', "Set always-on instructions that guide AI behavior across your workspace or user profile.") },
-			[AICustomizationManagementSection.Prompts]: { label: localize('prompts', "Prompts"), icon: promptIcon, description: localize('promptsDesc', "Reusable prompt templates that can be invoked as slash commands.") },
-			[AICustomizationManagementSection.Hooks]: { label: localize('hooks', "Hooks"), icon: hookIcon, description: localize('hooksDesc', "Configure automated actions triggered by events like saving files or running tasks.") },
-			[AICustomizationManagementSection.McpServers]: { label: localize('mcpServers', "MCP Servers"), icon: Codicon.server, description: localize('mcpServersDesc', "Connect external tool servers that extend AI capabilities with custom tools and data sources.") },
-			[AICustomizationManagementSection.Plugins]: { label: localize('plugins', "Plugins"), icon: pluginIcon, description: localize('pluginsDesc', "Install and manage agent plugins that add additional tools, skills, and integrations.") },
-			[AICustomizationManagementSection.Models]: { label: localize('models', "Models"), icon: Codicon.vm, description: localize('modelsDesc', "Configure and manage language models available for use.") },
-			[AICustomizationManagementSection.AIProviders]: { label: localize('aiProviders', "AI Providers"), icon: Codicon.key, description: localize('aiProvidersDesc', "Configure API keys and endpoints for language model providers such as Anthropic, OpenAI, Gemini and Ollama.") },
-			[AICustomizationManagementSection.Usage]: { label: localize('aiUsage', "AI Usage"), icon: Codicon.graph, description: localize('aiUsageDesc', "Review language model token consumption by day, month and year, with provider and model filters.") },
+			[AICustomizationManagementSection.Agents]: { label: localize('agents', "Agentes"), icon: agentIcon, description: localize('agentsDesc', "Defina agentes personalizados com personas, acesso a ferramentas e instruções específicas para cada tarefa.") },
+			[AICustomizationManagementSection.Skills]: { label: localize('skills', "Skills"), icon: skillIcon, description: localize('skillsDesc', "Crie arquivos de skill reutilizáveis com conhecimento e fluxos de trabalho de um domínio específico.") },
+			[AICustomizationManagementSection.Instructions]: { label: localize('instructions', "Instruções"), icon: instructionsIcon, description: localize('instructionsDesc', "Defina instruções sempre ativas que guiam o comportamento da IA no seu workspace ou perfil de usuário.") },
+			[AICustomizationManagementSection.Prompts]: { label: localize('prompts', "Prompts"), icon: promptIcon, description: localize('promptsDesc', "Modelos de prompt reutilizáveis que podem ser chamados como comandos de barra.") },
+			[AICustomizationManagementSection.Hooks]: { label: localize('hooks', "Hooks"), icon: hookIcon, description: localize('hooksDesc', "Configure ações automáticas disparadas por eventos como salvar arquivos ou executar tarefas.") },
+			[AICustomizationManagementSection.McpServers]: { label: localize('mcpServers', "Servidores MCP"), icon: Codicon.server, description: localize('mcpServersDesc', "Conecte servidores de ferramentas externos que ampliam a IA com ferramentas e fontes de dados próprias.") },
+			[AICustomizationManagementSection.Plugins]: { label: localize('plugins', "Plugins"), icon: pluginIcon, description: localize('pluginsDesc', "Instale e gerencie plugins do agente que adicionam ferramentas, skills e integrações.") },
+			[AICustomizationManagementSection.Models]: { label: localize('models', "Modelos"), icon: Codicon.vm, description: localize('modelsDesc', "Configure e gerencie os modelos de linguagem disponíveis para uso.") },
+			[AICustomizationManagementSection.AIProviders]: { label: localize('aiProviders', "Provedores de IA"), icon: Codicon.key, description: localize('aiProvidersDesc', "Configure chaves de API e endpoints dos provedores de modelos de linguagem, como Anthropic, OpenAI, Gemini e Ollama.") },
+			[AICustomizationManagementSection.Usage]: { label: localize('aiUsage', "Uso de IA"), icon: Codicon.graph, description: localize('aiUsageDesc', "Acompanhe o consumo de tokens dos modelos de linguagem por dia, mês e ano, com filtros de provedor e modelo.") },
 		};
 		for (const id of this.workspaceService.managementSections) {
 			const info = sectionInfo[id];
@@ -573,9 +573,9 @@ export class AICustomizationManagementEditor extends EditorPane {
 				horizontalScrolling: false,
 				accessibilityProvider: {
 					getAriaLabel: (item: ISectionItem) => item.count > 0
-						? localize('sectionAriaLabelWithCount', "{0}, {1} items", item.label, item.count)
+						? localize('sectionAriaLabelWithCount', "{0}, {1} itens", item.label, item.count)
 						: item.label,
-					getWidgetAriaLabel: () => localize('sectionsAriaLabel', "Agent Customization Sections"),
+					getWidgetAriaLabel: () => localize('sectionsAriaLabel', "Seções de Personalização do Agente"),
 				},
 				openOnSingleClick: true,
 				identityProvider: {
@@ -650,13 +650,13 @@ export class AICustomizationManagementEditor extends EditorPane {
 
 		// Home/overview button
 		const homeButton = this.homeButton = DOM.append(headerRow, $('button.sidebar-home-button'));
-		homeButton.setAttribute('aria-label', localize('homeButton', "Overview"));
-		this.editorDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), homeButton, localize('homeButtonTooltip', "Back to overview")));
+		homeButton.setAttribute('aria-label', localize('homeButton', "Visão Geral"));
+		this.editorDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), homeButton, localize('homeButtonTooltip', "Voltar para a visão geral")));
 		const homeIcon = DOM.append(homeButton, $('span.sidebar-home-icon'));
 		homeIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.home));
 		homeIcon.setAttribute('aria-hidden', 'true');
 		const homeLabel = this.homeButtonLabel = DOM.append(homeButton, $('span.sidebar-home-label'));
-		homeLabel.textContent = localize('overview', "Overview");
+		homeLabel.textContent = localize('overview', "Visão Geral");
 		this.editorDisposables.add(DOM.addDisposableListener(homeButton, 'click', () => {
 			this.showWelcomePage();
 		}));
@@ -674,7 +674,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 		const container = this.harnessDropdownContainer = DOM.append(parent, $('.sidebar-harness-dropdown'));
 
 		this.harnessDropdownButton = DOM.append(container, $('button.harness-dropdown-button'));
-		this.harnessDropdownButton.setAttribute('aria-label', localize('selectHarness', "Select customization target"));
+		this.harnessDropdownButton.setAttribute('aria-label', localize('selectHarness', "Selecionar o destino da personalização"));
 		this.harnessDropdownButton.setAttribute('aria-haspopup', 'listbox');
 		this.editorDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), this.harnessDropdownButton, () => {
 			const descriptor = this.harnessService.findHarnessById(this.harnessService.activeHarness.get());
@@ -811,8 +811,8 @@ export class AICustomizationManagementEditor extends EditorPane {
 	private createBackArrowButton(onClick?: () => void): HTMLButtonElement {
 		const button = $('button.section-back-arrow-button') as HTMLButtonElement;
 		button.type = 'button';
-		button.setAttribute('aria-label', localize('backToOverview', "Back to overview"));
-		this.editorDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), button, localize('backToOverviewTooltip', "Back to overview")));
+		button.setAttribute('aria-label', localize('backToOverview', "Voltar para a visão geral"));
+		this.editorDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), button, localize('backToOverviewTooltip', "Voltar para a visão geral")));
 		const icon = DOM.append(button, $('span.section-back-arrow-icon'));
 		icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.arrowLeft));
 		icon.setAttribute('aria-hidden', 'true');
@@ -876,9 +876,9 @@ export class AICustomizationManagementEditor extends EditorPane {
 
 			this.modelsFooterElement = DOM.append(this.modelsContentContainer, $('.section-footer'));
 			const modelsDescription = DOM.append(this.modelsFooterElement, $('p.section-footer-description'));
-			modelsDescription.textContent = localize('modelsDescription', "Browse and manage language models from different providers. Select models for use in chat, code completion, and other AI features.");
+			modelsDescription.textContent = localize('modelsDescription', "Explore e gerencie modelos de linguagem de diferentes provedores. Escolha quais usar no chat, no completar de código e em outros recursos de IA.");
 			const modelsLink = DOM.append(this.modelsFooterElement, $('a.section-footer-link')) as HTMLAnchorElement;
-			modelsLink.textContent = localize('learnMoreModels', "Learn more about language models");
+			modelsLink.textContent = localize('learnMoreModels', "Saiba mais sobre modelos de linguagem");
 			modelsLink.href = 'https://code.visualstudio.com/docs/copilot/customization/language-models';
 			this.editorDisposables.add(DOM.addDisposableListener(modelsLink, 'click', (e) => {
 				e.preventDefault();
@@ -1393,7 +1393,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 		}));
 
 		const picked = await this.quickInputService.pick(items, {
-			placeHolder: localize('selectTargetDirectory', "Select a directory for the new customization file"),
+			placeHolder: localize('selectTargetDirectory', "Selecione um diretório para o novo arquivo de personalização"),
 		});
 
 		return picked?.uri ?? null;
@@ -1563,14 +1563,14 @@ export class AICustomizationManagementEditor extends EditorPane {
 		const editorHeader = DOM.append(this.editorContentContainer, $('.editor-header'));
 
 		this.editorActionButton = DOM.append(editorHeader, $('button.editor-back-button'));
-		this.editorActionButton.setAttribute('aria-label', localize('backToList', "Back to list"));
-		this.editorDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), this.editorActionButton, localize('backToListTooltip', "Back to list")));
+		this.editorActionButton.setAttribute('aria-label', localize('backToList', "Voltar para a lista"));
+		this.editorDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), this.editorActionButton, localize('backToListTooltip', "Voltar para a lista")));
 		this.editorActionButtonIcon = DOM.append(this.editorActionButton, $(`.codicon.codicon-${Codicon.arrowLeft.id}.editor-action-button-icon`));
 		this.editorActionButtonIcon.setAttribute('aria-hidden', 'true');
 		this.editorDisposables.add(DOM.addDisposableListener(this.editorActionButton, 'click', () => {
 			void this.handleEditorActionButton().catch(error => {
 				console.error('Failed to handle editor back action:', error);
-				this.notificationService.error(localize('editorActionButtonFailed', "Failed to finish the prompt action."));
+				this.notificationService.error(localize('editorActionButtonFailed', "Falha ao concluir a ação do prompt."));
 			});
 		}));
 
@@ -1591,7 +1591,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 		this.editorPreviewContainer = DOM.append(this.editorContentContainer, $('.editor-preview-container'));
 		this.editorPreviewScrollContainer = DOM.append(this.editorPreviewContainer, $('.editor-preview-scroll-container'));
 		this.editorPreviewScrollContainer.setAttribute('role', 'region');
-		this.editorPreviewScrollContainer.setAttribute('aria-label', localize('customizationPreviewAriaLabel', "Customization preview"));
+		this.editorPreviewScrollContainer.setAttribute('aria-label', localize('customizationPreviewAriaLabel', "Prévia da personalização"));
 
 		this.editorPreviewIssuesContainer = DOM.append(this.editorPreviewScrollContainer, $('.editor-preview-issues'));
 
@@ -1712,9 +1712,9 @@ export class AICustomizationManagementEditor extends EditorPane {
 					this._editorContentChanged = this.workingCopyService.isDirty(uri);
 					this.editorSaveIndicator.className = 'editor-save-indicator visible saved';
 					this.editorSaveIndicator.classList.add(...ThemeIcon.asClassNameArray(Codicon.check));
-					this.editorSaveIndicator.title = localize('saved', "Saved");
-					this.editorSaveIndicator.setAttribute('aria-label', localize('saved', "Saved"));
-					status(localize('saved', "Saved"));
+					this.editorSaveIndicator.title = localize('saved', "Salvo");
+					this.editorSaveIndicator.setAttribute('aria-label', localize('saved', "Salvo"));
+					status(localize('saved', "Salvo"));
 				}
 			}));
 		} catch (error) {
@@ -1770,7 +1770,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 			const saveRequest = backgroundSaveRequest;
 			void this.saveExistingCustomization(saveRequest).catch(error => {
 				console.error('Failed to save customization changes on exit:', error);
-				this.notificationService.warn(localize('saveCustomizationOnExitFailed', "Could not save changes to {0}.", basename(saveRequest.fileUri)));
+				this.notificationService.warn(localize('saveCustomizationOnExitFailed', "Não foi possível salvar as alterações em {0}.", basename(saveRequest.fileUri)));
 			});
 		}
 	}
@@ -1881,7 +1881,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 		const userFolder = await resolveUserTargetDirectory(this.promptsService, promptType);
 		if (userFolder) {
 			items.push({
-				label: localize('userSaveTarget', "User"),
+				label: localize('userSaveTarget', "Usuário"),
 				description: userFolder.fsPath,
 				target: 'user',
 				folder: userFolder,
@@ -1889,13 +1889,13 @@ export class AICustomizationManagementEditor extends EditorPane {
 		}
 
 		items.push({
-			label: localize('cancelSaveTarget', "Cancel"),
+			label: localize('cancelSaveTarget', "Cancelar"),
 			target: 'cancel',
 		});
 
 		return this.quickInputService.pick(items, {
 			canPickMany: false,
-			placeHolder: localize('saveBuiltinCopyPlaceholder', "Select Workspace, User, or Cancel"),
+			placeHolder: localize('saveBuiltinCopyPlaceholder', "Selecione Workspace, Usuário ou Cancelar"),
 			matchOnDescription: true,
 		});
 	}
@@ -1934,8 +1934,8 @@ export class AICustomizationManagementEditor extends EditorPane {
 				}, error => {
 					console.error('Failed to save built-in override:', error);
 					this.notificationService.warn(saveRequest.target === 'workspace'
-						? localize('saveBuiltinCopyFailedWorkspace', "Could not save the override to the workspace.")
-						: localize('saveBuiltinCopyFailedUser', "Could not save the override to your user folder."));
+						? localize('saveBuiltinCopyFailedWorkspace', "Não foi possível salvar a substituição no workspace.")
+						: localize('saveBuiltinCopyFailedUser', "Não foi possível salvar a substituição na sua pasta de usuário."));
 				});
 			}
 		} finally {
@@ -1955,11 +1955,11 @@ export class AICustomizationManagementEditor extends EditorPane {
 		this.editorActionButtonIcon.className = `codicon codicon-${shouldShowBuiltinSaveAction ? Codicon.save.id : Codicon.arrowLeft.id} editor-action-button-icon`;
 		this.editorActionButton.disabled = this.editorActionButtonInProgress;
 		this.editorActionButton.setAttribute('aria-label', shouldShowBuiltinSaveAction
-			? localize('saveBuiltinCopyAndChooseLocation', "Save override")
-			: localize('backToList', "Back to list"));
+			? localize('saveBuiltinCopyAndChooseLocation', "Salvar substituição")
+			: localize('backToList', "Voltar para a lista"));
 		this.editorActionButton.title = shouldShowBuiltinSaveAction
-			? localize('saveBuiltinCopyAndChooseLocationTooltip', "Save override (choose Workspace, User, or Cancel)")
-			: localize('backToList', "Back to list");
+			? localize('saveBuiltinCopyAndChooseLocationTooltip', "Salvar substituição (escolha Workspace, Usuário ou Cancelar)")
+			: localize('backToList', "Voltar para a lista");
 	}
 
 	private shouldShowBuiltinSaveAction(): boolean {
@@ -2005,8 +2005,8 @@ export class AICustomizationManagementEditor extends EditorPane {
 		} catch (error) {
 			console.error('Failed to save built-in override:', error);
 			this.notificationService.warn(target.target === 'workspace'
-				? localize('saveBuiltinCopyFailedWorkspace', "Could not save the override to the workspace.")
-				: localize('saveBuiltinCopyFailedUser', "Could not save the override to your user folder."));
+				? localize('saveBuiltinCopyFailedWorkspace', "Não foi possível salvar a substituição no workspace.")
+				: localize('saveBuiltinCopyFailedUser', "Não foi possível salvar a substituição na sua pasta de usuário."));
 			return false;
 		}
 	}
@@ -2107,12 +2107,12 @@ export class AICustomizationManagementEditor extends EditorPane {
 		}
 
 		if (this.editorDisplayMode === 'raw') {
-			return localize('editorPreviewButtonLabel', "Preview");
+			return localize('editorPreviewButtonLabel', "Prévia");
 		}
 
 		return this.canEditCurrentRaw()
-			? localize('editorEditRawButtonLabel', "Edit")
-			: localize('editorViewRawButtonLabel', "View Raw");
+			? localize('editorEditRawButtonLabel', "Editar")
+			: localize('editorViewRawButtonLabel', "Ver Original");
 	}
 
 	private getEditorModeButtonTooltip(): string {
@@ -2121,12 +2121,12 @@ export class AICustomizationManagementEditor extends EditorPane {
 		}
 
 		if (this.editorDisplayMode === 'raw') {
-			return localize('editorPreviewButtonTooltip', "Show structured preview");
+			return localize('editorPreviewButtonTooltip', "Mostrar prévia estruturada");
 		}
 
 		return this.canEditCurrentRaw()
-			? localize('editorEditRawButtonTooltip', "Edit the raw markdown file")
-			: localize('editorViewRawButtonTooltip', "Show the raw markdown file");
+			? localize('editorEditRawButtonTooltip', "Editar o arquivo markdown original")
+			: localize('editorViewRawButtonTooltip', "Mostrar o arquivo markdown original");
 	}
 
 	private canEditCurrentRaw(): boolean {
@@ -2181,8 +2181,8 @@ export class AICustomizationManagementEditor extends EditorPane {
 		}
 
 		const issuesContainer = DOM.append(this.editorPreviewIssuesContainer, $('.editor-preview-issues-box'));
-		DOM.append(issuesContainer, $('div.editor-preview-issues-title')).textContent = localize('previewHeaderIssuesTitle', "Header issues detected");
-		DOM.append(issuesContainer, $('div.editor-preview-issues-description')).textContent = localize('previewHeaderIssuesDescription', "Switch to raw view to fix invalid or unsupported metadata entries.");
+		DOM.append(issuesContainer, $('div.editor-preview-issues-title')).textContent = localize('previewHeaderIssuesTitle', "Problemas detectados no cabeçalho");
+		DOM.append(issuesContainer, $('div.editor-preview-issues-description')).textContent = localize('previewHeaderIssuesDescription', "Mude para a visão original para corrigir entradas de metadados inválidas ou não suportadas.");
 		const list = DOM.append(issuesContainer, $('ul.editor-preview-issues-list'));
 		for (const error of parsedPromptFile.header.errors) {
 			DOM.append(list, $('li.editor-preview-issues-item')).textContent = error.message;
@@ -2196,7 +2196,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 
 		const attributes = parsedPromptFile.header?.attributes ?? [];
 		if (!attributes.length) {
-			DOM.append(this.editorPreviewFrontMatterContainer, $('div.editor-preview-empty-state')).textContent = localize('previewNoFrontMatter', "No metadata found in this file.");
+			DOM.append(this.editorPreviewFrontMatterContainer, $('div.editor-preview-empty-state')).textContent = localize('previewNoFrontMatter', "Nenhum metadado encontrado neste arquivo.");
 			return;
 		}
 
@@ -2216,12 +2216,12 @@ export class AICustomizationManagementEditor extends EditorPane {
 
 		const helpButton = DOM.append(header, $('button.editor-preview-row-help')) as HTMLButtonElement;
 		helpButton.type = 'button';
-		helpButton.setAttribute('aria-label', localize('previewFieldHelpAriaLabel', "Show help for '{0}'", attribute.key));
+		helpButton.setAttribute('aria-label', localize('previewFieldHelpAriaLabel', "Mostrar ajuda de '{0}'", attribute.key));
 		const helpIcon = DOM.append(helpButton, $('span.editor-preview-row-help-icon'));
 		helpIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.info));
 		helpIcon.setAttribute('aria-hidden', 'true');
 
-		const description = getAttributeDefinition(attribute.key, promptType, target)?.description ?? localize('previewUnknownFieldDescription', "Custom metadata field `{0}`.", attribute.key);
+		const description = getAttributeDefinition(attribute.key, promptType, target)?.description ?? localize('previewUnknownFieldDescription', "Campo de metadados personalizado `{0}`.", attribute.key);
 		const helpHover = this.editorPreviewDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), helpButton, {
 			markdown: new MarkdownString(description),
 			markdownNotSupportedFallback: description,
@@ -2245,7 +2245,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 
 		const bodyContent = parsedPromptFile.body?.getContent() ?? '';
 		if (!bodyContent.trim()) {
-			DOM.append(this.editorPreviewBodyContainer, $('div.editor-preview-empty-state')).textContent = localize('previewNoBody', "No markdown body found in this file.");
+			DOM.append(this.editorPreviewBodyContainer, $('div.editor-preview-empty-state')).textContent = localize('previewNoBody', "Nenhum corpo markdown encontrado neste arquivo.");
 			return;
 		}
 
@@ -2327,8 +2327,8 @@ export class AICustomizationManagementEditor extends EditorPane {
 		// Back button header
 		const detailHeader = DOM.append(this.mcpDetailContainer, $('.editor-header'));
 		const backButton = DOM.append(detailHeader, $('button.editor-back-button'));
-		backButton.setAttribute('aria-label', localize('backToMcpList', "Back to MCP servers"));
-		this.editorDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), backButton, localize('backToMcpListTooltip', "Back to MCP servers")));
+		backButton.setAttribute('aria-label', localize('backToMcpList', "Voltar para os servidores MCP"));
+		this.editorDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), backButton, localize('backToMcpListTooltip', "Voltar para os servidores MCP")));
 		const backIconEl = DOM.append(backButton, $(`.codicon.codicon-${Codicon.arrowLeft.id}`));
 		backIconEl.setAttribute('aria-hidden', 'true');
 		this.editorDisposables.add(DOM.addDisposableListener(backButton, 'click', () => {
@@ -2381,8 +2381,8 @@ export class AICustomizationManagementEditor extends EditorPane {
 		// Back button header
 		const detailHeader = DOM.append(this.pluginDetailContainer, $('.editor-header'));
 		const backButton = DOM.append(detailHeader, $('button.editor-back-button'));
-		backButton.setAttribute('aria-label', localize('backToPluginList', "Back to plugins"));
-		this.editorDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), backButton, localize('backToPluginListTooltip', "Back to plugins")));
+		backButton.setAttribute('aria-label', localize('backToPluginList', "Voltar para os plugins"));
+		this.editorDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), backButton, localize('backToPluginListTooltip', "Voltar para os plugins")));
 		const backIconEl = DOM.append(backButton, $(`.codicon.codicon-${Codicon.arrowLeft.id}`));
 		backIconEl.setAttribute('aria-hidden', 'true');
 		this.editorDisposables.add(DOM.addDisposableListener(backButton, 'click', () => {

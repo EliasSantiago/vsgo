@@ -28,7 +28,6 @@ export interface ICaptureResult {
 
 export interface IQaRunOpts {
 	readonly startUrl?: string;
-	readonly headless?: boolean;
 	readonly maxSteps?: number;
 	readonly timeoutMs?: number;
 	readonly allowDestructiveActions?: boolean;
@@ -100,7 +99,6 @@ export interface IQaService {
 
 export interface IQaConfiguration {
 	readonly defaultStartUrl: string;
-	readonly headless: boolean;
 	readonly maxSteps: number;
 	readonly timeoutMs: number;
 	readonly modelVendor: string;
@@ -114,5 +112,8 @@ export const QA_VIEW_CONTAINER_ID = 'workbench.view.qa';
 export const QA_VIEW_ID = 'workbench.view.qa.runs';
 export const QA_PREVIEW_VIEW_ID = 'workbench.view.qa.preview';
 export const QA_CONFIG_SECTION = 'qa';
-export const QA_DIR_NAME = '.vsgo';
+
+/** Identifies this feature to the shared model picker. */
+export const QA_FEATURE = { configSection: QA_CONFIG_SECTION, title: 'QA' };
+/** Subdirectory of the vsgo artifacts folder holding QA output. */
 export const QA_SUBDIR = 'qa';

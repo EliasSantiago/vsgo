@@ -46,7 +46,7 @@ export class EmbeddedAgentPluginDetail extends Disposable {
 		this.descriptionEl = DOM.append(this.root, $('.embedded-detail-description'));
 
 		this.emptyEl = DOM.append(this.root, $('.embedded-detail-empty'));
-		this.emptyEl.textContent = localize('pluginDetailEmpty', "No plugin selected.");
+		this.emptyEl.textContent = localize('pluginDetailEmpty', "Nenhum plugin selecionado.");
 
 		this.renderItem();
 	}
@@ -86,11 +86,11 @@ export class EmbeddedAgentPluginDetail extends Disposable {
 
 		const sourceLabel = item.marketplace
 			? (isMarketplace
-				? localize('pluginSourceMarketplace', "From {0}", item.marketplace)
-				: localize('pluginSourceInstalled', "Installed from {0}", item.marketplace))
+				? localize('pluginSourceMarketplace', "De {0}", item.marketplace)
+				: localize('pluginSourceInstalled', "Instalado de {0}", item.marketplace))
 			: (isMarketplace
-				? localize('pluginSourceMarketplaceUnknown', "Marketplace plugin")
-				: localize('pluginSourceLocal', "Installed plugin"));
+				? localize('pluginSourceMarketplaceUnknown', "Plugin do marketplace")
+				: localize('pluginSourceLocal', "Plugin instalado"));
 		const iconSpan = $(`span.codicon.codicon-${iconId}`);
 		this.sourceEl.replaceChildren(iconSpan, document.createTextNode(' ' + sourceLabel));
 

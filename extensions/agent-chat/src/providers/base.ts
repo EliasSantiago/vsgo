@@ -33,6 +33,15 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		return 'apiKey';
 	}
 
+	/**
+	 * Whether a credential must be present before the provider reports models.
+	 * Providers backed by a locally managed runtime have nothing to authenticate
+	 * against and override this to `false`.
+	 */
+	protected get requiresCredential(): boolean {
+		return true;
+	}
+
 	abstract fallbackModels(): ModelSpec[];
 
 	protected async fetchAvailableModels(_credential: string, _token: vscode.CancellationToken): Promise<ModelSpec[] | undefined> {
@@ -59,11 +68,11 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 	): Promise<vscode.LanguageModelChatInformation[]> {
 		const credential = await this.resolveCredential(options);
 		log(`[${this.providerId}] provideLanguageModelChatInformation: hasCredential=${!!credential}, hasOptionsConfig=${!!options.configuration}, configKeys=${Object.keys(options.configuration ?? {}).join(',')}`);
-		if (!credential) {
+		if (!credential && this.requiresCredential) {
 			return [];
 		}
 		try {
-			const fetched = await this.fetchAvailableModels(credential, token);
+			const fetched = await this.fetchAvailableModels(credential ?? '', token);
 			if (fetched && fetched.length > 0) {
 				this.cachedModels = fetched;
 				log(`[${this.providerId}] fetched ${fetched.length} models from API`);
@@ -96,7 +105,7 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		token: vscode.CancellationToken,
 	): Promise<void> {
 		const credential = await this.resolveCredential(options);
-		if (!credential) {
+		if (!credential && this.requiresCredential) {
 			throw new Error(`Missing credential for ${this.providerId}`);
 		}
 		const spec = (this.cachedModels ?? this.fallbackModels()).find(m => m.id === model.id)
@@ -116,7 +125,7 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		};
 
 		const startedAt = Date.now();
-		const usage = await this.sendChat(credential, spec, messages, tools, meteredProgress, token);
+		const usage = await this.sendChat(credential ?? '', spec, messages, tools, meteredProgress, token);
 		this.reportUsage(spec, model, messages, outputText, usage, Date.now() - startedAt);
 	}
 
@@ -158,15 +167,41 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		if (fromOptions) {
 			// Mirror into the extension's SecretStorage so the command-based UI keeps working.
 			await this.storage.set(this.providerId, fromOptions);
-			return fromOptions;
+			return assertHeaderSafe(fromOptions, this.providerId);
 		}
-		return this.storage.get(this.providerId);
+		const stored = await this.storage.get(this.providerId);
+		return stored === undefined ? undefined : assertHeaderSafe(stored.trim(), this.providerId);
 	}
 }
 
 function readCredential(config: { readonly [key: string]: any } | undefined, key: string): string | undefined {
 	const value = config?.[key];
 	return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * Um cabeçalho HTTP só transporta bytes latin-1. Um caractere acima de 255 na
+ * credencial faz o `fetch` lançar um TypeError falando de ByteString e de um
+ * índice — nunca da chave —, e o erro aparece longe daqui: a descoberta de
+ * modelos engole a exceção e cai na lista de fallback, então o seletor mostra
+ * modelos que nunca vão responder, e só ao enviar a primeira mensagem sai um
+ * "Cannot convert argument to a ByteString".
+ *
+ * Foi o que aconteceu em 14/08 com uma chave da xAI colada de um campo
+ * mascarado, que veio com o `●` (U+25CF) que a UI desenha no lugar dos
+ * caracteres. Barrar aqui é o único ponto em que ainda dá para dizer o que
+ * está errado.
+ */
+function assertHeaderSafe(credential: string, providerId: string): string {
+	const offender = /[^\x20-\x7e]/.exec(credential);
+	if (offender) {
+		const codePoint = offender[0].codePointAt(0) ?? 0;
+		throw new Error(
+			`The ${providerId} API key contains an invalid character (U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}) at position ${offender.index + 1}. ` +
+			`Keys copied from a masked field pick up the bullet characters the field draws instead of the real ones — copy the key from where it is shown in full and enter it again.`,
+		);
+	}
+	return credential;
 }
 
 function extractText(message: vscode.LanguageModelChatRequestMessage): string {

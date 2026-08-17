@@ -6,11 +6,18 @@
 import { ModelSpec } from './base.js';
 import { OAICompatProvider } from './oai-compat.js';
 
+/**
+ * Só entra em cena quando o /models não responde. A lista anterior era a da
+ * geração Grok 2/3, toda aposentada desde então: quem caísse no fallback via
+ * uma lista de modelos que o endpoint de chat recusa. Vale manter curta e
+ * conferida contra docs.x.ai/docs/models — a descoberta ao vivo é o caminho
+ * normal.
+ */
 const FALLBACK: ModelSpec[] = [
-	{ id: 'grok-3', name: 'Grok 3', family: 'grok-3', maxInputTokens: 131072, maxOutputTokens: 131072 },
-	{ id: 'grok-3-mini', name: 'Grok 3 Mini', family: 'grok-3-mini', maxInputTokens: 131072, maxOutputTokens: 131072 },
-	{ id: 'grok-2', name: 'Grok 2', family: 'grok-2', maxInputTokens: 131072, maxOutputTokens: 131072 },
-	{ id: 'grok-2-mini', name: 'Grok 2 Mini', family: 'grok-2-mini', maxInputTokens: 131072, maxOutputTokens: 131072 },
+	{ id: 'grok-4.6', name: 'Grok 4.6', family: 'grok-4.6', maxInputTokens: 500000, maxOutputTokens: 32768 },
+	{ id: 'grok-4.5', name: 'Grok 4.5', family: 'grok-4.5', maxInputTokens: 500000, maxOutputTokens: 32768 },
+	{ id: 'grok-4.3', name: 'Grok 4.3', family: 'grok-4.3', maxInputTokens: 1000000, maxOutputTokens: 32768 },
+	{ id: 'grok-build-0.1', name: 'Grok Build 0.1', family: 'grok-build', maxInputTokens: 262144, maxOutputTokens: 32768 },
 ];
 
 export class XAIProvider extends OAICompatProvider {

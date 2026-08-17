@@ -31,6 +31,7 @@ import {
 	CancelSpecRunCommand,
 	OpenSpecDrivenViewAction,
 	OpenSpecsFolderAction,
+	SelectSpecDrivenModelAction,
 	SetUpSpecDrivenAction,
 } from './specDrivenActions.js';
 
@@ -81,17 +82,17 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		[`${SPEC_DRIVEN_CONFIG_SECTION}.modelVendor`]: {
 			type: 'string',
 			default: '',
-			markdownDescription: localize('specDriven.modelVendor', "Preferred AI provider vendor for spec generation (empty = any available)."),
+			markdownDescription: localize('specDriven.modelVendor', "Provedor de IA usado para gerar os documentos. Vazio aceita qualquer um. Mais fácil de escolher pelo botão de modelo no título da view."),
 		},
 		[`${SPEC_DRIVEN_CONFIG_SECTION}.modelId`]: {
 			type: 'string',
 			default: '',
-			markdownDescription: localize('specDriven.modelId', "Preferred model identifier for spec generation (empty = first available for vendor)."),
+			markdownDescription: localize('specDriven.modelId', "Modelo usado para gerar spec, plano e tarefas. Vazio significa o primeiro disponível, que não é necessariamente o do chat."),
 		},
 		[`${SPEC_DRIVEN_CONFIG_SECTION}.persistRuns`]: {
 			type: 'boolean',
 			default: true,
-			markdownDescription: localize('specDriven.persistRuns', "Persist generated spec runs in `.vsgo/specs/` and restore them on startup."),
+			markdownDescription: localize('specDriven.persistRuns', "Remember generated spec runs across restarts. The run history is stored in `.vsgo/specs/`; the documents themselves are always written to `specs/` so they can be committed with the project."),
 		},
 		[`${SPEC_DRIVEN_CONFIG_SECTION}.runRetention`]: {
 			type: 'number',
@@ -107,8 +108,9 @@ registerAction2(OpenSpecDrivenViewAction);
 registerAction2(CancelSpecRunCommand);
 registerAction2(OpenSpecsFolderAction);
 registerAction2(SetUpSpecDrivenAction);
+registerAction2(SelectSpecDrivenModelAction);
 
-// Onboarding: offer SDD setup when a folder is opened
+// Onboarding: offer SDD setup when the user first opens the Spec Driven view
 registerWorkbenchContribution2(SpecDrivenOnboarding.ID, SpecDrivenOnboarding, WorkbenchPhase.AfterRestored);
 
 // Status bar entry
@@ -145,9 +147,8 @@ class SpecDrivenStatusBar extends Disposable implements IWorkbenchContribution {
 		if (!running) { return undefined; }
 		const phaseLabels: Record<string, string> = {
 			context: localize('specDriven.statusContext', "context"),
-			requirements: localize('specDriven.statusRequirements', "requirements"),
-			stories: localize('specDriven.statusStories', "stories"),
-			architecture: localize('specDriven.statusArchitecture', "architecture"),
+			spec: localize('specDriven.statusSpec', "spec"),
+			plan: localize('specDriven.statusPlan', "plan"),
 			tasks: localize('specDriven.statusTasks', "tasks"),
 		};
 		const phase = phaseLabels[running.currentPhase] ?? running.currentPhase;
@@ -181,19 +182,21 @@ class SpecDrivenAgentRegistration extends Disposable implements IWorkbenchContri
 			id: SDD_AGENT_ID,
 			name: 'sdd',
 			fullName: localize('specDriven.agentFullName', "Spec Driven Development"),
-			description: localize('specDriven.agentDescription', "Especialista em SDD — gera requisitos, histórias, arquitetura e tarefas."),
+			description: localize('specDriven.agentDescription', "Especialista em SDD — gera spec.md, plan.md e tasks.md no formato do spec-kit."),
 			isDefault: false,
 			isCore: true,
 			isDynamic: false,
 			locations: [ChatAgentLocation.Chat],
-			modes: [ChatModeKind.Ask],
+			// Every invocation writes spec.md/plan.md/tasks.md into the project, so this belongs to
+			// the acting mode. In Ask — "answer, don't act" — a participant that creates files
+			// breaks the contract the mode makes with the user.
+			modes: [ChatModeKind.Agent],
 			disambiguation: [],
 			slashCommands: [
-				{ name: 'completo', description: localize('specDriven.cmdCompleto', "Gera todos os 4 documentos SDD") },
-				{ name: 'requisitos', description: localize('specDriven.cmdRequisitos', "Gera apenas REQUIREMENTS.md") },
-				{ name: 'historias', description: localize('specDriven.cmdHistorias', "Gera apenas USER_STORIES.md") },
-				{ name: 'arquitetura', description: localize('specDriven.cmdArquitetura', "Gera apenas ARCHITECTURE.md") },
-				{ name: 'tarefas', description: localize('specDriven.cmdTarefas', "Gera apenas TASKS.md") },
+				{ name: 'completo', description: localize('specDriven.cmdCompleto', "Gera spec.md, plan.md e tasks.md") },
+				{ name: 'spec', description: localize('specDriven.cmdSpec', "Gera apenas spec.md") },
+				{ name: 'plano', description: localize('specDriven.cmdPlano', "Gera apenas plan.md") },
+				{ name: 'tarefas', description: localize('specDriven.cmdTarefas', "Gera apenas tasks.md") },
 				{ name: 'ajuda', description: localize('specDriven.cmdAjuda', "Exibe o guia SDD") },
 			],
 			metadata: {},
@@ -209,11 +212,10 @@ class SpecDrivenAgentRegistration extends Disposable implements IWorkbenchContri
 
 		// Registra os slash commands SDD globalmente (sem precisar de @sdd)
 		const sddCommands: Array<{ command: string; detail: string }> = [
-			{ command: 'completo', detail: localize('specDriven.cmdCompleto', "Gera todos os 4 documentos SDD") },
-			{ command: 'requisitos', detail: localize('specDriven.cmdRequisitos', "Gera apenas REQUIREMENTS.md") },
-			{ command: 'historias', detail: localize('specDriven.cmdHistorias', "Gera apenas USER_STORIES.md") },
-			{ command: 'arquitetura', detail: localize('specDriven.cmdArquitetura', "Gera apenas ARCHITECTURE.md") },
-			{ command: 'tarefas', detail: localize('specDriven.cmdTarefas', "Gera apenas TASKS.md") },
+			{ command: 'completo', detail: localize('specDriven.cmdCompleto', "Gera spec.md, plan.md e tasks.md") },
+			{ command: 'spec', detail: localize('specDriven.cmdSpec', "Gera apenas spec.md") },
+			{ command: 'plano', detail: localize('specDriven.cmdPlano', "Gera apenas plan.md") },
+			{ command: 'tarefas', detail: localize('specDriven.cmdTarefas', "Gera apenas tasks.md") },
 			{ command: 'ajuda', detail: localize('specDriven.cmdAjuda', "Exibe o guia SDD") },
 		];
 
@@ -222,7 +224,10 @@ class SpecDrivenAgentRegistration extends Disposable implements IWorkbenchContri
 				{ command: cmd, detail, locations: [ChatAgentLocation.Chat], modes: [ChatModeKind.Ask] },
 				async (prompt, progress, _history, _location, _sessionResource, token) => {
 					const adaptedProgress = (parts: IChatProgress[]) => parts.forEach(p => progress.report(p));
-					await agent.handleGenerate(prompt, cmd, adaptedProgress, token);
+					// The slash-command callback is not handed the request, so there is
+					// no chat selection to honour here: this path runs on the model
+					// configured for Spec Driven.
+					await agent.handleGenerate(prompt, cmd, undefined, adaptedProgress, token);
 				}
 			));
 		}

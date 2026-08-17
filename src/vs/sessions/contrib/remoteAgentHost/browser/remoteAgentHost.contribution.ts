@@ -517,7 +517,7 @@ export class RemoteAgentHostContribution extends Disposable implements IWorkbenc
 		// Language model provider.
 		// Order matters: `updateModels` must be called after
 		// `registerLanguageModelProvider` so the initial `onDidChange` is observed.
-		const vendorDescriptor = { vendor, displayName, configuration: undefined, managementCommand: undefined, when: undefined };
+		const vendorDescriptor = { vendor, displayName, configuration: undefined, managementCommand: undefined, manageModelsCommand: undefined, when: undefined };
 		this._languageModelsService.deltaLanguageModelChatProviderDescriptors([vendorDescriptor], []);
 		agentStore.add(toDisposable(() => this._languageModelsService.deltaLanguageModelChatProviderDescriptors([], [vendorDescriptor])));
 		const modelProvider = agentStore.add(new AgentHostLanguageModelProvider(sessionType, vendor));

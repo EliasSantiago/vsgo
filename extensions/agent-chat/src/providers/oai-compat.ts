@@ -5,8 +5,19 @@
 
 import * as vscode from 'vscode';
 import { BaseChatProvider, IProviderUsage, ModelSpec, parseSSE, toAbort } from './base.js';
+import { log } from '../logger.js';
 
 interface OAIToolCallAccum { id: string; name: string; arguments: string }
+
+interface IWireToolCall { id: string; type: 'function'; function: { name: string; arguments: string } }
+
+/** One message in the OpenAI chat completions wire format. */
+export interface IWireMessage {
+	role: 'system' | 'user' | 'assistant' | 'tool';
+	content: string | null;
+	tool_calls?: IWireToolCall[];
+	tool_call_id?: string;
+}
 
 interface OAIModelsResponse {
 	data?: Array<{ id: string; object?: string }>;
@@ -37,11 +48,16 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 				signal: toAbort(token),
 			});
 			if (!res.ok) {
+				// Sem isto o fallback entra em silêncio e a lista de modelos fica
+				// parecendo a real: uma chave recusada e um endpoint fora do ar
+				// dão exatamente o mesmo resultado visível.
+				log(`[${this.providerId}] ${endpoint} respondeu ${res.status}: ${(await res.text()).slice(0, 300)}`);
 				return undefined;
 			}
 			const data = await res.json() as OAIModelsResponse;
 			const ids = (data.data ?? []).map(m => m.id).filter(id => this.filterModelId(id));
 			if (ids.length === 0) {
+				log(`[${this.providerId}] ${endpoint} devolveu ${(data.data ?? []).length} modelos, nenhum sobreviveu ao filtro`);
 				return undefined;
 			}
 			return ids.map(id => ({
@@ -51,9 +67,40 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 				maxInputTokens: 128000,
 				maxOutputTokens: 8192,
 			}));
-		} catch {
+		} catch (err) {
+			log(`[${this.providerId}] ${endpoint} falhou:`, err instanceof Error ? err.message : String(err));
 			return undefined;
 		}
+	}
+
+	/**
+	 * Sampling parameters merged into the request body.
+	 *
+	 * Empty for hosted APIs, whose defaults are tuned for the models they serve.
+	 * Local runtimes are the ones that need it: llama.cpp defaults to a
+	 * temperature of 0.8, high enough that a small model regularly drifts into
+	 * describing a tool call in prose instead of emitting one.
+	 */
+	protected get samplingOptions(): Record<string, number> {
+		return {};
+	}
+
+	/**
+	 * Extra fields merged into the request body, for anything that is not a
+	 * sampling knob — a runtime-specific switch such as llama.cpp's
+	 * `chat_template_kwargs`, which is handed to the model's own chat template.
+	 */
+	protected get extraRequestBody(): Record<string, unknown> {
+		return {};
+	}
+
+	/**
+	 * The conversation in the shape the endpoint expects. Overridable because a
+	 * runtime that renders the model's own chat template can only accept what
+	 * that template knows how to write.
+	 */
+	protected toWireMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], _model: ModelSpec): IWireMessage[] {
+		return toOAIMessages(messages);
 	}
 
 	async sendChat(
@@ -72,11 +119,13 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 			},
 			body: JSON.stringify({
 				model: model.id,
-				messages: toOAIMessages(messages),
+				messages: this.toWireMessages(messages, model),
 				stream: true,
 				// Ask OpenAI-compatible APIs to include a final usage chunk.
 				stream_options: { include_usage: true },
 				tools: tools ? tools.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.inputSchema } })) : undefined,
+				...this.samplingOptions,
+				...this.extraRequestBody,
 			}),
 			signal: toAbort(token),
 		});
@@ -88,7 +137,7 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 		const calls = new Map<number, OAIToolCallAccum>();
 		let usage: IProviderUsage | undefined;
 		for await (const evt of parseSSE(response, token)) {
-			const e = evt as { choices?: Array<{ delta?: { content?: string; tool_calls?: Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }>; finish_reason?: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+			const e = evt as { choices?: Array<{ delta?: { content?: string; reasoning_content?: string; tool_calls?: Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }>; finish_reason?: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
 			if (e.usage) {
 				usage = { inputTokens: e.usage.prompt_tokens ?? 0, outputTokens: e.usage.completion_tokens ?? 0 };
 			}
@@ -96,6 +145,13 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 			const delta = choice?.delta;
 			if (!delta) {
 				continue;
+			}
+			// A reasoning model puts its whole turn here and leaves `content` empty
+			// until the answer itself starts, so dropping this means reporting
+			// nothing at all while it works — the request looks frozen for as long
+			// as the reasoning takes, which on CPU inference is minutes.
+			if (delta.reasoning_content) {
+				progress.report(new vscode.LanguageModelThinkingPart(delta.reasoning_content));
 			}
 			if (delta.content) {
 				progress.report(new vscode.LanguageModelTextPart(delta.content));
@@ -133,15 +189,70 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 	}
 }
 
-function toOAIMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): unknown[] {
-	const out: unknown[] = [];
+/**
+ * Rewrites a conversation for chat templates that only know how to render
+ * alternating user/assistant turns.
+ *
+ * Gemma's template is the case that forced this: it raises on a `tool` role and
+ * on two turns of the same role in a row, so an agent conversation — which is
+ * mostly assistant/tool ping-pong — fails to render at all and the server
+ * answers 400 before generating anything. Tool traffic is folded into the
+ * surrounding turns as plain text, which these models read fine; it is only the
+ * structured form they cannot express.
+ */
+export function flattenToAlternating(wire: readonly IWireMessage[]): IWireMessage[] {
+	const toolNames = new Map<string, string>();
+	for (const m of wire) {
+		for (const call of m.tool_calls ?? []) {
+			toolNames.set(call.id, call.function.name);
+		}
+	}
+
+	const rewritten: IWireMessage[] = [];
+	for (const m of wire) {
+		if (m.role === 'tool') {
+			const name = m.tool_call_id ? toolNames.get(m.tool_call_id) : undefined;
+			const label = name ? `[resultado de ${name}]` : '[resultado da ferramenta]';
+			rewritten.push({ role: 'user', content: `${label}\n${m.content ?? ''}` });
+			continue;
+		}
+		if (m.role === 'assistant' && m.tool_calls?.length) {
+			const described = m.tool_calls.map(c => `${c.function.name}(${c.function.arguments})`).join('\n');
+			rewritten.push({ role: 'assistant', content: [m.content, described].filter(Boolean).join('\n') });
+			continue;
+		}
+		rewritten.push(m);
+	}
+
+	// A leading assistant turn breaks the same alternation check that the tool
+	// role does, and there is no earlier turn left to merge it into.
+	const firstUser = rewritten.findIndex(m => m.role === 'user');
+	const body = firstUser < 0 ? [] : rewritten.slice(firstUser);
+	const out = [...rewritten.filter(m => m.role === 'system'), ...body.filter(m => m.role !== 'system')];
+
+	// Collapse what the rewrite left adjacent — a tool result followed by the
+	// user's next message is now two user turns.
+	const merged: IWireMessage[] = [];
+	for (const m of out) {
+		const previous = merged[merged.length - 1];
+		if (previous && previous.role === m.role && m.role !== 'system') {
+			previous.content = [previous.content, m.content].filter(Boolean).join('\n\n');
+			continue;
+		}
+		merged.push({ ...m });
+	}
+	return merged;
+}
+
+export function toOAIMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): IWireMessage[] {
+	const out: IWireMessage[] = [];
 	for (const m of messages) {
 		if (m.role === vscode.LanguageModelChatMessageRole.System) {
 			out.push({ role: 'system', content: textOf(m.content) });
 			continue;
 		}
 		if (m.role === vscode.LanguageModelChatMessageRole.Assistant) {
-			const toolCalls: unknown[] = [];
+			const toolCalls: IWireToolCall[] = [];
 			let text = '';
 			for (const p of m.content) {
 				if (p instanceof vscode.LanguageModelTextPart) {
@@ -150,7 +261,7 @@ function toOAIMessages(messages: readonly vscode.LanguageModelChatRequestMessage
 					toolCalls.push({ id: p.callId, type: 'function', function: { name: p.name, arguments: JSON.stringify(p.input) } });
 				}
 			}
-			const entry: Record<string, unknown> = { role: 'assistant', content: text || null };
+			const entry: IWireMessage = { role: 'assistant', content: text || null };
 			if (toolCalls.length > 0) {
 				entry.tool_calls = toolCalls;
 			}

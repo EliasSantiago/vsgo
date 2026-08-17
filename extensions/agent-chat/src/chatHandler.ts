@@ -11,11 +11,22 @@ import { parsePlan, SUBMIT_PLAN_TOOL, SUBMIT_PLAN_TOOL_NAME } from './planner/pl
 import { PlanRunner } from './planner/planRunner.js';
 import { RUN_SUBAGENT_TOOL, RUN_SUBAGENT_TOOL_NAME, runStandaloneSubagent } from './planner/subagent.js';
 import { log } from './logger.js';
-import { resolveUri, searchWorkspace } from './tools.js';
+import { FileLinkStream } from './fileLinks.js';
+import { collectDiagnostics, computeFileEdit, computeMultiFileEdit, DiagnosticsInput, EditFileInput, findFiles, gitDiff, GitDiffInput, GitInput, gitStatus, listDirectory, MultiEditInput, openFileInEditor, OpenFileInput, readFileForModel, ReadFileInput, resolveUri, searchWorkspace } from './tools.js';
+import { parseTodos, renderTodosForModel, renderTodosForUser, TODO_TOOL, TODO_TOOL_NAME, TodoItem } from './todoList.js';
+import { restoreTranscript, serializeTranscript, TRANSCRIPT_METADATA_KEY } from './transcript.js';
+import { clampToolResult, extractTextToolCalls, IAgentProfile, resolveProfile } from './agentProfile.js';
+import { isMcpToolInfo, McpServers } from './mcp.js';
+import { FIGMA_TOOL_NAME } from './figma/figmaTool.js';
 
-const MAX_AGENT_TURNS = 12;
+/**
+ * Turn budget for one request under the full profile. Tasks that run the app and
+ * then drive the browser spend several turns on exploration alone, so this has to
+ * be well above the handful of turns a pure question needs. The compact profile
+ * carries its own, smaller budget.
+ */
+const MAX_AGENT_TURNS = 32;
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
-const MAX_TEXT_REF_BYTES = 100 * 1024;
 
 const MIME_BY_EXT: Record<string, string> = {
 	'.png': 'image/png',
@@ -41,14 +52,22 @@ When the user asks you to change a function, class, method, variable, or any sym
 1. Use \`agent_search\` to locate the symbol across the workspace FIRST. Search by the symbol name (e.g. the function name).
 2. NEVER tell the user that a function or symbol "does not exist" or "was not found" until you have searched the ENTIRE workspace with \`agent_search\`. A symbol missing from one file is not proof it is absent — search before concluding.
 3. The active file shown in context is only a hint, not the only place to look. The symbol is often defined in a different file.
+4. \`agent_search\` looks INSIDE files, so it never matches a filename. When you are after a FILE rather than a symbol, use \`agent_find_files\` — it matches names at any depth, so a project whose convention you guessed wrong (\`app.routes.ts\`, not \`app-routing.module.ts\`) still turns up on a shorter fragment.
+5. An empty result narrows the guess; it does not answer the question. Retry with a shorter fragment, or search for what the code would contain rather than what it is called, before reporting anything as absent.
 
 ## File editing rules (CRITICAL)
 When asked to refactor, fix, add, remove, or otherwise change code in a file:
 1. If the user's message includes a "--- Arquivo: /path ---" block, that is the file to edit. Use the exact path shown. Otherwise, locate the target with \`agent_search\` as described above.
-2. Use \`agent_read_file\` to read the FULL current content of the file before writing (the block may show only a selection).
-3. Apply ALL changes and write the COMPLETE updated file with \`agent_write_file\` using the exact path from step 1.
+2. Use \`agent_read_file\` to read the FULL current content of the file before writing — unless the block already says it holds the complete file, in which case you have it and reading it again only costs a turn.
+3. Change it with \`agent_edit_file\`, giving the exact text to replace and what replaces it. This is the default for a file that already exists. When the change touches several places in the same file, send them together with \`agent_multi_edit\` instead of one call each. Reserve \`agent_write_file\` for a NEW file or a rewrite so sweeping that little of the original survives.
 4. NEVER output code changes as markdown in the chat — always write them to the file directly.
-5. After writing, give a short summary in the user's language of what changed and why.
+5. Call \`agent_diagnostics\` afterwards to see whether the change compiles. It reads what the language server already knows, so it costs a second and needs no build — do this instead of guessing, and fix what you broke before answering.
+6. Then give a short summary in the user's language of what changed and why.
+
+## Reviewing your own work
+\`agent_git_status\` shows which files are modified; \`agent_git_diff\` shows the actual change.
+Use them when the user asks what changed, before summarising a batch of edits, or when you
+have lost track of what you already did.
 
 When the user asks "how" (explanation only, no file named), explain in the chat without touching files.
 
@@ -60,14 +79,88 @@ When the user asks anything about the project, application, architecture, depend
 2. Call \`agent_read_file\` on key files (package.json, index files, main entry points, config files, etc.) to understand the project.
 3. Form your answer from what you read. Do NOT ask the user for information that is already in the files.
 
+## Citing and opening files
+Always cite files by their workspace-relative path, and pin the citation to the exact spot:
+- \`src/Service/Foo.php#getUnidades\` — when you are talking about a function, method or class.
+Write the plain symbol name, no parentheses and no arguments.
+- \`src/Service/Foo.php:120\` — when you know the line number.
+- \`src/Service/Foo.php\` — only when the whole file is the subject.
+
+These become clickable links that open the file **at that function**, so the user lands on the
+code instead of at the top of a 900-line file. Never split the file and the symbol across
+separate lines ("Arquivo: X" then "Função: y") — that loses the link. Write \`X#y\` and, if you
+want to spell it out for the reader, do that in the surrounding sentence.
+
+When the user asks to open, show or reveal files, call \`agent_open_file\` for each one. Naming
+the file in the answer is not the same as opening it: if they asked for it open, open it.
+
+Explore only as far as the task needs. When the user asks for a concrete action
+("run the app", "open it in the browser", "fix function X"), go straight for the
+one or two files that unblock it and act — a broad survey first wastes the turn
+budget and the task never gets done. Never list \`node_modules\`, \`.git\`, \`dist\`,
+\`build\` or similar; they hold no answers.
+
+Never repeat a read you already made in this conversation. If you catch yourself
+reading the same file twice, you are stuck — act on what you already know.
+
+A large file does not have to be read whole: \`agent_read_file\` takes \`offset\` and
+\`limit\`, and tells you the offset that continues the file when a result is cut short.
+
+## Staying on task
+For work that takes several steps, call \`agent_todo_write\` with the plan before you start,
+then again after each step to mark it done. Send the whole list every time; keep exactly one
+item \`in_progress\`. It exists so a long task does not drift: read the list back before
+deciding what to do next, and do not stop while items are still open. Skip it entirely for
+anything that takes one or two tool calls.
+
 Examples of when to explore automatically (not an exhaustive list):
 - "analyze my application" → list root, read package.json, main files, architecture files
 - "what architecture does this use?" → explore src/, read entry points and key modules
 - "what does this project do?" → read README, package.json, main entry point
 - "what dependencies does this use?" → read package.json / requirements.txt / go.mod etc.
 
+## Testing in a real browser
+You can drive the Integrated Browser to verify web apps end to end and to automate
+web tasks for the user. Pages open as editor tabs inside this window, so the user
+watches you work and can take over at any time (logins, 2FA, captchas).
+
+Use it when the user asks you to test, verify, reproduce, look at the running
+application, or automate something on the web — and proactively after changing UI
+code that you can check this way.
+
+Workflow:
+1. Find the dev server URL before guessing: read package.json (or the vite/next/webpack config) to see the start script and port. Read only what you need — do not survey the whole workspace first.
+2. If no server is running, start it with \`agent_run_command\` and \`"background": true\`. A dev server never exits, so a foreground call would hang until it is killed. The tool returns the first seconds of output, which is where the actual port is printed — use that port, do not assume 3000. It also returns a terminal id: a server that prints "ready" can still crash a moment later, so before you trust it, call \`agent_read_terminal\` with that id and \`"waitSeconds": 5\` to see what it printed next.
+3. \`open_browser_page\` with an absolute \`url\`. It returns a \`pageId\` plus an accessibility summary of the page. Every other browser tool takes that \`pageId\`.
+4. \`read_page\` to see the current state — it returns the accessibility tree WITH element refs. This is how you see. You do NOT receive image content back, so never rely on \`screenshot_page\` to observe anything yourself.
+5. Interact using refs from the LATEST \`read_page\` (\`click_element\`, \`type_in_page\`, \`hover_element\`, \`drag_element\`), then \`read_page\` again to confirm the result. Refs go stale after the page changes — re-read instead of reusing old ones.
+6. \`navigate_page\` for url/back/forward/reload on a page you already opened. \`handle_dialog\` when an alert/confirm blocks you.
+7. \`run_playwright_code\` is the escape hatch for anything the dedicated tools do not cover — waiting for a selector, reading \`document.title\`, extracting a list. Access the page only through the provided \`page\` object, never \`document\`/\`window\` directly.
+8. \`screenshot_page\` when the USER would benefit from seeing the result — it is for them, not for you.
+
+Never claim the app works until \`read_page\` or \`run_playwright_code\` output actually shows it. Report what you observed, not what you expect.
+
+## Running commands
+Commands that exit on their own run in the foreground and return their full output.
+Anything that does NOT exit — dev servers, watchers, \`tail -f\` — needs \`"background": true\`,
+which runs it in a visible terminal and returns a terminal id.
+
+That first result is only the opening seconds. Whenever the outcome depends on what
+the command prints later — did the server actually serve, did the watcher recompile
+cleanly, did the test suite finish green — read it back with \`agent_read_terminal\`
+using the terminal id, with \`waitSeconds\` so you block instead of polling. Never
+report a background command as working based only on its first seconds of output.
+
 ## Tool usage
 Do NOT narrate tool invocations. Invoke tools silently and only speak once you have results.
+
+Batch independent calls into a SINGLE turn. Every round-trip you make spends one
+turn of a limited budget, so calls that do not depend on each other's output must
+go out together — reading four files, a search plus a directory listing, two
+\`read_page\` calls on different pages. Issue calls one at a time only when the
+next one genuinely needs the previous result (e.g. search, then read the file it
+found). Emitting one call per turn when five were independent wastes 80% of the
+budget and is the main reason a task runs out of turns before finishing.
 
 ## Delegation
 To delegate ONE focused, self-contained task to a sub-agent, call \`agent_run_subagent\` with a complete task description. The sub-agent runs with the same tools, works in its own context (it does NOT see this conversation), and returns a summary. Use it to keep your own context focused on larger work — e.g. delegate "investigate and fix failing test X" while you continue elsewhere.
@@ -76,16 +169,57 @@ Skip both for trivial single-file edits — just do them inline.
 `.trim();
 
 const WRITE_FILE_TOOL_NAME = 'agent_write_file';
+const EDIT_FILE_TOOL_NAME = 'agent_edit_file';
+const MULTI_EDIT_TOOL_NAME = 'agent_multi_edit';
+const OPEN_FILE_TOOL_NAME = 'agent_open_file';
+
+/** Read-only tools whose result cannot change until the agent writes a file. */
+const REPEATABLE_READ_TOOLS: ReadonlySet<string> = new Set([
+	'agent_read_file',
+	'agent_list_dir',
+	'agent_search',
+	'agent_find_files',
+]);
+
+/**
+ * Browser automation tools contributed by the workbench itself. They drive the
+ * Integrated Browser (an Electron `WebContentsView` steered by Playwright over
+ * CDP), so no external Chrome or Chromium download is involved.
+ *
+ * They are only present in `vscode.lm.tools` when `workbench.browser.enableChatTools`
+ * is on; `agent-chat.browser.enabled` additionally controls whether we hand them
+ * to the model.
+ */
+const BROWSER_TOOL_NAMES: ReadonlySet<string> = new Set([
+	'open_browser_page',
+	'read_page',
+	'screenshot_page',
+	'navigate_page',
+	'click_element',
+	'type_in_page',
+	'hover_element',
+	'drag_element',
+	'handle_dialog',
+	'run_playwright_code',
+]);
 
 const AGENT_TOOL_NAMES: ReadonlySet<string> = new Set([
 	'agent_read_file',
+	OPEN_FILE_TOOL_NAME,
 	WRITE_FILE_TOOL_NAME,
+	EDIT_FILE_TOOL_NAME,
+	MULTI_EDIT_TOOL_NAME,
 	'agent_list_dir',
 	'agent_search',
+	'agent_find_files',
+	'agent_diagnostics',
+	'agent_git_status',
+	'agent_git_diff',
 	'agent_run_command',
-	// Only registered in vscode.lm.tools while `agent-chat.codeGraph.enabled` is on,
-	// so it is naturally absent from the tool list when the graph is disabled.
+	'agent_read_terminal',
 	'agent_code_graph',
+	FIGMA_TOOL_NAME,
+	...BROWSER_TOOL_NAMES,
 ]);
 
 /** Augmented stream type that includes the proposed `textEdit` API from `chatParticipantAdditions`. */
@@ -99,10 +233,10 @@ export type ChatHandler = (
 	context: vscode.ChatContext,
 	stream: vscode.ChatResponseStream,
 	token: vscode.CancellationToken,
-) => Promise<void>;
+) => Promise<vscode.ChatResult>;
 
-export function createChatHandler(rulesLoader: RulesLoader, memoryService: MemoryService): ChatHandler {
-	return (request, context, stream, token) => handleChatRequest(request, context, stream, token, rulesLoader, memoryService);
+export function createChatHandler(rulesLoader: RulesLoader, memoryService: MemoryService, mcpServers?: McpServers): ChatHandler {
+	return (request, context, stream, token) => handleChatRequest(request, context, stream, token, rulesLoader, memoryService, mcpServers);
 }
 
 export async function handleChatRequest(
@@ -112,60 +246,137 @@ export async function handleChatRequest(
 	token: vscode.CancellationToken,
 	rulesLoader?: RulesLoader,
 	memoryService?: MemoryService,
-): Promise<void> {
+	mcpServers?: McpServers,
+): Promise<vscode.ChatResult> {
+	// Antes de listar as ferramentas: um servidor MCP parado não aparece em
+	// `vscode.lm.tools`, e o que não estiver de pé agora fica de fora deste turno
+	// inteiro. Não levanta exceção — servidor fora do ar não cancela a conversa.
+	await mcpServers?.ensureStartedForRequest();
 	const model = await resolveModel(request);
 	if (!model) {
 		stream.markdown(
 			'Nenhum provedor de IA está configurado. Execute **Agent Chat: Adicionar Chave de API...** na Paleta de Comandos para adicionar uma chave Anthropic, OpenAI, Gemini ou Ollama.',
 		);
 		stream.button({ command: 'agent-chat.addApiKey', title: 'Adicionar Chave de API...' });
-		return;
+		return {};
 	}
 
-	const baseTools = collectTools();
-	const tools: vscode.LanguageModelChatTool[] = [...baseTools, SUBMIT_PLAN_TOOL, RUN_SUBAGENT_TOOL];
+	const profile = resolveProfile(model, { systemPrompt: BASE_SYSTEM_PROMPT, maxTurns: MAX_AGENT_TURNS });
+	const browserWanted = wantsBrowserTools(request, context);
+	const baseTools = collectTools(profile, browserWanted);
+	const tools: vscode.LanguageModelChatTool[] = profile.allowDelegation
+		? [...baseTools, SUBMIT_PLAN_TOOL, RUN_SUBAGENT_TOOL, TODO_TOOL]
+		: [...baseTools, TODO_TOOL];
+	// What the model is allowed to invoke, used to validate tool calls that had to
+	// be recovered from plain text. The schemas travel along because a recovered
+	// Python-style call can pass its arguments positionally.
+	const offeredTools = tools;
+	// Quais das ferramentas oferecidas vieram de servidores MCP. Usado só para
+	// orientar o modelo quando uma delas falha — a saída para um serviço externo
+	// fora do ar não é a mesma de uma ferramenta local.
+	const mcpToolNames = new Set(vscode.lm.tools.filter(isMcpToolInfo).map(t => t.name));
+	log(`tools: offering ${tools.length} (browser ${browserWanted ? 'included' : 'withheld'}, mcp ${mcpToolNames.size})`);
+	// A printed call may only be hidden from the user where it is also recovered
+	// and run. Under the full profile the same text is part of the answer.
+	const hideableTools = profile.parseTextToolCalls
+		? new Set(offeredTools.map(tool => tool.name))
+		: undefined;
 	const activeFile = vscode.window.activeTextEditor?.document.uri;
 	const resolvedRules = rulesLoader ? await rulesLoader.resolve(activeFile) : undefined;
 	const memories = memoryService ? await loadMemories(memoryService) : [];
 	const [attachments, textRefs] = await Promise.all([
 		collectAttachments(request, stream),
-		collectTextReferences(request),
+		collectTextReferences(request, profile),
 	]);
-	const messages = buildInitialMessages(context, request, resolvedRules, memories, attachments, textRefs);
+	const messages = buildInitialMessages(context, request, resolvedRules, memories, attachments, textRefs, profile);
 
-	for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
+	// Signatures of read-only calls already answered this request. Re-issuing one
+	// verbatim returns nothing new and costs a turn, so it is short-circuited.
+	const answeredReads = new Set<string>();
+
+	// Checklist the model keeps for itself, replaced wholesale on every write.
+	let todos: readonly TodoItem[] = [];
+
+	const stats: IRequestStats = { turnsUsed: 0, toolCalls: 0, startedAt: Date.now(), modelId: model.id, profile, droppedMessages: 0, overflowRetries: 0 };
+
+	const budget: IPromptBudget = {
+		maxInputTokens: model.maxInputTokens,
+		toolTokens: estimateToolsTokens(tools),
+		charsPerToken: DEFAULT_CHARS_PER_TOKEN,
+	};
+	// Bounded so a server that keeps rejecting cannot spin the turn forever.
+	let overflowRetries = 0;
+
+	for (let turn = 0; turn < profile.maxTurns; turn++) {
 		if (token.isCancellationRequested) {
-			return;
+			return finishRequest('cancelado', stats, messages);
 		}
+		stats.turnsUsed = turn + 1;
 
 		const toolCalls: vscode.LanguageModelToolCallPart[] = [];
 		let assistantText = '';
+		let budgeted: vscode.LanguageModelChatMessage[] = [];
 
 		try {
-			const response = await model.sendRequest(messages, { tools, toolMode: vscode.LanguageModelChatToolMode.Auto }, token);
+			budgeted = trimToBudget(messages, budget, stats);
+			const response = await model.sendRequest(budgeted, { tools, toolMode: vscode.LanguageModelChatToolMode.Auto }, token);
+			const links = new FileLinkStream(stream, hideableTools);
 			for await (const part of response.stream) {
 				if (token.isCancellationRequested) {
-					return;
+					await links.end();
+					return finishRequest('cancelado', stats, messages);
 				}
 				if (part instanceof vscode.LanguageModelTextPart) {
-					stream.markdown(part.value);
+					await links.write(part.value);
 					assistantText += part.value;
 				} else if (part instanceof vscode.LanguageModelToolCallPart) {
 					toolCalls.push(part);
+				} else if (part instanceof vscode.LanguageModelThinkingPart) {
+					// Shown live, but deliberately kept out of `assistantText`:
+					// Gemma 4's own guidance is that a previous turn's thoughts must
+					// not be replayed into the next one, and it is not an answer
+					// worth keeping in the transcript either.
+					stream.thinkingProgress({ text: typeof part.value === 'string' ? part.value : part.value.join('') });
 				}
 			}
+			await links.end();
 		} catch (err) {
 			if (err instanceof vscode.CancellationError || token.isCancellationRequested) {
-				return;
+				return finishRequest('cancelado', stats, messages);
+			}
+			// The prompt did not fit. The server counted it with the real tokenizer
+			// and says by how much, so the estimate is corrected from its numbers
+			// and the same turn is sent again, trimmed harder. Nothing was
+			// generated before the rejection, so nothing has to be undone.
+			const overflow = parseContextOverflow(err);
+			if (overflow && overflowRetries < MAX_OVERFLOW_RETRIES && recalibrateBudget(budget, overflow, budgeted, stats)) {
+				overflowRetries++;
+				log(`context overflow: ${overflow.promptTokens} tokens against ${overflow.contextTokens}; retrying at ${budget.charsPerToken.toFixed(2)} chars/token`);
+				turn--;
+				continue;
 			}
 			const message = err instanceof Error ? err.message : String(err);
 			stream.markdown(`\n\n_Erro do modelo_: ${message}`);
-			return;
+			return finishRequest(`erro do modelo (${message})`, stats, messages);
+		}
+
+		if (toolCalls.length === 0 && profile.parseTextToolCalls && assistantText) {
+			const recovered = extractTextToolCalls(assistantText, offeredTools);
+			if (recovered.calls.length > 0) {
+				toolCalls.push(...recovered.calls);
+				assistantText = recovered.remainingText;
+			}
 		}
 
 		if (toolCalls.length === 0) {
-			return;
+			// Closing answer: keep it in the transcript so a follow-up sees what was said.
+			if (assistantText) {
+				messages.push(vscode.LanguageModelChatMessage.Assistant(assistantText));
+			}
+			return finishRequest('concluído', stats, messages);
 		}
+
+		stats.toolCalls += toolCalls.length;
 
 		const assistantParts: Array<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart> = [];
 		if (assistantText) {
@@ -217,55 +428,98 @@ export async function handleChatRequest(
 						if (token.isCancellationRequested) {
 							break;
 						}
+						const readSignature = REPEATABLE_READ_TOOLS.has(tc.name) ? `${tc.name}:${JSON.stringify(tc.input)}` : undefined;
+						if (readSignature !== undefined) {
+							if (answeredReads.has(readSignature)) {
+								resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(
+									'You already made this exact call in this request and nothing has changed since. Reuse the earlier result and move on to the next step.',
+								)]));
+								continue;
+							}
+							answeredReads.add(readSignature);
+						}
 						if (tc.name === 'agent_search') {
 							const input = tc.input as { query: string; isRegex?: boolean; path?: string };
-							const text = await searchWorkspace(input);
+							const text = clampToolResult(await searchWorkspace(input), profile);
+							searchCount++;
+							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
+						} else if (tc.name === 'agent_find_files') {
+							const input = tc.input as { name: string; path?: string };
+							const text = clampToolResult(await findFiles(input), profile);
 							searchCount++;
 							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
 						} else if (tc.name === WRITE_FILE_TOOL_NAME) {
 							const input = tc.input as { path: string; content: string };
 							const uri = resolveUri(input.path);
 							const summary = await applyFileEdit(input, stream as ChatStreamWithEdits);
+							// The workspace changed, so earlier reads may now be stale.
+							answeredReads.clear();
 							accessedUris.push(uri);
 							taskProgress.report(new vscode.ChatResponseReferencePart(uri));
 							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(summary)]));
-						} else if (tc.name === 'agent_read_file') {
-							const input = tc.input as { path: string };
+						} else if (tc.name === EDIT_FILE_TOOL_NAME) {
+							const input = tc.input as EditFileInput;
 							const uri = resolveUri(input.path);
-							let text: string;
-							try {
-								const bytes = await vscode.workspace.fs.readFile(uri);
-								text = Buffer.from(bytes).toString('utf8');
-								if (text.length > 100_000) {
-									text = text.slice(0, 100_000) + '\n…[truncado]';
-								}
-							} catch (err) {
-								text = `Erro ao ler: ${err instanceof Error ? err.message : String(err)}`;
+							const outcome = await computeFileEdit(input);
+							if (outcome.content !== undefined) {
+								await applyFileEdit({ path: input.path, content: outcome.content }, stream as ChatStreamWithEdits);
+								answeredReads.clear();
+								accessedUris.push(uri);
+								taskProgress.report(new vscode.ChatResponseReferencePart(uri));
 							}
+							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(outcome.message)]));
+						} else if (tc.name === 'agent_read_file') {
+							const input = tc.input as ReadFileInput;
+							const uri = resolveUri(input.path);
+							// Budgeted rather than clamped: the reader cuts on a line
+							// boundary and tells the model which offset continues the file.
+							const text = await readFileForModel(input, profile.maxToolResultChars);
 							accessedUris.push(uri);
 							taskProgress.report(new vscode.ChatResponseReferencePart(uri));
 							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
+						} else if (tc.name === OPEN_FILE_TOOL_NAME) {
+							const input = tc.input as OpenFileInput;
+							const uri = resolveUri(input.path);
+							const summary = await openFileInEditor(input);
+							accessedUris.push(uri);
+							taskProgress.report(new vscode.ChatResponseReferencePart(uri));
+							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(summary)]));
+						} else if (tc.name === MULTI_EDIT_TOOL_NAME) {
+							const input = tc.input as MultiEditInput;
+							const uri = resolveUri(input.path);
+							const outcome = await computeMultiFileEdit(input);
+							if (outcome.content !== undefined) {
+								await applyFileEdit({ path: input.path, content: outcome.content }, stream as ChatStreamWithEdits);
+								answeredReads.clear();
+								accessedUris.push(uri);
+								taskProgress.report(new vscode.ChatResponseReferencePart(uri));
+							}
+							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(outcome.message)]));
+						} else if (tc.name === 'agent_diagnostics') {
+							const text = clampToolResult(await collectDiagnostics(tc.input as DiagnosticsInput), profile);
+							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
+						} else if (tc.name === 'agent_git_status') {
+							const text = clampToolResult(await gitStatus(tc.input as GitInput), profile);
+							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
+						} else if (tc.name === 'agent_git_diff') {
+							const text = clampToolResult(await gitDiff(tc.input as GitDiffInput), profile);
+							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
+						} else if (tc.name === TODO_TOOL_NAME) {
+							const parsed = parseTodos(tc.input);
+							if (parsed.todos) {
+								todos = parsed.todos;
+								stream.markdown(renderTodosForUser(todos));
+							}
+							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [
+								new vscode.LanguageModelTextPart(parsed.todos ? renderTodosForModel(parsed.todos) : parsed.error!),
+							]));
 						} else if (tc.name === 'agent_list_dir') {
 							const input = tc.input as { path?: string };
-							const dirPath = input.path ?? '.';
-							let text: string;
-							const folders = vscode.workspace.workspaceFolders ?? [];
-							if (!input.path && folders.length > 1) {
-								const lines = folders.map(f => `📁 ${f.name}/  (root: ${f.uri.fsPath})`);
-								text = `Workspace tem ${folders.length} pastas raiz. Informe o nome da pasta como primeiro segmento do caminho.\n\n${lines.join('\n')}`;
-							} else {
-								try {
-									const uri = resolveUri(dirPath);
-									const entries = await vscode.workspace.fs.readDirectory(uri);
-									const sorted = entries.sort(([a], [b]) => a.localeCompare(b));
-									text = sorted.map(([name, kind]) => `${kind === vscode.FileType.Directory ? '📁' : '📄'} ${name}`).join('\n') || '(vazio)';
-								} catch (err) {
-									text = `Erro: ${err instanceof Error ? err.message : String(err)}`;
-								}
-							}
+							const text = clampToolResult(await listDirectory(input.path), profile);
 							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
 						} else {
-							// agent_run_command and unknowns — VS Code handles confirmation dialogs.
+							// agent_run_command, ferramentas MCP e desconhecidas — o VS Code
+							// cuida dos diálogos de confirmação.
 							try {
 								const result = await vscode.lm.invokeTool(tc.name, {
 									input: tc.input,
@@ -274,7 +528,20 @@ export async function handleChatRequest(
 								resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, result.content as Array<vscode.LanguageModelTextPart | vscode.LanguageModelPromptTsxPart>));
 							} catch (err) {
 								const message = err instanceof Error ? err.message : String(err);
-								resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(`Erro da ferramenta: ${message}`)]));
+								// The next step travels with the error on purpose: a small model
+								// that receives only a failure stops and hands the task back to
+								// the user, which is never the right answer while other tools
+								// are still available.
+								//
+								// A saída indicada muda conforme a origem: mandar quem falhou numa
+								// ferramenta MCP tentar `agent_search` é conselho ruim — o trabalho
+								// dela é com um serviço externo, e nenhuma ferramenta local o faz.
+								const nextStep = mcpToolNames.has(tc.name)
+									? 'Essa ferramenta vem de um servidor MCP externo; nenhuma ferramenta local faz o trabalho dela. Se o erro indicar falta de autenticação ou servidor fora do ar, diga isso ao usuário e siga com o que for possível sem ela.'
+									: 'Não repita essa chamada — faça o mesmo trabalho com outra ferramenta (`agent_search` para um símbolo, `agent_find_files` para um arquivo, `agent_list_dir` para ver o que existe) e siga sem perguntar nada ao usuário.';
+								resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(
+									`Erro da ferramenta ${tc.name}: ${message}. ${nextStep}`,
+								)]));
 							}
 							cmdCount++;
 						}
@@ -301,7 +568,252 @@ export async function handleChatRequest(
 		messages.push(vscode.LanguageModelChatMessage.User(resultParts));
 	}
 
-	stream.markdown('\n\n_Limite de turnos do agente atingido; encerrando. Envie outra mensagem para continuar._');
+	const unfinished = todos.filter(t => t.status !== 'done');
+	const pending = unfinished.length > 0
+		? `\n\nFaltou:\n${unfinished.map(t => `- ${t.content}`).join('\n')}`
+		: '';
+	stream.markdown(`\n\n_Limite de turnos do agente atingido. O que já foi lido e executado ficou preservado — envie **continue** para retomar de onde parei._${pending}`);
+	return finishRequest('limite de turnos', stats, messages);
+}
+
+/**
+ * What the prompt may cost, in the terms the trimmer can measure.
+ *
+ * There is no tokenizer on this side of the wire: the server owns the model's
+ * chat template and its vocabulary, so everything here is an estimate from
+ * character counts. {@link recalibrateBudget} corrects it when the server
+ * answers with a real count.
+ */
+interface IPromptBudget {
+	/** Input the model accepts, already net of the room reserved for its reply. */
+	maxInputTokens: number;
+	/**
+	 * Tool schemas. They are sent beside the messages and rendered into the same
+	 * prompt by the template, so they are charged to the same window even though
+	 * the trimmer cannot drop them.
+	 */
+	readonly toolTokens: number;
+	/** Characters per token. Lowered when the server proves the prompt denser. */
+	charsPerToken: number;
+}
+
+/**
+ * Starting guess at characters per token.
+ *
+ * Prose runs about 4 on these tokenizers, but an agent conversation is mostly
+ * code, JSON tool arguments and diffs, which tokenize far denser — the value
+ * that matters is the one that does not overflow, and undershooting the prompt
+ * is what makes the server reject the whole call.
+ */
+const DEFAULT_CHARS_PER_TOKEN = 3;
+
+/**
+ * Share of the window left to the chat template's own framing: the role markers,
+ * the tool-call scaffolding and the system preamble it adds around what we send.
+ */
+const FRAMING_RESERVE = 0.9;
+
+/** Attempts allowed at correcting the estimate before the error reaches the user. */
+const MAX_OVERFLOW_RETRIES = 2;
+
+/**
+ * Drops the oldest turns until the conversation fits the model's input budget.
+ *
+ * Hosted models have six-figure context windows, so nothing here ever mattered;
+ * a local model with 16k-32k overflows on the first request that carries any
+ * history, and the server rejects the whole call. Trimming keeps the system
+ * prompt (index 0) and the newest turns, which is where the task actually lives.
+ *
+ * Messages are removed from the front so that an assistant message carrying tool
+ * calls always leaves before the tool results answering it. Any tool results
+ * left orphaned at the new front are dropped too: an OpenAI-format server
+ * rejects a tool result whose call it can no longer see.
+ */
+function trimToBudget(
+	messages: readonly vscode.LanguageModelChatMessage[],
+	budget: IPromptBudget,
+	stats: IRequestStats,
+): vscode.LanguageModelChatMessage[] {
+	const allowance = messageAllowance(budget);
+	if (estimateMessagesTokens(messages, budget) <= allowance) {
+		return [...messages];
+	}
+
+	const system = messages[0];
+	const rest = messages.slice(1);
+	// Never drop the newest turn: it is the request being answered.
+	while (rest.length > 1 && estimateMessagesTokens([system, ...rest], budget) > allowance) {
+		rest.shift();
+		stats.droppedMessages++;
+	}
+	while (rest.length > 1 && isOrphanToolResult(rest[0])) {
+		rest.shift();
+		stats.droppedMessages++;
+	}
+	return [system, ...rest];
+}
+
+/** Tokens the messages may spend, once the schemas and the framing are paid for. */
+function messageAllowance(budget: IPromptBudget): number {
+	return Math.max(1024, Math.floor(budget.maxInputTokens * FRAMING_RESERVE) - budget.toolTokens);
+}
+
+/**
+ * Server's answer when the prompt did not fit, read out of the 400 body.
+ *
+ * Both shapes are accepted because the numbers appear twice: as fields of the
+ * error object, and spelled out in the message llama.cpp writes beside them.
+ */
+interface IContextOverflow {
+	readonly promptTokens: number;
+	readonly contextTokens: number;
+}
+
+function parseContextOverflow(err: unknown): IContextOverflow | undefined {
+	const message = err instanceof Error ? err.message : String(err);
+	if (!message.includes('exceed_context_size_error') && !message.includes('exceeds the available context size')) {
+		return undefined;
+	}
+	const prompt = /"n_prompt_tokens"\s*:\s*(?<count>\d+)/.exec(message)?.groups?.count
+		?? /request \((?<count>\d+) tokens\)/.exec(message)?.groups?.count;
+	const context = /"n_ctx"\s*:\s*(?<count>\d+)/.exec(message)?.groups?.count
+		?? /context size \((?<count>\d+) tokens\)/.exec(message)?.groups?.count;
+	if (!prompt || !context) {
+		return undefined;
+	}
+	return { promptTokens: Number(prompt), contextTokens: Number(context) };
+}
+
+/**
+ * Teaches the budget what the last rejection proved, and reports whether the
+ * next attempt is actually going to be smaller.
+ *
+ * Two things are learned. The window: the server's `n_ctx` is what the process
+ * was launched with, which beats whatever the catalog claims. And the density:
+ * the prompt we thought was `estimated` came back counted as `promptTokens`, so
+ * the ratio between them is how wrong the characters-per-token guess was.
+ *
+ * Returns false when nothing was learned — an estimate already at least as
+ * conservative as the evidence — so the caller stops retrying instead of
+ * sending the same prompt again.
+ */
+function recalibrateBudget(
+	budget: IPromptBudget,
+	overflow: IContextOverflow,
+	sent: readonly vscode.LanguageModelChatMessage[],
+	stats: IRequestStats,
+): boolean {
+	let learned = false;
+
+	// Room for the reply has to come out of the window the server reported.
+	const window = overflow.contextTokens - REPLY_RESERVE_TOKENS;
+	if (window > 0 && window < budget.maxInputTokens) {
+		budget.maxInputTokens = window;
+		learned = true;
+	}
+
+	const estimated = estimateMessagesTokens(sent, budget) + budget.toolTokens;
+	if (estimated > 0 && overflow.promptTokens > estimated) {
+		const corrected = Math.max(MIN_CHARS_PER_TOKEN, budget.charsPerToken * (estimated / overflow.promptTokens));
+		// Only worth another round trip if the correction really tightens things.
+		if (corrected < budget.charsPerToken * 0.98) {
+			budget.charsPerToken = corrected;
+			learned = true;
+		}
+	}
+
+	if (learned) {
+		stats.overflowRetries++;
+	}
+	return learned;
+}
+
+/**
+ * Floor on the correction. Below this the estimate stops describing any real
+ * tokenizer and starts throwing away conversation to chase a number that must
+ * be wrong for another reason.
+ */
+const MIN_CHARS_PER_TOKEN = 1.5;
+
+/** Room the reply needs inside the window the server reported. */
+const REPLY_RESERVE_TOKENS = 2048;
+
+/**
+ * Tool schemas cost, as the template renders them into the prompt.
+ *
+ * Deliberately counted with the same fixed ratio as the messages: they are the
+ * one part of the prompt the trimmer cannot shrink, so they are subtracted from
+ * the allowance instead of being trimmed.
+ */
+function estimateToolsTokens(tools: readonly vscode.LanguageModelChatTool[]): number {
+	let chars = 0;
+	for (const tool of tools) {
+		chars += tool.name.length + (tool.description?.length ?? 0);
+		if (tool.inputSchema) {
+			chars += JSON.stringify(tool.inputSchema).length;
+		}
+	}
+	return Math.ceil(chars / DEFAULT_CHARS_PER_TOKEN);
+}
+
+/** True for a message whose only content is tool results. */
+function isOrphanToolResult(message: vscode.LanguageModelChatMessage): boolean {
+	return message.content.length > 0
+		&& message.content.every(part => part instanceof vscode.LanguageModelToolResultPart);
+}
+
+function estimateMessagesTokens(messages: readonly vscode.LanguageModelChatMessage[], budget: IPromptBudget): number {
+	const perToken = budget.charsPerToken;
+	let total = 0;
+	for (const message of messages) {
+		for (const part of message.content) {
+			if (part instanceof vscode.LanguageModelTextPart) {
+				total += Math.ceil(part.value.length / perToken);
+			} else if (part instanceof vscode.LanguageModelToolCallPart) {
+				total += Math.ceil((part.name.length + JSON.stringify(part.input).length) / perToken);
+			} else if (part instanceof vscode.LanguageModelToolResultPart) {
+				for (const inner of part.content) {
+					if (inner instanceof vscode.LanguageModelTextPart) {
+						total += Math.ceil(inner.value.length / perToken);
+					}
+				}
+			}
+		}
+		// Per-message framing (role markers, separators).
+		total += 4;
+	}
+	return total;
+}
+
+/** What one request actually spent, so the turn budget can be tuned from data. */
+interface IRequestStats {
+	turnsUsed: number;
+	toolCalls: number;
+	readonly startedAt: number;
+	readonly modelId: string;
+	readonly profile: IAgentProfile;
+	/** Messages dropped to keep the prompt inside the model's input budget. */
+	droppedMessages: number;
+	/** Times the server rejected the prompt and the estimate had to be corrected. */
+	overflowRetries: number;
+}
+
+/**
+ * Closes a request: records what it cost in the Agent Chat output channel and
+ * stashes the working messages in the result metadata, so the next request can
+ * resume with the tool calls and tool results intact instead of rebuilding a
+ * text-only summary of the conversation.
+ *
+ * The leading system prompt is dropped from the snapshot: it is rebuilt from the
+ * rules and memories that are current at the time of the next request.
+ */
+function finishRequest(outcome: string, stats: IRequestStats, messages: readonly vscode.LanguageModelChatMessage[]): vscode.ChatResult {
+	const seconds = Math.round((Date.now() - stats.startedAt) / 1000);
+	const perTurn = stats.turnsUsed > 0 ? (stats.toolCalls / stats.turnsUsed).toFixed(1) : '0';
+	const dropped = stats.droppedMessages > 0 ? `, ${stats.droppedMessages} mensagens descartadas por limite de contexto` : '';
+	const recalibrated = stats.overflowRetries > 0 ? `, ${stats.overflowRetries} reenvios após estouro de contexto` : '';
+	log(`request: ${outcome} — ${stats.turnsUsed}/${stats.profile.maxTurns} turnos, ${stats.toolCalls} tool calls (${perTurn}/turno), ${seconds}s, modelo ${stats.modelId}, perfil ${stats.profile.id}${dropped}${recalibrated}`);
+	return { metadata: { [TRANSCRIPT_METADATA_KEY]: serializeTranscript(messages.slice(1)) } };
 }
 
 /** Pick a progress label that reflects what the agent is doing this turn. */
@@ -316,8 +828,14 @@ function progressLabel(toolCalls: readonly vscode.LanguageModelToolCallPart[]): 
 	if (names.has('agent_read_file') || names.has('agent_list_dir')) {
 		return 'Lendo arquivos...';
 	}
+	if ([...names].some(name => BROWSER_TOOL_NAMES.has(name))) {
+		return 'Testando no navegador...';
+	}
 	if (names.has('agent_run_command')) {
 		return 'Executando comandos...';
+	}
+	if (names.has('agent_read_terminal')) {
+		return 'Acompanhando o terminal...';
 	}
 	return 'Analisando...';
 }
@@ -372,6 +890,9 @@ async function executeSubagentTool(
 		return result.summary || 'Subagente concluiu a tarefa.';
 	}
 	stream.markdown(`\n❌ **Subagente falhou** — ${result.error ?? 'erro desconhecido'}\n`);
+	if (result.summary) {
+		stream.markdown(`\n${truncate(result.summary, 400)}\n`);
+	}
 	const partial = result.summary ? ` Progresso parcial: ${result.summary}` : '';
 	return `Subagente não concluiu: ${result.error ?? 'erro desconhecido'}.${partial}`;
 }
@@ -394,10 +915,76 @@ async function resolveModel(request: vscode.ChatRequest): Promise<vscode.Languag
 	return anyModel[0];
 }
 
-function collectTools(): vscode.LanguageModelChatTool[] {
+/**
+ * Words that earn the browser tools their place in the prompt.
+ *
+ * Their ten schemas measure ~2400 tokens, which a small model pays for on every
+ * single turn — and on CPU inference those tokens are seconds, not cents. The
+ * list errs towards including them: a false positive costs what the old
+ * behaviour always cost, while a false negative breaks the task.
+ */
+const BROWSER_INTENT_RE = /\b(navegador|browser|chrome|playwright|screenshot|captura de tela|print da tela|pagina|page|url|localhost|https?:\/\/|site|frontend|front-end|interface|tela|clic\w*|cliqu\w*|click\w*|preench\w*|renderiz\w*)\b/;
+
+/** A verb aimed at something runnable, which almost always ends up in a page. */
+const BROWSER_TASK_RE = /\b(abr\w*|rod\w*|execut\w*|sub\w*|inici\w*|start\w*|run|open|test\w*)\b[\s\S]{0,40}\b(app|aplicacao|aplicativo|projeto|servidor|server|dev|site|ui)\b/;
+
+/**
+ * Whether this conversation has asked for anything the browser tools serve.
+ *
+ * The whole conversation is scanned, not just the new message, so the answer can
+ * only ever turn on. The tool schemas sit at the very front of the prompt: taking
+ * one away mid-conversation would invalidate the runtime's cached prefix and buy
+ * a full re-read of every token before it — far more than the tools ever cost.
+ */
+function wantsBrowserTools(request: vscode.ChatRequest, context: vscode.ChatContext): boolean {
+	const asked: string[] = [request.prompt];
+	for (const turn of context.history) {
+		if (turn instanceof vscode.ChatRequestTurn) {
+			asked.push(turn.prompt);
+		}
+	}
+	// Accents dropped so `página` and `pagina` are one word to the matcher.
+	const text = asked.join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+	return BROWSER_INTENT_RE.test(text) || BROWSER_TASK_RE.test(text);
+}
+
+function collectTools(profile: IAgentProfile, browserWanted: boolean): vscode.LanguageModelChatTool[] {
+	const config = vscode.workspace.getConfiguration('agent-chat');
+	const browserEnabled = config.get<boolean>('browser.enabled', true)
+		&& profile.allowBrowser
+		// Only the compact profile pays enough for the schemas to be worth gating: a
+		// hosted model has the room, and withholding there would be a regression for
+		// no gain.
+		&& (browserWanted || profile.id !== 'compact');
+	// `vscode.lm.tools` lists every tool the manifest contributes, whether or not
+	// an implementation was registered for it. The code graph registers itself only
+	// while its setting is on, so without this it is offered as a tool that always
+	// fails to invoke — and a model that gets an error with no way forward stops
+	// and asks the user to do the work by hand.
+	const graphEnabled = config.get<boolean>('codeGraph.enabled', false);
+	const mcpEnabled = config.get<boolean>('mcp.enabled', true);
+	const mcpLimit = config.get<number>('mcp.maxTools', 48);
 	const result: vscode.LanguageModelChatTool[] = [];
+	const mcpTools: vscode.LanguageModelChatTool[] = [];
 	for (const info of vscode.lm.tools) {
+		// Ferramentas vindas de servidores MCP se anunciam pela tag, posta pelo
+		// núcleo em mcpLanguageModelToolContribution.ts. A tag está no objeto
+		// público da API — não é preciso API proposta para reconhecê-las. O nome
+		// já chega saneado de lá (pontos viram `_`, tamanho limitado), então
+		// serve como está para os provedores que validam nomes de ferramenta.
+		if (isMcpToolInfo(info)) {
+			if (mcpEnabled) {
+				mcpTools.push({ name: info.name, description: info.description, inputSchema: info.inputSchema });
+			}
+			continue;
+		}
 		if (!AGENT_TOOL_NAMES.has(info.name)) {
+			continue;
+		}
+		if (!browserEnabled && BROWSER_TOOL_NAMES.has(info.name)) {
+			continue;
+		}
+		if (!graphEnabled && info.name === 'agent_code_graph') {
 			continue;
 		}
 		result.push({
@@ -406,7 +993,16 @@ function collectTools(): vscode.LanguageModelChatTool[] {
 			inputSchema: info.inputSchema,
 		});
 	}
-	return result;
+	// As ferramentas próprias entram inteiras; as de MCP cedem primeiro se houver
+	// excesso. Um punhado de servidores passa fácil das cem ferramentas, e cada
+	// uma custa o schema dela em todo turno — sem teto, um servidor falante come
+	// a janela de contexto antes de o usuário escrever qualquer coisa. O corte é
+	// avisado no log porque um teto silencioso vira um mistério mais tarde.
+	if (mcpTools.length > mcpLimit) {
+		log(`tools: ${mcpTools.length} ferramentas MCP disponíveis, oferecendo ${mcpLimit} (agent-chat.mcp.maxTools)`);
+		mcpTools.length = mcpLimit;
+	}
+	return [...result, ...mcpTools];
 }
 
 interface LoadedMemory {
@@ -429,7 +1025,9 @@ async function loadMemories(service: MemoryService): Promise<LoadedMemory[]> {
 interface ITextReference {
 	readonly uri: vscode.Uri;
 	readonly range?: vscode.Range;
-	readonly content: string;
+	/** Left out when the file is too large to inline; the block says so instead. */
+	readonly content?: string;
+	readonly bytes: number;
 }
 
 function buildInitialMessages(
@@ -439,31 +1037,26 @@ function buildInitialMessages(
 	memories: readonly LoadedMemory[],
 	attachments: readonly vscode.LanguageModelDataPart[],
 	textRefs: readonly ITextReference[],
+	profile: IAgentProfile,
 ): vscode.LanguageModelChatMessage[] {
 	const messages: vscode.LanguageModelChatMessage[] = [];
-	messages.push(vscode.LanguageModelChatMessage.User(buildSystemPrompt(rules, memories)));
+	messages.push(vscode.LanguageModelChatMessage.User(buildSystemPrompt(rules, memories, profile)));
 
-	for (const turn of context.history) {
-		if (turn instanceof vscode.ChatRequestTurn) {
-			const prompt = turn.prompt?.trim();
-			if (prompt) {
-				messages.push(vscode.LanguageModelChatMessage.User(prompt));
-			}
-		} else if (turn instanceof vscode.ChatResponseTurn) {
-			const text = collectResponseText(turn);
-			if (text) {
-				messages.push(vscode.LanguageModelChatMessage.Assistant(text));
-			}
-		}
-	}
+	appendHistory(context.history, messages);
 
 	let userPrompt = request.prompt || '';
 	if (textRefs.length > 0) {
 		const refBlocks = textRefs.map(ref => {
-			const rangeStr = ref.range
-				? ` (linhas ${ref.range.start.line + 1}–${ref.range.end.line + 1})`
-				: '';
-			return `--- Arquivo: ${ref.uri.fsPath}${rangeStr} ---\n${ref.content}\n---`;
+			if (ref.content === undefined) {
+				// Saying nothing would leave the model looking for a file it was just
+				// handed, which is how a read-only question turns into a search.
+				return `--- Arquivo: ${ref.uri.fsPath} — anexado, mas grande demais (${formatBytes(ref.bytes)}) para caber aqui. Leia-o com agent_read_file, usando offset/limit. ---`;
+			}
+			if (ref.range) {
+				const lines = ` (linhas ${ref.range.start.line + 1}–${ref.range.end.line + 1})`;
+				return `--- Arquivo: ${ref.uri.fsPath}${lines} — apenas o trecho selecionado; leia o arquivo se precisar do resto ---\n${ref.content}\n---`;
+			}
+			return `--- Arquivo: ${ref.uri.fsPath} — conteúdo COMPLETO abaixo. Este arquivo já está lido: responda a partir do que está aqui e NÃO chame agent_read_file para ele. ---\n${ref.content}\n---`;
 		});
 		userPrompt = refBlocks.join('\n\n') + (userPrompt ? '\n\n' + userPrompt : '');
 	}
@@ -504,7 +1097,7 @@ async function collectAttachments(request: vscode.ChatRequest, stream: vscode.Ch
 	return parts;
 }
 
-async function collectTextReferences(request: vscode.ChatRequest): Promise<ITextReference[]> {
+async function collectTextReferences(request: vscode.ChatRequest, profile: IAgentProfile): Promise<ITextReference[]> {
 	const refs = (request as { references?: readonly vscode.ChatPromptReference[] }).references ?? [];
 	const result: ITextReference[] = [];
 	for (const ref of refs) {
@@ -534,7 +1127,8 @@ async function collectTextReferences(request: vscode.ChatRequest): Promise<IText
 
 		try {
 			const bytes = await vscode.workspace.fs.readFile(uri);
-			if (bytes.byteLength > MAX_TEXT_REF_BYTES) {
+			if (bytes.byteLength > profile.maxTextRefBytes) {
+				result.push({ uri, bytes: bytes.byteLength });
 				continue;
 			}
 			let content = Buffer.from(bytes).toString('utf8');
@@ -542,7 +1136,7 @@ async function collectTextReferences(request: vscode.ChatRequest): Promise<IText
 				const lines = content.split('\n');
 				content = lines.slice(range.start.line, range.end.line + 1).join('\n');
 			}
-			result.push({ uri, range, content });
+			result.push({ uri, range, content, bytes: bytes.byteLength });
 		} catch {
 			// ignore unreadable files
 		}
@@ -586,8 +1180,8 @@ function formatBytes(n: number): string {
 	return `${(n / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-function buildSystemPrompt(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[]): string {
-	const sections: string[] = [BASE_SYSTEM_PROMPT];
+function buildSystemPrompt(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[], profile: IAgentProfile): string {
+	const sections: string[] = [profile.systemPrompt];
 	const workspaceSection = describeWorkspaceRoots();
 	if (workspaceSection) {
 		sections.push(workspaceSection);
@@ -629,6 +1223,44 @@ function describeWorkspaceRoots(): string | undefined {
 function renderRule(rule: Rule): string {
 	const header = rule.description ? `## ${rule.id} — ${rule.description}` : `## ${rule.id}`;
 	return `${header}\n${rule.body}`;
+}
+
+/**
+ * Replays the conversation so far. The most recent response that carries a
+ * transcript snapshot wins: it restores that request's tool calls and results
+ * verbatim, so a continuation resumes with everything the agent had read and
+ * run. Only turns after it — and conversations from before this existed — fall
+ * back to the text-only reconstruction, which loses all tool activity.
+ */
+function appendHistory(history: readonly (vscode.ChatRequestTurn | vscode.ChatResponseTurn)[], messages: vscode.LanguageModelChatMessage[]): void {
+	let snapshotIndex = -1;
+	for (let i = history.length - 1; i >= 0; i--) {
+		const turn = history[i];
+		if (!(turn instanceof vscode.ChatResponseTurn)) {
+			continue;
+		}
+		const restored = restoreTranscript(turn.result);
+		if (restored) {
+			messages.push(...restored);
+			snapshotIndex = i;
+			break;
+		}
+	}
+
+	for (let i = snapshotIndex + 1; i < history.length; i++) {
+		const turn = history[i];
+		if (turn instanceof vscode.ChatRequestTurn) {
+			const prompt = turn.prompt?.trim();
+			if (prompt) {
+				messages.push(vscode.LanguageModelChatMessage.User(prompt));
+			}
+		} else if (turn instanceof vscode.ChatResponseTurn) {
+			const text = collectResponseText(turn);
+			if (text) {
+				messages.push(vscode.LanguageModelChatMessage.Assistant(text));
+			}
+		}
+	}
 }
 
 function collectResponseText(turn: vscode.ChatResponseTurn): string {

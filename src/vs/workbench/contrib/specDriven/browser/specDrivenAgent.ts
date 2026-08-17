@@ -6,7 +6,10 @@
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { MarkdownString } from '../../../../base/common/htmlContent.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { basename } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
+import { localize } from '../../../../nls.js';
+import { ILanguageModelsService } from '../../../contrib/chat/common/languageModels.js';
 import { IChatFollowup, IChatProgress } from '../../../contrib/chat/common/chatService/chatService.js';
 import { IChatAgentHistoryEntry, IChatAgentImplementation, IChatAgentRequest, IChatAgentResult } from '../../../contrib/chat/common/participants/chatAgents.js';
 import { ALL_DOC_PHASES, ISpecDrivenService, ISpecRun, SpecDocPhase, SpecPhase } from '../common/spec.js';
@@ -35,12 +38,15 @@ Com o SDD, antes de escrever código, você documenta claramente **o quê**, **p
 
 ### Documentos que posso gerar
 
+Sigo o formato do **spec-kit**: cada geração cria uma pasta \`specs/NNN-slug/\` com os três documentos abaixo.
+
 | Arquivo | Conteúdo |
 |---------|----------|
-| \`REQUIREMENTS.md\` | Requisitos funcionais (FR-001…) e não-funcionais (NFR-001…), metas e restrições |
-| \`USER_STORIES.md\` | Personas, épicos, histórias no formato BDD (Given/When/Then) |
-| \`ARCHITECTURE.md\` | Componentes, fluxo de dados, stack tecnológico e ADRs |
-| \`TASKS.md\` | Milestones, backlog de tarefas com esforço (S/M/L/XL) e sugestão de sprints |
+| \`spec.md\` | **O quê e por quê**, sem tecnologia — requisitos (RF/RNF), regras de negócio (RN), histórias e critérios de aceitação (CA) |
+| \`plan.md\` | **O como** — arquitetura, modelo de dados, contratos, decisões técnicas com alternativas e estratégia de testes |
+| \`tasks.md\` | Tarefas \`Tnnn\` em seis fases, marcadas com \`[P]\` quando paralelizáveis e referenciando o RF/CA que cobrem |
+
+> A separação é a regra central do SDD: tecnologia só aparece no \`plan.md\`. Se algo estiver indefinido na spec, eu marco \`[NEEDS CLARIFICATION: ...]\` em vez de inventar.
 
 ---
 
@@ -60,57 +66,80 @@ Descreva seu projeto ou funcionalidade em linguagem natural. Exemplos:
 
 | Comando | Descrição |
 |---------|-----------|
-| \`/completo\` | Gera todos os 4 documentos SDD |
-| \`/requisitos\` | Gera apenas \`REQUIREMENTS.md\` |
-| \`/historias\` | Gera apenas \`USER_STORIES.md\` |
-| \`/arquitetura\` | Gera apenas \`ARCHITECTURE.md\` |
-| \`/tarefas\` | Gera apenas \`TASKS.md\` |
+| \`/completo\` | Gera \`spec.md\`, \`plan.md\` e \`tasks.md\` |
+| \`/spec\` | Gera apenas \`spec.md\` |
+| \`/plano\` | Gera apenas \`plan.md\` |
+| \`/tarefas\` | Gera apenas \`tasks.md\` |
 | \`/ajuda\` | Exibe este guia |
 
-> 💡 **Dica:** Se você já tem alguns documentos e quer apenas gerar as tarefas, use \`/tarefas\` com a descrição do projeto.`;
+> 💡 **Dica:** o fluxo do SDD é sequencial — aprove a \`spec.md\` antes de escrever o \`plan.md\`, e o plano antes de executar as \`tasks.md\`.
+
+---
+
+### Continuidade
+
+Antes de gerar, eu verifico se o seu pedido continua uma spec que já existe. Se continuar, eu pergunto se você quer **atualizar** aquela spec — revisando os documentos e preservando a numeração \`RF\`/\`CA\`/\`T\` que os outros arquivos referenciam — ou **criar uma nova**. Assim o projeto não acumula duas specs sobre o mesmo assunto.
+
+Pedidos de \`/plano\` ou \`/tarefas\` que claramente pertencem a uma spec existente entram direto nela, sem perguntar.`;
 
 const PHASE_LABEL: Record<SpecPhase, string> = {
 	context: 'Analisando contexto do workspace',
-	requirements: 'Gerando REQUIREMENTS.md',
-	stories: 'Gerando USER_STORIES.md',
-	architecture: 'Gerando ARCHITECTURE.md',
-	tasks: 'Gerando TASKS.md',
+	spec: 'Gerando spec.md',
+	plan: 'Gerando plan.md',
+	tasks: 'Gerando tasks.md',
 	done: 'Concluído',
 };
 
 const PHASE_EMOJI: Record<SpecPhase, string> = {
 	context: '🔍',
-	requirements: '📋',
-	stories: '📖',
-	architecture: '🏗️',
+	spec: '📋',
+	plan: '🏗️',
 	tasks: '✅',
 	done: '✅',
 };
 
-const PHASE_FILE: Partial<Record<SpecDocPhase, string>> = {
-	requirements: 'REQUIREMENTS.md',
-	stories: 'USER_STORIES.md',
-	architecture: 'ARCHITECTURE.md',
-	tasks: 'TASKS.md',
+const PHASE_FILE: Record<SpecDocPhase, string> = {
+	spec: 'spec.md',
+	plan: 'plan.md',
+	tasks: 'tasks.md',
 };
 
-const PHASE_DESCRIPTION: Partial<Record<SpecDocPhase, string>> = {
-	requirements: 'Requisitos funcionais (FR-001…) e não-funcionais (NFR-001…), metas e restrições',
-	stories: 'Personas, épicos, histórias de usuário e critérios de aceite em BDD',
-	architecture: 'Componentes, stack tecnológico, fluxo de dados e decisões de arquitetura (ADRs)',
-	tasks: 'Milestones, backlog de tarefas com esforço estimado (S/M/L/XL) e sugestão de sprints',
+const PHASE_DESCRIPTION: Record<SpecDocPhase, string> = {
+	spec: 'O quê e por quê — RF, RNF, regras de negócio, histórias e critérios de aceitação',
+	plan: 'O como — arquitetura, modelo de dados, contratos, decisões técnicas e estratégia de testes',
+	tasks: 'Tarefas Tnnn em seis fases, com marcação de paralelismo e rastreio para RF/CA',
 };
 
 // ─── Comando → fases ─────────────────────────────────────────────────────────
 
 export function commandToPhases(command: string | undefined): readonly SpecDocPhase[] {
 	switch (command) {
-		case 'requisitos': return ['requirements'];
-		case 'historias': return ['stories'];
-		case 'arquitetura': return ['architecture'];
+		case 'spec': return ['spec'];
+		case 'plano': return ['plan'];
 		case 'tarefas': return ['tasks'];
 		default: return ALL_DOC_PHASES;
 	}
+}
+
+// ─── Confirmação "spec existente" ────────────────────────────────────────────
+
+/** Payload carried by the confirmation, so the follow-up request resumes the original ask. */
+interface ISpecChoice {
+	readonly description: string;
+	readonly command: string | undefined;
+	readonly folder: string;
+}
+
+function readChoice(data: unknown[] | undefined): ISpecChoice | undefined {
+	const first = data?.[0] as Partial<ISpecChoice> | undefined;
+	if (!first || typeof first.description !== 'string' || typeof first.folder !== 'string') {
+		return undefined;
+	}
+	return {
+		description: first.description,
+		command: typeof first.command === 'string' ? first.command : undefined,
+		folder: first.folder,
+	};
 }
 
 function detectProjectType(message: string): 'new' | 'existing' {
@@ -127,6 +156,7 @@ export class SpecDrivenAgent extends Disposable implements IChatAgentImplementat
 
 	constructor(
 		@ISpecDrivenService private readonly specDrivenService: ISpecDrivenService,
+		@ILanguageModelsService private readonly languageModelsService: ILanguageModelsService,
 	) {
 		super();
 	}
@@ -139,18 +169,70 @@ export class SpecDrivenAgent extends Disposable implements IChatAgentImplementat
 	): Promise<IChatAgentResult> {
 		const cmd = request.command?.toLowerCase();
 
+		// Resposta a uma confirmação nossa: o pedido original volta em `data`, então a geração
+		// retoma de onde parou sem perguntar de novo nem reclassificar.
+		const accepted = readChoice(request.acceptedConfirmationData);
+		if (accepted) {
+			return this.runGeneration(accepted.description, accepted.command, accepted.folder, request.userSelectedModelId, progress, token);
+		}
+		const rejected = readChoice(request.rejectedConfirmationData);
+		if (rejected) {
+			return this.runGeneration(rejected.description, rejected.command, undefined, request.userSelectedModelId, progress, token);
+		}
+
 		// Sem mensagem ou comando /ajuda → exibir guia
 		if (cmd === 'ajuda' || (!request.message.trim() && !cmd)) {
 			progress([{ kind: 'markdownContent', content: new MarkdownString(HELP_MARKDOWN) }]);
 			return {};
 		}
 
-		return this.handleGenerate(request.message.trim(), cmd, progress, token);
+		return this.handleGenerate(request.message.trim(), cmd, request.userSelectedModelId, progress, token);
 	}
 
+	/**
+	 * Decides whether the request continues an existing feature before generating anything.
+	 *
+	 * A request that only asks for `plan.md` or `tasks.md` belongs to a spec that already exists,
+	 * so a confident match is used directly. A request that would (re)write `spec.md` is a
+	 * different matter: reusing the folder overwrites a document the team may have approved, so
+	 * the user decides.
+	 */
 	async handleGenerate(
 		description: string,
 		command: string | undefined,
+		/** Model selected in the chat, which wins over this feature's own setting. */
+		modelId: string | undefined,
+		progress: (parts: IChatProgress[]) => void,
+		token: CancellationToken,
+	): Promise<IChatAgentResult> {
+		const selectedPhases = commandToPhases(command);
+		const match = await this.specDrivenService.matchSpecFolder(description, token);
+		if (token.isCancellationRequested) { return {}; }
+
+		if (match && selectedPhases.includes('spec')) {
+			const choice: ISpecChoice = { description, command, folder: match };
+			progress([{
+				kind: 'confirmation',
+				title: `Spec existente: ${match}`,
+				message: new MarkdownString(
+					`Este pedido parece continuar a spec \`${match}\`.\n\n` +
+					`Posso **atualizar** os documentos dela — preservando as decisões e a numeração que ainda valem — ` +
+					`ou **criar uma spec nova** em uma pasta separada.`
+				),
+				data: choice,
+				buttons: [`Atualizar ${match}`, 'Criar spec nova'],
+			}]);
+			return {};
+		}
+
+		return this.runGeneration(description, command, match, modelId, progress, token);
+	}
+
+	private async runGeneration(
+		description: string,
+		command: string | undefined,
+		targetFolder: string | undefined,
+		modelId: string | undefined,
 		progress: (parts: IChatProgress[]) => void,
 		token: CancellationToken,
 	): Promise<IChatAgentResult> {
@@ -158,16 +240,36 @@ export class SpecDrivenAgent extends Disposable implements IChatAgentImplementat
 		const projectType = detectProjectType(description);
 		const phaseFiles = selectedPhases.map(p => `\`${PHASE_FILE[p]}\``).join(', ');
 
+		if (targetFolder) {
+			progress([{
+				kind: 'markdownContent',
+				content: new MarkdownString(`📎 Continuando a spec \`${targetFolder}\`.\n`),
+			}]);
+		} else if (!selectedPhases.includes('spec') && (await this.specDrivenService.listSpecFolders()).length > 0) {
+			// A plan or task list without a spec to hang off is almost always a mis-targeted
+			// request, so say plainly that a new folder is being created.
+			progress([{
+				kind: 'markdownContent',
+				content: new MarkdownString(
+					`ℹ️ Não identifiquei a qual spec existente este pedido pertence, então vou criar uma pasta nova. ` +
+					`Se era para continuar outra, cancele e mencione o nome dela (ex.: \`002-autenticacao\`).\n`
+				),
+			}]);
+		}
+
 		// Mensagem inicial
 		const introMd = selectedPhases.length === ALL_DOC_PHASES.length
 			? `🚀 **Iniciando geração SDD completa**\n\nDocumentos: ${phaseFiles}\n\n---\n`
 			: `🚀 **Gerando ${phaseFiles}**\n\n---\n`;
-		progress([{ kind: 'markdownContent', content: new MarkdownString(introMd) }]);
+		const modelLabel = modelId
+			? this.languageModelsService.lookupLanguageModel(modelId)?.name ?? modelId
+			: localize('specDriven.configuredModel', "o modelo configurado em Spec Driven");
+		progress([{ kind: 'markdownContent', content: new MarkdownString(`${introMd}\n_Gerando com **${modelLabel}**._\n`) }]);
 		progress([{ kind: 'progressMessage', content: new MarkdownString('Iniciando…'), shimmer: true }]);
 
 		const runId = await this.specDrivenService.startRun(
 			description || 'Projeto sem descrição',
-			{ projectType, selectedPhases },
+			{ projectType, selectedPhases, targetFolder, modelId },
 		);
 
 		if (!runId) {
@@ -244,28 +346,27 @@ export class SpecDrivenAgent extends Disposable implements IChatAgentImplementat
 			? Math.round((run.endedAt - run.startedAt) / 1000)
 			: undefined;
 
+		const folder = run.artifacts.dirUri ? basename(URI.parse(run.artifacts.dirUri)) : undefined;
+
 		const lines: string[] = [];
 		lines.push(`\n## ✅ Especificações geradas com sucesso!`);
 		if (elapsed !== undefined) {
 			lines.push(`\n*Tempo total: ${elapsed}s*`);
 		}
-		lines.push(`\nOs documentos foram salvos em \`.vsgo/specs/\`:\n`);
+		lines.push(folder
+			? `\nOs documentos foram salvos em \`specs/${folder}/\`:\n`
+			: `\nOs documentos foram salvos em \`specs/\`:\n`);
 
 		for (const phase of selectedPhases) {
-			const file = PHASE_FILE[phase];
-			const desc = PHASE_DESCRIPTION[phase];
-			if (file && desc) {
-				lines.push(`- **${file}** — ${desc}`);
-			}
+			lines.push(`- **${PHASE_FILE[phase]}** — ${PHASE_DESCRIPTION[phase]}`);
 		}
 
 		lines.push(`\n---`);
 		lines.push(`\n### Próximos passos com SDD`);
-		lines.push(`\n1. **Revise os requisitos** — ajuste prioridades (MUST/SHOULD/COULD) conforme o escopo do projeto`);
-		lines.push(`2. **Refine as histórias** — compartilhe com o time no próximo refinamento de backlog`);
-		lines.push(`3. **Valide a arquitetura** — discuta as decisões técnicas (ADRs) com os desenvolvedores`);
-		lines.push(`4. **Importe as tarefas** — use o TASKS.md como base para seu planejamento de sprints`);
-		lines.push(`\n> 💡 Você pode regenerar qualquer documento individualmente usando \`/requisitos\`, \`/historias\`, \`/arquitetura\` ou \`/tarefas\`.`);
+		lines.push(`\n1. **Revise a \`spec.md\`** — resolva todo \`[NEEDS CLARIFICATION]\` e mude o Status para Aprovada`);
+		lines.push(`2. **Valide o \`plan.md\`** — confira a checklist de conformidade com a constituição e as alternativas descartadas`);
+		lines.push(`3. **Execute as \`tasks.md\`** — só depois da spec e do plano aprovados, conforme a constituição`);
+		lines.push(`\n> 💡 Você pode regenerar qualquer documento individualmente usando \`/spec\`, \`/plano\` ou \`/tarefas\`.`);
 
 		progress([{
 			kind: 'markdownContent',
@@ -274,10 +375,9 @@ export class SpecDrivenAgent extends Disposable implements IChatAgentImplementat
 
 		// Adicionar referências de arquivo como pills clicáveis
 		const artifacts: Array<[string | undefined, string]> = [
-			[run.artifacts.requirementsUri, 'REQUIREMENTS.md'],
-			[run.artifacts.storiesUri, 'USER_STORIES.md'],
-			[run.artifacts.architectureUri, 'ARCHITECTURE.md'],
-			[run.artifacts.tasksUri, 'TASKS.md'],
+			[run.artifacts.specUri, 'spec.md'],
+			[run.artifacts.planUri, 'plan.md'],
+			[run.artifacts.tasksUri, 'tasks.md'],
 		];
 		for (const [uri] of artifacts) {
 			if (uri) {
@@ -299,7 +399,7 @@ export class SpecDrivenAgent extends Disposable implements IChatAgentImplementat
 				agentId: SDD_AGENT_ID,
 				message: originalMessage,
 				subCommand: 'tarefas',
-				title: 'Regenerar apenas TASKS.md',
+				title: 'Regenerar apenas tasks.md',
 				tooltip: 'Gera novamente apenas o breakdown de tarefas para este projeto',
 			},
 			{

@@ -1791,6 +1791,40 @@ MenuRegistry.appendMenuItem(MenuId.EditorContext, {
 
 // --- Chat Default Visibility
 
+/**
+ * Closes the chat from its own title bar.
+ *
+ * Every other way out of the chat is indirect — the command palette, the
+ * activity bar toggle, the container's context menu — and none of them is where
+ * someone looks when they want the panel gone.
+ *
+ * Order 0 puts it immediately after the New Chat split button, which sits at
+ * -1. A larger order pushes it past the width of the title bar and into the
+ * overflow menu, which is the same as not being there.
+ */
+registerAction2(class CloseChatViewAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.chat.closeView',
+			title: localize2('chat.closeView.label', "Close Chat"),
+			icon: Codicon.close,
+			f1: true,
+			category: CHAT_CATEGORY,
+			precondition: ChatContextKeys.enabled,
+			menu: {
+				id: MenuId.ViewTitle,
+				when: ContextKeyExpr.equals('view', ChatViewId),
+				order: 0,
+				group: 'navigation'
+			},
+		});
+	}
+
+	async run(accessor: ServicesAccessor) {
+		accessor.get(IViewsService).closeView(ChatViewId);
+	}
+});
+
 registerAction2(class ToggleDefaultVisibilityAction extends Action2 {
 	constructor() {
 		super({

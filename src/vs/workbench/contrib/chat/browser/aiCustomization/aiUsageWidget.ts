@@ -47,7 +47,7 @@ export class AIUsageWidget extends Disposable {
 	private create(): void {
 		const header = DOM.append(this.element, $('.ai-usage-header'));
 		const description = DOM.append(header, $('p.ai-usage-description'));
-		description.textContent = localize('aiUsageInfo', "Track language model token consumption across all providers. Totals are estimates based on each provider's token counter.");
+		description.textContent = localize('aiUsageInfo', "Acompanhe o consumo de tokens dos modelos de linguagem em todos os provedores. Os totais são estimativas baseadas no contador de tokens de cada provedor.");
 
 		this.summaryContainer = DOM.append(this.element, $('.ai-usage-summary'));
 		this.controlsContainer = DOM.append(this.element, $('.ai-usage-controls'));
@@ -83,17 +83,17 @@ export class AIUsageWidget extends Disposable {
 		const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
 
 		const cards: { label: string; totals: IAIUsageTotals }[] = [
-			{ label: localize('usageToday', "Today"), totals: this.aiUsageService.getTotals({ ...filter, from: startOfDay }) },
-			{ label: localize('usageMonth', "This Month"), totals: this.aiUsageService.getTotals({ ...filter, from: startOfMonth }) },
-			{ label: localize('usageYear', "This Year"), totals: this.aiUsageService.getTotals({ ...filter, from: startOfYear }) },
-			{ label: localize('usageAll', "All Time"), totals: this.aiUsageService.getTotals(filter) },
+			{ label: localize('usageToday', "Hoje"), totals: this.aiUsageService.getTotals({ ...filter, from: startOfDay }) },
+			{ label: localize('usageMonth', "Este Mês"), totals: this.aiUsageService.getTotals({ ...filter, from: startOfMonth }) },
+			{ label: localize('usageYear', "Este Ano"), totals: this.aiUsageService.getTotals({ ...filter, from: startOfYear }) },
+			{ label: localize('usageAll', "Desde o Início"), totals: this.aiUsageService.getTotals(filter) },
 		];
 
 		for (const card of cards) {
 			const cardEl = DOM.append(this.summaryContainer, $('.ai-usage-card'));
 			DOM.append(cardEl, $('.ai-usage-card-label')).textContent = card.label;
 			DOM.append(cardEl, $('.ai-usage-card-value')).textContent = formatTokens(card.totals.inputTokens + card.totals.outputTokens);
-			DOM.append(cardEl, $('.ai-usage-card-sub')).textContent = localize('usageCardSub', "{0} requests · {1} in · {2} out", card.totals.requests, formatTokens(card.totals.inputTokens), formatTokens(card.totals.outputTokens));
+			DOM.append(cardEl, $('.ai-usage-card-sub')).textContent = localize('usageCardSub', "{0} requisições · {1} entrada · {2} saída", card.totals.requests, formatTokens(card.totals.inputTokens), formatTokens(card.totals.outputTokens));
 		}
 	}
 
@@ -103,9 +103,9 @@ export class AIUsageWidget extends Disposable {
 		// Granularity segmented buttons.
 		const granularityGroup = DOM.append(this.controlsContainer, $('.ai-usage-granularity'));
 		const options: { id: AIUsageGranularity; label: string }[] = [
-			{ id: 'day', label: localize('granularityDay', "Day") },
-			{ id: 'month', label: localize('granularityMonth', "Month") },
-			{ id: 'year', label: localize('granularityYear', "Year") },
+			{ id: 'day', label: localize('granularityDay', "Dia") },
+			{ id: 'month', label: localize('granularityMonth', "Mês") },
+			{ id: 'year', label: localize('granularityYear', "Ano") },
 		];
 		for (const option of options) {
 			const button = DOM.append(granularityGroup, $('button.ai-usage-granularity-button')) as HTMLButtonElement;
@@ -119,27 +119,27 @@ export class AIUsageWidget extends Disposable {
 
 		// Vendor and model filters.
 		this.renderFilterSelect(
-			localize('filterVendor', "Provider"),
-			[{ value: '', label: localize('allVendors', "All providers") }, ...this.aiUsageService.getVendors().map(v => ({ value: v, label: v }))],
+			localize('filterVendor', "Provedor"),
+			[{ value: '', label: localize('allVendors', "Todos os provedores") }, ...this.aiUsageService.getVendors().map(v => ({ value: v, label: v }))],
 			this.vendorFilter ?? '',
 			value => { this.vendorFilter = value || undefined; this.refresh(); },
 		);
 		this.renderFilterSelect(
-			localize('filterModel', "Model"),
-			[{ value: '', label: localize('allModels', "All models") }, ...this.aiUsageService.getModelIds().map(m => ({ value: m, label: m }))],
+			localize('filterModel', "Modelo"),
+			[{ value: '', label: localize('allModels', "Todos os modelos") }, ...this.aiUsageService.getModelIds().map(m => ({ value: m, label: m }))],
 			this.modelFilter ?? '',
 			value => { this.modelFilter = value || undefined; this.refresh(); },
 		);
 
 		// Clear button.
 		const clearButton = this.renderDisposables.add(new Button(this.controlsContainer, { ...defaultButtonStyles, secondary: true }));
-		clearButton.label = localize('clearUsage', "Clear History");
+		clearButton.label = localize('clearUsage', "Limpar Histórico");
 		clearButton.element.classList.add('ai-usage-clear');
 		this.renderDisposables.add(clearButton.onDidClick(async () => {
 			const confirmed = await this.dialogService.confirm({
-				message: localize('clearUsageConfirm', "Clear all recorded token usage?"),
-				detail: localize('clearUsageDetail', "This permanently removes the usage history. This cannot be undone."),
-				primaryButton: localize('clearUsageYes', "Clear"),
+				message: localize('clearUsageConfirm', "Limpar todo o uso de tokens registrado?"),
+				detail: localize('clearUsageDetail', "Isso remove o histórico de uso permanentemente. Não é possível desfazer."),
+				primaryButton: localize('clearUsageYes', "Limpar"),
 			});
 			if (confirmed.confirmed) {
 				this.aiUsageService.clear();
@@ -165,17 +165,17 @@ export class AIUsageWidget extends Disposable {
 		const rows = this.aiUsageService.getTotalsByPeriod(this.granularity, this.currentFilter());
 
 		if (rows.length === 0) {
-			DOM.append(this.tableContainer, $('.ai-usage-empty')).textContent = localize('noUsage', "No usage recorded yet for the selected filters.");
+			DOM.append(this.tableContainer, $('.ai-usage-empty')).textContent = localize('noUsage', "Nenhum uso registrado ainda para os filtros selecionados.");
 			return;
 		}
 
 		const table = DOM.append(this.tableContainer, $('table.ai-usage-grid'));
 		const headerRow = DOM.append(DOM.append(table, $('thead')), $('tr'));
 		for (const heading of [
-			localize('colPeriod', "Period"),
-			localize('colRequests', "Requests"),
-			localize('colInput', "Input"),
-			localize('colOutput', "Output"),
+			localize('colPeriod', "Período"),
+			localize('colRequests', "Requisições"),
+			localize('colInput', "Entrada"),
+			localize('colOutput', "Saída"),
 			localize('colTotal', "Total"),
 		]) {
 			DOM.append(headerRow, $('th')).textContent = heading;

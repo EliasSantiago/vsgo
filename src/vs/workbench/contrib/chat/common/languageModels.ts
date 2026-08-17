@@ -524,6 +524,10 @@ const languageModelChatProviderType = {
 			deprecated: true,
 			deprecationMessage: localize('vscode.extension.contributes.languageModels.managementCommand.deprecated', "The managementCommand property is deprecated and will be removed in a future release. Use the new configuration property instead.")
 		},
+		manageModelsCommand: {
+			type: 'string',
+			description: localize('vscode.extension.contributes.languageModels.manageModelsCommand', "A command that opens this provider's own model management UI. Providers that host models locally use this to offer downloading and removing model weights.")
+		},
 		when: {
 			type: 'string',
 			description: localize('vscode.extension.contributes.languageModels.when', "Condition which must be true to show this language model chat provider in the Manage Models list.")
@@ -682,6 +686,7 @@ export class LanguageModelsService implements ILanguageModelsService {
 				displayName: item.displayName,
 				configuration: item.configuration,
 				managementCommand: item.managementCommand,
+				manageModelsCommand: item.manageModelsCommand,
 				when: item.when,
 				isDefault: item.vendor === 'copilot'
 			};

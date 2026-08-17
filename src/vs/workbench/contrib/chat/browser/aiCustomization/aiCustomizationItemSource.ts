@@ -152,7 +152,7 @@ export async function expandHookFileItems(
 							uri: item.uri,
 							type: PromptsType.hook,
 							name: hookMeta?.label ?? entry.originalId,
-							description: truncatedCmd || localize('hookUnset', "(unset)"),
+							description: truncatedCmd || localize('hookUnset', "(não definido)"),
 							enabled: item.enabled,
 							groupKey: item.groupKey,
 							storage: item.storage,
@@ -411,7 +411,7 @@ export class ProviderCustomizationItemSource implements IAICustomizationItemSour
 		const deduped = items.filter(item => !builtinUris.has(item.uri));
 
 		const uiIntegrations = this.workspaceService.getSkillUIIntegrations();
-		const uiIntegrationBadge = localize('uiIntegrationBadge', "UI Integration");
+		const uiIntegrationBadge = localize('uiIntegrationBadge', "Integração de UI");
 
 		// Collect names of user/workspace skills so we can hide the built-in
 		// copy once the user has added an override at either level.

@@ -18,7 +18,9 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { IViewDescriptorService } from '../../../common/views.js';
 import { IViewPaneOptions, ViewPane } from '../../../browser/parts/views/viewPane.js';
-import { IQaRun, IQaService, QaRunStatus } from '../common/qa.js';
+import { trackAiFeatureModel } from '../../chat/common/aiFeatureModel.js';
+import { ILanguageModelsService } from '../../chat/common/languageModels.js';
+import { IQaRun, IQaService, QA_FEATURE, QaRunStatus } from '../common/qa.js';
 
 export class QaView extends ViewPane {
 
@@ -42,12 +44,16 @@ export class QaView extends ViewPane {
 		@IThemeService themeService: IThemeService,
 		@IHoverService hoverService: IHoverService,
 		@IQaService private readonly qaService: IQaService,
+		@ILanguageModelsService languageModelsService: ILanguageModelsService,
 		@ITelemetryService _telemetryService: ITelemetryService,
 	) {
 		super(options, keybindingService, contextMenuService, configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
 
 		this._register(this.qaService.onDidChangeRuns(() => this.refreshRuns()));
 		this._register(this.qaService.onDidChangeRun(() => this.refreshCurrentRun()));
+		// Beside the title, so which model drives the browser is answerable
+		// without opening the settings.
+		this._register(trackAiFeatureModel(languageModelsService, configurationService, QA_FEATURE, label => this.updateTitleDescription(label)));
 	}
 
 	protected override renderBody(container: HTMLElement): void {

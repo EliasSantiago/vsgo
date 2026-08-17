@@ -79,7 +79,7 @@ Registry.as<IEditorPaneRegistry>(EditorExtensions.EditorPane).registerEditorPane
 	EditorPaneDescriptor.create(
 		AICustomizationManagementEditor,
 		AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID,
-		localize('aiCustomizationManagementEditor', "Agent Customizations Editor")
+		localize('aiCustomizationManagementEditor', "Editor de Personalizações do Agente")
 	),
 	[
 		// Note: Using the class directly since we use a singleton pattern
@@ -212,7 +212,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: OPEN_AI_CUSTOMIZATION_MGMT_FILE_ID,
-			title: localize2('open', "Open"),
+			title: localize2('open', "Abrir"),
 			icon: Codicon.goToFile,
 		});
 	}
@@ -228,7 +228,7 @@ registerAction2(class extends Action2 {
 		if (codeEditor && (storage === PromptsStorage.extension || storage === PromptsStorage.plugin)) {
 			codeEditor.updateOptions({
 				readOnly: true,
-				readOnlyMessage: new MarkdownString(localize('readonlyPluginFile', "This file is provided by a plugin or extension and cannot be edited.")),
+				readOnlyMessage: new MarkdownString(localize('readonlyPluginFile', "Este arquivo é fornecido por um plugin ou extensão e não pode ser editado.")),
 			});
 		}
 	}
@@ -241,7 +241,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: RUN_PROMPT_MGMT_ID,
-			title: localize2('runPrompt', "Run Prompt"),
+			title: localize2('runPrompt', "Executar Prompt"),
 			icon: Codicon.play,
 		});
 	}
@@ -253,10 +253,10 @@ registerAction2(class extends Action2 {
 
 // Reveal in Finder/Explorer action
 const REVEAL_IN_OS_LABEL = isWindows
-	? localize2('revealInWindows', "Reveal in File Explorer")
+	? localize2('revealInWindows', "Revelar no Explorador de Arquivos")
 	: isMacintosh
-		? localize2('revealInMac', "Reveal in Finder")
-		: localize2('openContainer', "Open Containing Folder");
+		? localize2('revealInMac', "Revelar no Finder")
+		: localize2('openContainer', "Abrir Pasta Correspondente");
 
 const REVEAL_AI_CUSTOMIZATION_IN_OS_ID = 'aiCustomizationManagement.revealInOS';
 registerAction2(class extends Action2 {
@@ -281,7 +281,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: DELETE_AI_CUSTOMIZATION_ID,
-			title: localize2('delete', "Delete"),
+			title: localize2('delete', "Excluir"),
 			icon: Codicon.trash,
 		});
 	}
@@ -307,9 +307,9 @@ registerAction2(class extends Action2 {
 			const plugin = agentPluginService.plugins.get().find(p => isEqualOrParent(uri, p.uri));
 			if (plugin) {
 				const result = await dialogService.confirm({
-					message: localize('cannotDeletePluginItem', "This item is provided by the plugin '{0}'", plugin.label),
-					detail: localize('cannotDeletePluginItemDetail', "Individual components from a plugin cannot be removed separately. Would you like to uninstall the entire plugin?"),
-					primaryButton: localize('uninstallPlugin', "Uninstall Plugin"),
+					message: localize('cannotDeletePluginItem', "Este item é fornecido pelo plugin '{0}'", plugin.label),
+					detail: localize('cannotDeletePluginItemDetail', "Componentes de um plugin não podem ser removidos separadamente. Deseja desinstalar o plugin inteiro?"),
+					primaryButton: localize('uninstallPlugin', "Desinstalar Plugin"),
 					type: 'question',
 				});
 				if (result.confirmed) {
@@ -322,8 +322,8 @@ registerAction2(class extends Action2 {
 		// Extension and built-in files cannot be deleted
 		if (storage === PromptsStorage.extension || storage === BUILTIN_STORAGE) {
 			await dialogService.info(
-				localize('cannotDeleteExtension', "Cannot Delete Extension File"),
-				localize('cannotDeleteExtensionDetail', "Files provided by extensions cannot be deleted. You can disable the extension if you no longer want to use this customization.")
+				localize('cannotDeleteExtension', "Não é Possível Excluir o Arquivo da Extensão"),
+				localize('cannotDeleteExtensionDetail', "Arquivos fornecidos por extensões não podem ser excluídos. Você pode desabilitar a extensão se não quiser mais usar esta personalização.")
 			);
 			return;
 		}
@@ -332,14 +332,14 @@ registerAction2(class extends Action2 {
 		const hookInfo = isHook && itemId ? parseHookItemId(itemId) : undefined;
 		const hookName = typeof context !== 'string' && !URI.isUri(context) ? context.name : undefined;
 		const message = isSkill
-			? localize('confirmDeleteSkill', "Are you sure you want to delete skill '{0}' and its folder?", fileName)
+			? localize('confirmDeleteSkill', "Tem certeza de que quer excluir a skill '{0}' e a pasta dela?", fileName)
 			: hookInfo && hookName
-				? localize('confirmDeleteHook', "Are you sure you want to delete the '{0}' hook?", hookName)
-				: localize('confirmDelete', "Are you sure you want to delete '{0}'?", fileName);
+				? localize('confirmDeleteHook', "Tem certeza de que quer excluir o hook '{0}'?", hookName)
+				: localize('confirmDelete', "Tem certeza de que quer excluir '{0}'?", fileName);
 		const confirmation = await dialogService.confirm({
 			message,
-			detail: localize('confirmDeleteDetail', "This action cannot be undone."),
-			primaryButton: localize('delete', "Delete"),
+			detail: localize('confirmDeleteDetail', "Esta ação não pode ser desfeita."),
+			primaryButton: localize('delete', "Excluir"),
 			type: 'warning',
 		});
 
@@ -372,8 +372,8 @@ registerAction2(class extends Action2 {
 					}
 				} catch {
 					await dialogService.error(
-						localize('deleteHookItemFailed', "Unable to delete this hook entry because the file contents have changed."),
-						localize('deleteHookItemFailedDetail', "Refresh the view and try again."),
+						localize('deleteHookItemFailed', "Não foi possível excluir esta entrada de hook porque o conteúdo do arquivo mudou."),
+						localize('deleteHookItemFailedDetail', "Atualize a visão e tente de novo."),
 					);
 				}
 				return;
@@ -409,7 +409,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: COPY_AI_CUSTOMIZATION_PATH_ID,
-			title: localize2('copyPath', "Copy Path"),
+			title: localize2('copyPath', "Copiar Caminho"),
 			icon: Codicon.clippy,
 		});
 	}
@@ -429,7 +429,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: INSTALL_CHAT_CUSTOMIZATION_EXTENSION_ID,
-			title: localize2('installChatCustomizationExtension', "Install Chat Customization Extension"),
+			title: localize2('installChatCustomizationExtension', "Instalar Extensão de Personalização do Chat"),
 			icon: Codicon.beaker,
 		});
 	}
@@ -456,7 +456,7 @@ const WHEN_ITEM_IS_PLUGIN = ContextKeyExpr.equals(AI_CUSTOMIZATION_ITEM_STORAGE_
 
 // Inline hover actions (shown as icon buttons on hover)
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: INSTALL_CHAT_CUSTOMIZATION_EXTENSION_ID, title: localize('Install Chat Customization Extension', "Install Chat Customization Extension"), icon: Codicon.beaker },
+	command: { id: INSTALL_CHAT_CUSTOMIZATION_EXTENSION_ID, title: localize('Install Chat Customization Extension', "Instalar Extensão de Personalização do Chat"), icon: Codicon.beaker },
 	group: 'inline',
 	order: 1,
 	when: ContextKeyExpr.and(CHAT_CUSTOMIZATION_EXTENSION_NOT_INSTALLED,
@@ -469,13 +469,13 @@ MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
 });
 
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: COPY_AI_CUSTOMIZATION_PATH_ID, title: localize('copyPath', "Copy Path"), icon: Codicon.clippy },
+	command: { id: COPY_AI_CUSTOMIZATION_PATH_ID, title: localize('copyPath', "Copiar Caminho"), icon: Codicon.clippy },
 	group: 'inline',
 	order: 2,
 });
 
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: DELETE_AI_CUSTOMIZATION_ID, title: localize('delete', "Delete"), icon: Codicon.trash },
+	command: { id: DELETE_AI_CUSTOMIZATION_ID, title: localize('delete', "Excluir"), icon: Codicon.trash },
 	group: 'inline',
 	order: 10,
 	when: WHEN_ITEM_IS_DELETABLE,
@@ -483,13 +483,13 @@ MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
 
 // Context menu items (shown on right-click)
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: OPEN_AI_CUSTOMIZATION_MGMT_FILE_ID, title: localize('open', "Open") },
+	command: { id: OPEN_AI_CUSTOMIZATION_MGMT_FILE_ID, title: localize('open', "Abrir") },
 	group: '1_open',
 	order: 1,
 });
 
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: RUN_PROMPT_MGMT_ID, title: localize('runPrompt', "Run Prompt"), icon: Codicon.play },
+	command: { id: RUN_PROMPT_MGMT_ID, title: localize('runPrompt', "Executar Prompt"), icon: Codicon.play },
 	group: '2_run',
 	order: 1,
 	when: ContextKeyExpr.equals(AI_CUSTOMIZATION_ITEM_TYPE_KEY, PromptsType.prompt),
@@ -506,7 +506,7 @@ MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
 });
 
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: DELETE_AI_CUSTOMIZATION_ID, title: localize('delete', "Delete") },
+	command: { id: DELETE_AI_CUSTOMIZATION_ID, title: localize('delete', "Excluir") },
 	group: '4_modify',
 	order: 1,
 	when: WHEN_ITEM_IS_DELETABLE,
@@ -518,7 +518,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: UNINSTALL_PLUGIN_AI_CUSTOMIZATION_ID,
-			title: localize2('uninstallPlugin', "Uninstall Plugin"),
+			title: localize2('uninstallPlugin', "Desinstalar Plugin"),
 			icon: Codicon.trash,
 		});
 	}
@@ -533,9 +533,9 @@ registerAction2(class extends Action2 {
 		}
 
 		const result = await dialogService.confirm({
-			message: localize('confirmUninstallPlugin', "This item is provided by the plugin '{0}'", plugin.label),
-			detail: localize('confirmUninstallPluginDetail', "Individual components from a plugin cannot be removed separately. Would you like to uninstall the entire plugin?"),
-			primaryButton: localize('uninstallPluginBtn', "Uninstall Plugin"),
+			message: localize('confirmUninstallPlugin', "Este item é fornecido pelo plugin '{0}'", plugin.label),
+			detail: localize('confirmUninstallPluginDetail', "Componentes de um plugin não podem ser removidos separadamente. Deseja desinstalar o plugin inteiro?"),
+			primaryButton: localize('uninstallPluginBtn', "Desinstalar Plugin"),
 			type: 'question',
 		});
 		if (result.confirmed) {
@@ -545,14 +545,14 @@ registerAction2(class extends Action2 {
 });
 
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: UNINSTALL_PLUGIN_AI_CUSTOMIZATION_ID, title: localize('uninstallPlugin', "Uninstall Plugin"), icon: Codicon.trash },
+	command: { id: UNINSTALL_PLUGIN_AI_CUSTOMIZATION_ID, title: localize('uninstallPlugin', "Desinstalar Plugin"), icon: Codicon.trash },
 	group: 'inline',
 	order: 10,
 	when: WHEN_ITEM_IS_PLUGIN,
 });
 
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: UNINSTALL_PLUGIN_AI_CUSTOMIZATION_ID, title: localize('uninstallPlugin', "Uninstall Plugin") },
+	command: { id: UNINSTALL_PLUGIN_AI_CUSTOMIZATION_ID, title: localize('uninstallPlugin', "Desinstalar Plugin") },
 	group: '4_modify',
 	order: 1,
 	when: WHEN_ITEM_IS_PLUGIN,
@@ -564,7 +564,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: SHOW_PLUGIN_AI_CUSTOMIZATION_ID,
-			title: localize2('showPlugin', "Show Plugin"),
+			title: localize2('showPlugin', "Mostrar Plugin"),
 		});
 	}
 	async run(accessor: ServicesAccessor, context: AICustomizationContext): Promise<void> {
@@ -598,7 +598,7 @@ registerAction2(class extends Action2 {
 });
 
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: SHOW_PLUGIN_AI_CUSTOMIZATION_ID, title: localize('showPlugin', "Show Plugin") },
+	command: { id: SHOW_PLUGIN_AI_CUSTOMIZATION_ID, title: localize('showPlugin', "Mostrar Plugin") },
 	group: '1_open',
 	order: 2,
 	when: WHEN_ITEM_IS_PLUGIN,
@@ -610,7 +610,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: DISABLE_AI_CUSTOMIZATION_MGMT_ITEM_ID,
-			title: localize2('disable', "Disable"),
+			title: localize2('disable', "Desabilitar"),
 			icon: Codicon.eyeClosed,
 		});
 	}
@@ -634,7 +634,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: ENABLE_AI_CUSTOMIZATION_MGMT_ITEM_ID,
-			title: localize2('enable', "Enable"),
+			title: localize2('enable', "Habilitar"),
 			icon: Codicon.eye,
 		});
 	}
@@ -654,7 +654,7 @@ registerAction2(class extends Action2 {
 
 // Context menu: Disable (shown when builtin item is enabled)
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: DISABLE_AI_CUSTOMIZATION_MGMT_ITEM_ID, title: localize('disable', "Disable") },
+	command: { id: DISABLE_AI_CUSTOMIZATION_MGMT_ITEM_ID, title: localize('disable', "Desabilitar") },
 	group: '5_toggle',
 	order: 1,
 	when: ContextKeyExpr.and(
@@ -666,7 +666,7 @@ MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
 
 // Context menu: Enable (shown when builtin item is disabled)
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: ENABLE_AI_CUSTOMIZATION_MGMT_ITEM_ID, title: localize('enable', "Enable") },
+	command: { id: ENABLE_AI_CUSTOMIZATION_MGMT_ITEM_ID, title: localize('enable', "Habilitar") },
 	group: '5_toggle',
 	order: 1,
 	when: ContextKeyExpr.and(
@@ -678,7 +678,7 @@ MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
 
 // Inline hover: Disable (shown when builtin item is enabled)
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: DISABLE_AI_CUSTOMIZATION_MGMT_ITEM_ID, title: localize('disable', "Disable"), icon: Codicon.eyeClosed },
+	command: { id: DISABLE_AI_CUSTOMIZATION_MGMT_ITEM_ID, title: localize('disable', "Desabilitar"), icon: Codicon.eyeClosed },
 	group: 'inline',
 	order: 5,
 	when: ContextKeyExpr.and(
@@ -690,7 +690,7 @@ MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
 
 // Inline hover: Enable (shown when builtin item is disabled)
 MenuRegistry.appendMenuItem(AICustomizationManagementItemMenuId, {
-	command: { id: ENABLE_AI_CUSTOMIZATION_MGMT_ITEM_ID, title: localize('enable', "Enable"), icon: Codicon.eye },
+	command: { id: ENABLE_AI_CUSTOMIZATION_MGMT_ITEM_ID, title: localize('enable', "Habilitar"), icon: Codicon.eye },
 	group: 'inline',
 	order: 5,
 	when: ContextKeyExpr.and(
@@ -741,8 +741,8 @@ class AICustomizationManagementActionsContribution extends Disposable implements
 			constructor() {
 				super({
 					id: AICustomizationManagementCommands.OpenEditor,
-					title: localize2('openAICustomizations', "Open Customizations"),
-					shortTitle: localize2('aiCustomizations', "Customizations"),
+					title: localize2('openAICustomizations', "Abrir Personalizações"),
+					shortTitle: localize2('aiCustomizations', "Personalizações"),
 					category: CHAT_CATEGORY,
 					precondition: ChatContextKeys.enabled,
 					f1: true,
@@ -778,7 +778,7 @@ class AICustomizationManagementActionsContribution extends Disposable implements
 			constructor() {
 				super({
 					id: AICustomizationManagementCommands.OpenMarketplace,
-					title: localize2('openMarketplace', "Open Marketplace"),
+					title: localize2('openMarketplace', "Abrir Marketplace"),
 					category: CHAT_CATEGORY,
 					precondition: ChatContextKeys.enabled,
 				});
@@ -800,7 +800,7 @@ class AICustomizationManagementActionsContribution extends Disposable implements
 			constructor() {
 				super({
 					id: AICustomizationManagementCommands.GenerateDebugReport,
-					title: localize2('generateDebugReport', "Generate Customization Debug Report"),
+					title: localize2('generateDebugReport', "Gerar Relatório de Diagnóstico das Personalizações"),
 					category: Categories.Developer,
 					precondition: ChatContextKeys.enabled,
 					f1: true,

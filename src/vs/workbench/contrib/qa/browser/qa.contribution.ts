@@ -3,29 +3,63 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Codicon } from '../../../../base/common/codicons.js';
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
+import { ViewPaneContainer } from '../../../browser/parts/views/viewPaneContainer.js';
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
+import { Extensions as ViewContainerExtensions, IViewContainersRegistry, IViewsRegistry, ViewContainer, ViewContainerLocation } from '../../../common/views.js';
 import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment } from '../../../services/statusbar/browser/statusbar.js';
-import { IQaService, QA_CONFIG_SECTION } from '../common/qa.js';
-import { IQaDriver, PlaywrightQaDriver } from './qaDriver.js';
+import { IQaService, QA_CONFIG_SECTION, QA_VIEW_CONTAINER_ID, QA_VIEW_ID } from '../common/qa.js';
+import { IQaDriver, BrowserViewQaDriver } from './qaDriver.js';
 import { QaService } from './qaService.js';
+import { QaView } from './qaView.js';
 import {
 	CancelQaRunAction,
 	OpenLatestQaReportAction,
 	OpenQaRunsFolderAction,
 	OpenQaViewAction,
 	RunQaTestAction,
+	SelectQaModelAction,
 } from './qaActions.js';
 
 // Services
-registerSingleton(IQaDriver, PlaywrightQaDriver, InstantiationType.Delayed);
+registerSingleton(IQaDriver, BrowserViewQaDriver, InstantiationType.Delayed);
 registerSingleton(IQaService, QaService, InstantiationType.Delayed);
 
+// View container, next to Security Scan and Spec Driven in the sidebar
+const qaIcon = registerIcon('qa-view-icon', Codicon.beaker, localize('qaViewIcon', "View icon of the QA view."));
+
+const VIEW_CONTAINER: ViewContainer = Registry.as<IViewContainersRegistry>(ViewContainerExtensions.ViewContainersRegistry).registerViewContainer({
+	id: QA_VIEW_CONTAINER_ID,
+	title: localize2('qa.containerTitle', "QA"),
+	icon: qaIcon,
+	order: 8,
+	ctorDescriptor: new SyncDescriptor(ViewPaneContainer, [QA_VIEW_CONTAINER_ID, { mergeViewWithContainerWhenSingleView: true }]),
+	storageId: QA_VIEW_CONTAINER_ID,
+	hideIfEmpty: false,
+}, ViewContainerLocation.Sidebar);
+
+// Runs view
+Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews([{
+	id: QA_VIEW_ID,
+	containerIcon: qaIcon,
+	name: localize2('qa.viewTitle', "Runs"),
+	canToggleVisibility: true,
+	canMoveView: true,
+	ctorDescriptor: new SyncDescriptor(QaView),
+	openCommandActionDescriptor: {
+		id: 'workbench.view.qa.open',
+		mnemonicTitle: localize({ key: 'miQa', comment: ['&& denotes a mnemonic'] }, "&&QA"),
+		order: 6,
+	},
+}], VIEW_CONTAINER);
 
 // Configuration
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
@@ -38,11 +72,6 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 			type: 'string',
 			default: '',
 			markdownDescription: localize('qa.defaultStartUrl', "Default URL to open at the start of a QA run when none is provided."),
-		},
-		[`${QA_CONFIG_SECTION}.headless`]: {
-			type: 'boolean',
-			default: false,
-			markdownDescription: localize('qa.headless', "Run the test browser headless (no visible window). Default is to show the browser so the tester can watch."),
 		},
 		[`${QA_CONFIG_SECTION}.maxSteps`]: {
 			type: 'number',
@@ -59,12 +88,12 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		[`${QA_CONFIG_SECTION}.modelVendor`]: {
 			type: 'string',
 			default: '',
-			markdownDescription: localize('qa.modelVendor', "Preferred AI provider vendor (empty = any available). Vision-capable models recommended."),
+			markdownDescription: localize('qa.modelVendor', "Provedor de IA usado pelo agente de QA. Vazio aceita qualquer um. Prefira modelos com visão — o agente lê uma captura de tela a cada passo."),
 		},
 		[`${QA_CONFIG_SECTION}.modelId`]: {
 			type: 'string',
 			default: '',
-			markdownDescription: localize('qa.modelId', "Preferred model identifier (empty = first available for vendor)."),
+			markdownDescription: localize('qa.modelId', "Modelo que dirige o navegador. Vazio significa o primeiro disponível, que não é necessariamente o do chat. Mais fácil de escolher pelo botão de modelo no título da view."),
 		},
 		[`${QA_CONFIG_SECTION}.persistRuns`]: {
 			type: 'boolean',
@@ -91,6 +120,7 @@ registerAction2(CancelQaRunAction);
 registerAction2(OpenQaViewAction);
 registerAction2(OpenLatestQaReportAction);
 registerAction2(OpenQaRunsFolderAction);
+registerAction2(SelectQaModelAction);
 
 // Status bar entry
 class QaStatusBar extends Disposable implements IWorkbenchContribution {
