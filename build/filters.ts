@@ -64,8 +64,6 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!extensions/**/colorize-fixtures/**',
 	'!extensions/terminal-suggest/src/shell/fishBuiltinsCache.ts',
 
-	// extensions/copilot has its own code style
-	'!extensions/copilot/**',
 
 	'!src/vs/base/browser/dompurify/**',
 	'!src/vs/workbench/services/keybinding/browser/keyboardLayouts/**',
@@ -155,8 +153,6 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!extensions/**/themes/**',
 	'!extensions/**/colorize-fixtures/**',
 
-	// extensions/copilot has its own code style
-	'!extensions/copilot/**',
 
 	// vsgo: template literals embedding JS/JSON/markdown, whose content is
 	// intentionally space-indented and must not be reflowed to tabs.
@@ -240,8 +236,6 @@ export const copyrightFilter = Object.freeze<string[]>([
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
 	'!extensions/mermaid-chat-features/chat-webview-out/**',
 
-	// extensions/copilot has its own code style
-	'!extensions/copilot/**',
 ]);
 
 export const tsFormattingFilter = Object.freeze<string[]>([
@@ -262,8 +256,6 @@ export const tsFormattingFilter = Object.freeze<string[]>([
 	'!extensions/terminal-suggest/src/shell/zshBuiltinsCache.ts',
 	'!extensions/terminal-suggest/src/shell/fishBuiltinsCache.ts',
 
-	// extensions/copilot has its own code style
-	'!extensions/copilot/**',
 ]);
 
 export const eslintFilter = Object.freeze<string[]>([

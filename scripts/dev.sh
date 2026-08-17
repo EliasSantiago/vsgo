@@ -125,11 +125,10 @@ USE_LIMITS=1
 
 # ─── Watch enxuto ─────────────────────────────────────────────────────────────
 # Com useEsbuildTranspile=true (build/buildConfig.ts) quem escreve o out/ é o
-# watcher esbuild. Dos quatro watchers do `npm run watch`, dois só checam tipos e
-# não emitem nada que a app carregue: o watch-client é o watchTypeCheckTask
-# (build/lib/compilation.ts) — tsgo --noEmit mais o gerador de d.ts do monaco — e
-# o watch-copilot roda um tsgo --watch igual ao lado do esbuild dele. São também
-# os dois que mais pesam, e é a soma deles que estourava a memória.
+# watcher esbuild. Dos watchers do `npm run watch`, o watch-client só checa tipos
+# e não emite nada que a app carregue: é o watchTypeCheckTask
+# (build/lib/compilation.ts) — tsgo --noEmit mais o gerador de d.ts do monaco. É
+# também o mais pesado, e era ele que estourava a memória junto dos demais.
 #
 # O padrão então é o scripts/watch-dev.sh, que sobe só o que produz artefato e
 # ainda escalona as duas compilações frias em série, porque em paralelo elas não
