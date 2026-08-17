@@ -54,7 +54,7 @@ function createMockAgentSession(resource: URI, opts?: {
 		override readonly providerLabel = 'Copilot';
 		override readonly label = opts?.title ?? 'Test Session';
 		override readonly status = ChatSessionStatus.Completed;
-		override readonly icon = Codicon.copilot;
+		override readonly icon = Codicon.chatSparkle;
 		override readonly timing = { created: opts?.createdAt ?? Date.now(), lastRequestStarted: undefined, lastRequestEnded: undefined };
 		override readonly metadata = opts?.metadata ?? { repositoryPath: '/test/repo' };
 		override isArchived(): boolean { return archived; }

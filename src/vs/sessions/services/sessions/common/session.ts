@@ -31,7 +31,7 @@ export const COPILOT_CLOUD_SESSION_TYPE = 'copilot-cloud-agent';
 export const CopilotCLISessionType: ISessionType = {
 	id: COPILOT_CLI_SESSION_TYPE,
 	label: localize('copilotCLI', "Copilot CLI"),
-	icon: Codicon.copilot,
+	icon: Codicon.chatSparkle,
 };
 
 /** Copilot Cloud session type - cloud-hosted agent. */

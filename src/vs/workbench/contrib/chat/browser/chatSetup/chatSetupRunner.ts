@@ -178,7 +178,7 @@ export class ChatSetup {
 				type: 'none',
 				extraClasses: ['chat-setup-dialog'],
 				detail: ' ', // workaround allowing us to render the message in large
-				icon: options?.dialogIcon ?? Codicon.copilotLarge,
+				icon: options?.dialogIcon ?? Codicon.chatSparkle,
 				alignment: DialogContentsAlignment.Vertical,
 				cancelId: buttons.length,
 				disableCloseButton: false,

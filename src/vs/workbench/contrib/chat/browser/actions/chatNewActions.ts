@@ -109,7 +109,7 @@ export function registerNewChatActions() {
 						group: '1_open',
 						order: 1,
 						when: ContextKeyExpr.and(
-							ChatContextKeys.newChatButtonExperimentIcon.notEqualsTo('copilot'),
+							ChatContextKeys.newChatButtonExperimentIcon.notEqualsTo('sparkle'),
 							ChatContextKeys.newChatButtonExperimentIcon.notEqualsTo('new-session'),
 							ChatContextKeys.newChatButtonExperimentIcon.notEqualsTo('comment')
 						)
@@ -137,7 +137,7 @@ export function registerNewChatActions() {
 	);
 
 	const iconVariants = [
-		{ idSuffix: '.copilotIcon', iconValue: 'copilot', icon: Codicon.copilot },
+		{ idSuffix: '.sparkleIcon', iconValue: 'sparkle', icon: Codicon.chatSparkle },
 		{ idSuffix: '.newSessionIcon', iconValue: 'new-session', icon: Codicon.newSession },
 		{ idSuffix: '.commentIcon', iconValue: 'comment', icon: Codicon.comment },
 	] as const;

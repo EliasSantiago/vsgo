@@ -449,7 +449,7 @@ export function createCliHarnessDescriptor(cliUserRoots: readonly URI[], extras:
 	return createRestrictedHarnessDescriptor(
 		SessionType.CopilotCLI,
 		localize('harness.cli', "Copilot CLI"),
-		ThemeIcon.fromId(Codicon.copilot.id),
+		ThemeIcon.fromId(Codicon.chatSparkle.id),
 		cliUserRoots,
 		extras,
 		{
