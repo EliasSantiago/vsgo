@@ -14,7 +14,6 @@ import { IAction, toAction, WorkbenchActionExecutedEvent, WorkbenchActionExecute
 import { CancellationToken, cancelOnDispose } from '../../../../../base/common/cancellation.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { safeIntl } from '../../../../../base/common/date.js';
-import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { MutableDisposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { parseLinkedText } from '../../../../../base/common/linkedText.js';
 import { language } from '../../../../../base/common/platform.js';
@@ -31,7 +30,6 @@ import { localize } from '../../../../../nls.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IHoverService, nativeHoverDelegate } from '../../../../../platform/hover/browser/hover.js';
-import { IMarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { Link } from '../../../../../platform/opener/browser/link.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
@@ -112,7 +110,6 @@ export class ChatStatusDashboard extends DomWidget {
 		@ITelemetryService private readonly telemetryService: ITelemetryService,
 		@ITextResourceConfigurationService private readonly textResourceConfigurationService: ITextResourceConfigurationService,
 		@IInlineCompletionsService private readonly inlineCompletionsService: IInlineCompletionsService,
-		@IMarkdownRendererService private readonly markdownRendererService: IMarkdownRendererService,
 		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@IStorageService private readonly storageService: IStorageService,
@@ -484,50 +481,30 @@ export class ChatStatusDashboard extends DomWidget {
 		const anonymousUser = this.chatEntitlementService.anonymous;
 		const disabled = this.chatEntitlementService.sentiment.disabled || this.chatEntitlementService.sentiment.untrusted;
 		const signedOut = this.chatEntitlementService.entitlement === ChatEntitlement.Unknown;
+
+		// Anonymous/BYOK chat is this build's normal, complete mode: there is no
+		// Copilot sign-up to upsell. Only keep the section for the disabled/untrusted case.
+		if (anonymousUser && !disabled) {
+			return;
+		}
+
 		if (!(newUser || signedOut || disabled)) {
 			return;
 		}
 
 		this.element.appendChild($('hr'));
 
-		let descriptionText: string | MarkdownString;
-		let descriptionClass = '.description';
-		if (newUser && anonymousUser) {
-			descriptionText = new MarkdownString(localize({ key: 'activeDescriptionAnonymous', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0} Copilot, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3})", defaultChat.provider.default.name, defaultChat.provider.default.name, defaultChat.termsStatementUrl, defaultChat.privacyStatementUrl), { isTrusted: true });
-			descriptionClass = `${descriptionClass}.terms`;
-		} else if (newUser) {
-			descriptionText = localize('activateDescription', "Set up Copilot to use AI features.");
-		} else if (anonymousUser) {
-			descriptionText = localize('enableMoreDescription', "Sign in to enable more Copilot AI features.");
-		} else if (disabled) {
-			descriptionText = localize('enableDescription', "Enable Copilot to use AI features.");
-		} else {
-			descriptionText = localize('signInDescription', "Sign in to use Copilot AI features.");
-		}
+		const descriptionText: string = disabled
+			? localize('enableDescription', "Enable AI features.")
+			: localize('signInDescription', "Sign in to use Copilot AI features.");
 
-		let buttonLabel: string;
-		if (newUser) {
-			buttonLabel = localize('enableAIFeatures', "Use AI Features");
-		} else if (anonymousUser) {
-			buttonLabel = localize('enableMoreAIFeatures', "Enable more AI Features");
-		} else if (disabled) {
-			buttonLabel = localize('enableCopilotButton', "Enable AI Features");
-		} else {
-			buttonLabel = localize('signInToUseAIFeatures', "Sign in to use AI Features");
-		}
+		const buttonLabel: string = disabled
+			? localize('enableCopilotButton', "Enable AI Features")
+			: localize('signInToUseAIFeatures', "Sign in to use AI Features");
 
-		let commandId: string;
-		if (newUser && anonymousUser) {
-			commandId = 'workbench.action.chat.triggerSetupAnonymousWithoutDialog';
-		} else {
-			commandId = 'workbench.action.chat.triggerSetup';
-		}
+		const commandId = 'workbench.action.chat.triggerSetup';
 
-		if (typeof descriptionText === 'string') {
-			this.element.appendChild($(`div${descriptionClass}`, undefined, descriptionText));
-		} else {
-			this.element.appendChild($(`div${descriptionClass}`, undefined, this._store.add(this.markdownRendererService.render(descriptionText)).element));
-		}
+		this.element.appendChild($('div.description', undefined, descriptionText));
 
 		const button = this._store.add(new Button(this.element, { ...defaultButtonStyles, hoverDelegate: nativeHoverDelegate }));
 		button.label = buttonLabel;

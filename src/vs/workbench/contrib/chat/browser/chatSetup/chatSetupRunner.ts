@@ -23,7 +23,7 @@ import { IKeybindingService } from '../../../../../platform/keybinding/common/ke
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import product from '../../../../../platform/product/common/product.js';
-import { ITelemetryService, TelemetryLevel } from '../../../../../platform/telemetry/common/telemetry.js';
+import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { IWorkspaceTrustRequestService } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkbenchLayoutService } from '../../../../services/layout/browser/layoutService.js';
 import { ChatEntitlement, ChatEntitlementContext, ChatEntitlementService, IChatEntitlementService, isProUser } from '../../../../services/chat/common/chatEntitlementService.js';
@@ -182,7 +182,7 @@ export class ChatSetup {
 				alignment: DialogContentsAlignment.Vertical,
 				cancelId: buttons.length,
 				disableCloseButton: false,
-				renderFooter: footer => footer.appendChild(this.createDialogFooter(disposables, options)),
+				renderFooter: footer => footer.appendChild(this.createDialogFooter(disposables)),
 				buttonOptions: buttons.map(button => button[2])
 			}, this.keybindingService, this.layoutService, this.hostService)
 		));
@@ -250,16 +250,10 @@ export class ChatSetup {
 		return localize('startUsing', "Start using AI Features");
 	}
 
-	private createDialogFooter(disposables: DisposableStore, options?: { forceAnonymous?: ChatSetupAnonymous }): HTMLElement {
+	private createDialogFooter(disposables: DisposableStore): HTMLElement {
 		const element = $('.chat-setup-dialog-footer');
 
-
-		let footer: string;
-		if (options?.forceAnonymous || this.telemetryService.telemetryLevel === TelemetryLevel.NONE) {
-			footer = localize({ key: 'settingsAnonymous', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}'] }, "By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}).", defaultChat.provider.default.name, defaultChat.termsStatementUrl, defaultChat.privacyStatementUrl);
-		} else {
-			footer = localize({ key: 'settings', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}', '{Locked="]({4})"}', '{Locked="]({5})"}'] }, "By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}). {3} Copilot may show [public code]({4}) suggestions and use your data to improve the product. You can change these [settings]({5}) anytime.", defaultChat.provider.default.name, defaultChat.termsStatementUrl, defaultChat.privacyStatementUrl, defaultChat.provider.default.name, defaultChat.publicCodeMatchesUrl, defaultChat.manageSettingsUrl);
-		}
+		const footer = localize({ key: 'settingsAnonymous', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}'] }, "By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}).", defaultChat.provider.default.name, defaultChat.termsStatementUrl, defaultChat.privacyStatementUrl);
 		element.appendChild($('p', undefined, disposables.add(this.markdownRendererService.render(new MarkdownString(footer, { isTrusted: true }))).element));
 
 		return element;

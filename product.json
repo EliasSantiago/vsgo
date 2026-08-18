@@ -84,6 +84,78 @@
 			}
 		}
 	],
+	"defaultChatAgent": {
+		"extensionId": "vscode.agent-chat",
+		"chatExtensionId": "vscode.agent-chat",
+		"chatExtensionOutputId": "vscode.agent-chat.Agent Chat.log",
+		"chatExtensionOutputExtensionStateCommand": "",
+		"documentationUrl": "https://aka.ms/github-copilot-overview",
+		"termsStatementUrl": "https://aka.ms/github-copilot-terms-statement",
+		"privacyStatementUrl": "https://aka.ms/github-copilot-privacy-statement",
+		"skusDocumentationUrl": "https://aka.ms/github-copilot-plans",
+		"publicCodeMatchesUrl": "https://aka.ms/github-copilot-match-public-code",
+		"manageSettingsUrl": "https://aka.ms/github-copilot-settings",
+		"managePlanUrl": "https://aka.ms/github-copilot-manage-plan",
+		"manageOverageUrl": "https://aka.ms/github-copilot-manage-overage",
+		"upgradePlanUrl": "https://aka.ms/github-copilot-upgrade-plan",
+		"signUpUrl": "https://aka.ms/github-sign-up",
+		"provider": {
+			"default": {
+				"id": "github",
+				"name": "GitHub"
+			},
+			"enterprise": {
+				"id": "github-enterprise",
+				"name": "GHE"
+			},
+			"google": {
+				"id": "google",
+				"name": "Google"
+			},
+			"apple": {
+				"id": "apple",
+				"name": "Apple"
+			}
+		},
+		"providerExtensionId": "vscode.github-authentication",
+		"providerUriSetting": "github-enterprise.uri",
+		"providerScopes": [
+			[
+				"read:user",
+				"user:email",
+				"repo",
+				"workflow"
+			],
+			[
+				"user:email"
+			],
+			[
+				"read:user"
+			]
+		],
+		"entitlementUrl": "https://api.github.com/copilot_internal/user",
+		"entitlementSignupLimitedUrl": "https://api.github.com/copilot_internal/subscribe_limited_user",
+		"tokenEntitlementUrl": "https://api.github.com/copilot_internal/v2/token",
+		"mcpRegistryDataUrl": "https://api.github.com/copilot/mcp_registry",
+		"chatQuotaExceededContext": "github.copilot.chat.quotaExceeded",
+		"completionsQuotaExceededContext": "github.copilot.completions.quotaExceeded",
+		"walkthroughCommand": "github.copilot.open.walkthrough",
+		"completionsMenuCommand": "github.copilot.toggleStatusMenu",
+		"chatRefreshTokenCommand": "github.copilot.refreshToken",
+		"generateCommitMessageCommand": "github.copilot.git.generateCommitMessage",
+		"resolveMergeConflictsCommand": "github.copilot.git.resolveMergeConflicts",
+		"completionsAdvancedSetting": "github.copilot.advanced",
+		"completionsEnablementSetting": "github.copilot.enable",
+		"nextEditSuggestionsSetting": "github.copilot.nextEditSuggestions.enabled"
+	},
+	"trustedExtensionAuthAccess": {
+		"github": [
+			"vscode.agent-chat"
+		],
+		"github-enterprise": [
+			"vscode.agent-chat"
+		]
+	},
 	"onboardingKeymaps": [
 		{
 			"id": "vscode",
@@ -164,6 +236,9 @@
 			"themeId": "Solarized Light",
 			"type": "light"
 		}
+	],
+	"builtInExtensionsEnabledWithAutoUpdates": [
+		"vscode.agent-chat"
 	],
 	"extensionsGallery": {
 		"serviceUrl": "https://open-vsx.org/vscode/gallery",
