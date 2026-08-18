@@ -85,6 +85,7 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!src/vs/workbench/contrib/chat/common/aiFeatureModel.ts',
 	'!src/vs/workbench/api/browser/mainThreadChatAgents2.ts',
 	'!src/vs/workbench/contrib/specDriven/**',
+	'!src/vs/workbench/contrib/welcomeOnboarding/**',
 	'!src/vs/workbench/contrib/qa/**',
 	'!src/vs/workbench/contrib/securityScan/**',
 	'!extensions/agent-chat/**',

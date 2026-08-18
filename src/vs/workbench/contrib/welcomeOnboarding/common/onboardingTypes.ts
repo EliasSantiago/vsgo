@@ -23,13 +23,13 @@ export const enum OnboardingStepId {
 export function getOnboardingStepTitle(stepId: OnboardingStepId): string {
 	switch (stepId) {
 		case OnboardingStepId.SignIn:
-			return localize('onboarding.step.signIn', "Sign In");
+			return localize('onboarding.step.signIn', "Entrar");
 		case OnboardingStepId.Personalize:
-			return localize('onboarding.step.personalize', "Make It Yours");
+			return localize('onboarding.step.personalize', "Deixe do Seu Jeito");
 		case OnboardingStepId.AiPreference:
-			return localize('onboarding.step.aiPreference', "Your AI Style");
+			return localize('onboarding.step.aiPreference', "Seu Estilo de IA");
 		case OnboardingStepId.AgentSessions:
-			return localize('onboarding.step.agentSessions', "Build with AI Agents");
+			return localize('onboarding.step.agentSessions', "Construa com Agentes de IA");
 	}
 }
 
@@ -39,13 +39,13 @@ export function getOnboardingStepTitle(stepId: OnboardingStepId): string {
 export function getOnboardingStepSubtitle(stepId: OnboardingStepId): string {
 	switch (stepId) {
 		case OnboardingStepId.SignIn:
-			return localize('onboarding.step.signIn.subtitle', "Sync settings, unlock AI features, and connect to GitHub");
+			return localize('onboarding.step.signIn.subtitle', "Sincronize configurações, libere recursos de IA e conecte-se ao GitHub");
 		case OnboardingStepId.Personalize:
-			return localize('onboarding.step.personalize.subtitle', "Choose your theme and keyboard mapping");
+			return localize('onboarding.step.personalize.subtitle', "Escolha seu tema e seu mapeamento de teclado");
 		case OnboardingStepId.AiPreference:
-			return localize('onboarding.step.aiPreference.subtitle', "Choose how much AI collaboration fits your workflow");
+			return localize('onboarding.step.aiPreference.subtitle', "Escolha quanta colaboração com a IA combina com o seu fluxo de trabalho");
 		case OnboardingStepId.AgentSessions:
-			return localize('onboarding.step.agentSessions.subtitle', "Open Chat anytime with {0}", isMacintosh ? '\u2318\u2303I' : 'Ctrl+Alt+I');
+			return localize('onboarding.step.agentSessions.subtitle', "Abra o Chat quando quiser com {0}", isMacintosh ? '\u2318\u2303I' : 'Ctrl+Alt+I');
 	}
 }
 
@@ -89,20 +89,20 @@ export interface IAiPreferenceOption {
 export const ONBOARDING_AI_PREFERENCE_OPTIONS: readonly IAiPreferenceOption[] = [
 	{
 		id: AiCollaborationMode.CodeFirst,
-		label: localize('onboarding.aiPref.codeFirst', "I Write the Code"),
-		description: localize('onboarding.aiPref.codeFirst.desc', "AI assists with suggestions and answers questions when you ask. You stay in control of every edit."),
+		label: localize('onboarding.aiPref.codeFirst', "Eu Escrevo o Código"),
+		description: localize('onboarding.aiPref.codeFirst.desc', "A IA ajuda com sugestões e responde quando você pergunta. Você mantém o controle de cada edição."),
 		icon: 'edit',
 	},
 	{
 		id: AiCollaborationMode.Balanced,
-		label: localize('onboarding.aiPref.balanced', "Side by Side"),
-		description: localize('onboarding.aiPref.balanced.desc', "Inline suggestions plus a chat panel for deeper collaboration. A balance of writing and delegating."),
+		label: localize('onboarding.aiPref.balanced', "Lado a Lado"),
+		description: localize('onboarding.aiPref.balanced.desc', "Sugestões em linha mais um painel de chat para uma colaboração mais profunda. Um equilíbrio entre escrever e delegar."),
 		icon: 'layoutSidebarRight',
 	},
 	{
 		id: AiCollaborationMode.AgentForward,
-		label: localize('onboarding.aiPref.agentForward', "AI Takes the Lead"),
-		description: localize('onboarding.aiPref.agentForward.desc', "Let the agent drive — describe what you want and review the result. Great for scaffolding and exploration."),
+		label: localize('onboarding.aiPref.agentForward', "A IA Assume a Frente"),
+		description: localize('onboarding.aiPref.agentForward.desc', "Deixe o agente conduzir — descreva o que você quer e revise o resultado. Ótimo para criar estruturas e explorar."),
 		icon: 'copilot',
 	},
 ];
