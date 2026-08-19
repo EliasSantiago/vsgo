@@ -17,6 +17,7 @@ import { parseTodos, renderTodosForModel, renderTodosForUser, TODO_TOOL, TODO_TO
 import { restoreTranscript, serializeTranscript, TRANSCRIPT_METADATA_KEY } from './transcript.js';
 import { clampToolResult, extractTextToolCalls, IAgentProfile, resolveProfile } from './agentProfile.js';
 import { isMcpToolInfo, McpServers } from './mcp.js';
+import { usageBus } from './usageBus.js';
 import { FIGMA_TOOL_NAME } from './figma/figmaTool.js';
 
 /**
@@ -297,7 +298,11 @@ export async function handleChatRequest(
 	// Checklist the model keeps for itself, replaced wholesale on every write.
 	let todos: readonly TodoItem[] = [];
 
-	const stats: IRequestStats = { turnsUsed: 0, toolCalls: 0, startedAt: Date.now(), modelId: model.id, profile, droppedMessages: 0, overflowRetries: 0 };
+	// The request itself, kept aside so compaction can re-insert it verbatim: a
+	// summary may blur what was discovered, never what was asked.
+	const pinnedRequest = messages[messages.length - 1];
+
+	const stats: IRequestStats = { turnsUsed: 0, toolCalls: 0, startedAt: Date.now(), modelId: model.id, profile, droppedMessages: 0, overflowRetries: 0, evictedToolResults: 0, compactions: 0 };
 
 	const budget: IPromptBudget = {
 		maxInputTokens: model.maxInputTokens,
@@ -318,8 +323,11 @@ export async function handleChatRequest(
 		let budgeted: vscode.LanguageModelChatMessage[] = [];
 
 		try {
-			budgeted = trimToBudget(messages, budget, stats);
-			const response = await model.sendRequest(budgeted, { tools, toolMode: vscode.LanguageModelChatToolMode.Auto }, token);
+			budgeted = await ensurePromptFits(messages, budget, stats, pinnedRequest, model, stream, token);
+			// Tagging the request is what lets its token counts find their way back
+			// here from the provider; see `usageBus`.
+			const usageToken = usageBus.newToken();
+			const response = await model.sendRequest(budgeted, { tools, toolMode: vscode.LanguageModelChatToolMode.Auto, modelOptions: usageBus.modelOptions(usageToken) }, token);
 			const links = new FileLinkStream(stream, hideableTools);
 			for await (const part of response.stream) {
 				if (token.isCancellationRequested) {
@@ -340,6 +348,7 @@ export async function handleChatRequest(
 				}
 			}
 			await links.end();
+			reportContextUsage(stream, usageToken);
 		} catch (err) {
 			if (err instanceof vscode.CancellationError || token.isCancellationRequested) {
 				return finishRequest('cancelado', stats, messages);
@@ -653,9 +662,290 @@ function trimToBudget(
 	return [system, ...rest];
 }
 
+/**
+ * Messages at the end of the conversation that neither eviction nor compaction
+ * touches. The agent is mid-task: whatever it just read or just ran is what the
+ * next step is built on, and summarising that is how a loop starts repeating
+ * work it already did.
+ */
+const KEEP_RECENT_MESSAGES = 6;
+
+/** What an evicted tool result leaves in place of its output. */
+const EVICTED_TOOL_RESULT = '[output dropped to free context — call the tool again if you still need it]';
+
+/** Per-message ceiling when the conversation is rendered for the summariser. */
+const SUMMARY_PART_CHARS = 2000;
+
+/**
+ * Brings the prompt inside the budget, cheapest measure first.
+ *
+ * Three steps, in increasing cost and increasing loss:
+ *
+ * 1. Evict old tool output. In an agent conversation this is where the window
+ *    actually goes — a handful of file reads outweighs every word the user and
+ *    the model exchanged — and it is the cheapest thing to lose, because the
+ *    agent can read the file again.
+ * 2. Compact: ask the model to summarise the older half and continue with the
+ *    summary in its place. Costs one extra request, and is the only step that
+ *    preserves *why* the conversation went where it did.
+ * 3. Drop the oldest messages outright, which is where {@link trimToBudget} was
+ *    the whole strategy. It stays as the floor: it needs no model and cannot
+ *    fail, so it is what catches a summariser that errored or was cancelled.
+ *
+ * Steps 1 and 2 mutate `messages`, so the saving carries to the following turns
+ * and into the transcript. Re-summarising the same history once per turn would
+ * cost more than the history ever did.
+ */
+async function ensurePromptFits(
+	messages: vscode.LanguageModelChatMessage[],
+	budget: IPromptBudget,
+	stats: IRequestStats,
+	pinned: vscode.LanguageModelChatMessage | undefined,
+	model: vscode.LanguageModelChat,
+	stream: vscode.ChatResponseStream,
+	token: vscode.CancellationToken,
+): Promise<vscode.LanguageModelChatMessage[]> {
+	const fits = () => estimateMessagesTokens(messages, budget) <= messageAllowance(budget);
+	if (fits()) {
+		return [...messages];
+	}
+
+	stats.evictedToolResults += evictOldToolResults(messages, budget);
+	if (fits()) {
+		return [...messages];
+	}
+
+	if (compactionEnabled() && !token.isCancellationRequested) {
+		stream.progress('Compactando a conversa...');
+		if (await compactConversation(messages, budget, pinned, model, token)) {
+			stats.compactions++;
+			stream.markdown('\n\n_A conversa encheu a janela de contexto. Resumi o que veio antes e segui daqui — o histórico completo continua visível acima._\n\n');
+			if (fits()) {
+				return [...messages];
+			}
+		}
+	}
+
+	return trimToBudget(messages, budget, stats);
+}
+
+/** Whether the conversation may be summarised when the window fills. */
+function compactionEnabled(): boolean {
+	return vscode.workspace.getConfiguration('agent-chat').get<boolean>('compaction.enabled', true);
+}
+
+/**
+ * Replaces the output of old tool results with a marker, oldest first, until the
+ * prompt fits.
+ *
+ * The call itself is left in place, so every tool call still has the result
+ * answering it — an OpenAI-format server rejects the whole prompt over a
+ * dangling call, which is the trap that makes dropping whole messages delicate.
+ *
+ * Returns how many results were emptied.
+ */
+function evictOldToolResults(messages: vscode.LanguageModelChatMessage[], budget: IPromptBudget): number {
+	const allowance = messageAllowance(budget);
+	const lastTouchable = messages.length - KEEP_RECENT_MESSAGES;
+	let evicted = 0;
+
+	for (let i = 1; i < lastTouchable && estimateMessagesTokens(messages, budget) > allowance; i++) {
+		const message = messages[i];
+		if (!isOrphanToolResult(message)) {
+			continue;
+		}
+		const replaced: vscode.LanguageModelToolResultPart[] = [];
+		let changed = false;
+		for (const part of message.content) {
+			if (!(part instanceof vscode.LanguageModelToolResultPart)) {
+				continue;
+			}
+			if (isEvictedToolResult(part)) {
+				replaced.push(part);
+				continue;
+			}
+			replaced.push(new vscode.LanguageModelToolResultPart(part.callId, [new vscode.LanguageModelTextPart(EVICTED_TOOL_RESULT)]));
+			changed = true;
+			evicted++;
+		}
+		if (changed) {
+			messages[i] = vscode.LanguageModelChatMessage.User(replaced);
+		}
+	}
+	return evicted;
+}
+
+function isEvictedToolResult(part: vscode.LanguageModelToolResultPart): boolean {
+	const [only] = part.content;
+	return part.content.length === 1
+		&& only instanceof vscode.LanguageModelTextPart
+		&& only.value === EVICTED_TOOL_RESULT;
+}
+
+/**
+ * Summarises the older part of the conversation and puts the summary in its
+ * place, keeping the recent tail verbatim.
+ *
+ * The cut never lands on a message of tool results whose assistant call would be
+ * summarised away: the tail has to start somewhere the server can still read as
+ * a conversation. The message carrying the user's actual request is re-inserted
+ * after the summary when it falls inside the compacted range — a summary is
+ * allowed to blur what was discovered, never what was asked.
+ *
+ * Returns false when there was nothing to compact, or when the summariser failed
+ * or was cancelled; the caller then falls back to dropping messages. Nothing is
+ * mutated unless a usable summary came back.
+ */
+async function compactConversation(
+	messages: vscode.LanguageModelChatMessage[],
+	budget: IPromptBudget,
+	pinned: vscode.LanguageModelChatMessage | undefined,
+	model: vscode.LanguageModelChat,
+	token: vscode.CancellationToken,
+): Promise<boolean> {
+	let cut = Math.max(2, messages.length - KEEP_RECENT_MESSAGES);
+	while (cut < messages.length && isOrphanToolResult(messages[cut])) {
+		cut++;
+	}
+	const head = messages.slice(1, cut);
+	if (head.length < 2) {
+		return false;
+	}
+
+	let summary: string;
+	try {
+		// The summariser gets a request of its own and has to fit the same window.
+		// Half of it, in characters, leaves ample room for the summary to come back.
+		const renderBudget = Math.floor(budget.maxInputTokens * budget.charsPerToken * 0.5);
+		summary = await summarize(head, renderBudget, model, token);
+	} catch (err) {
+		// A summariser that fails must not take the turn down with it: the caller
+		// still has trimming, which needs nothing from the model.
+		log(`compaction failed: ${err instanceof Error ? err.message : String(err)}`);
+		return false;
+	}
+	if (!summary.trim() || token.isCancellationRequested) {
+		return false;
+	}
+
+	const replacement: vscode.LanguageModelChatMessage[] = [
+		vscode.LanguageModelChatMessage.User(
+			`[Summary of the earlier conversation. The raw history was compacted to free context; what follows continues from here.]\n\n${summary.trim()}`,
+		),
+	];
+	if (pinned && head.includes(pinned)) {
+		replacement.push(pinned);
+	}
+
+	const before = estimateMessagesTokens(messages, budget);
+	messages.splice(1, cut - 1, ...replacement);
+	log(`compaction: ${head.length} messages -> ${replacement.length}, ~${before - estimateMessagesTokens(messages, budget)} tokens freed`);
+	return true;
+}
+
+/** Asks the model for the summary that will stand in for the conversation. */
+async function summarize(
+	head: readonly vscode.LanguageModelChatMessage[],
+	renderBudget: number,
+	model: vscode.LanguageModelChat,
+	token: vscode.CancellationToken,
+): Promise<string> {
+	const request = vscode.LanguageModelChatMessage.User(`${COMPACTION_PROMPT}\n\n---\n${renderForSummary(head, renderBudget)}\n---`);
+	// Deliberately untagged for the usage bus: these tokens are spent on the
+	// summary, not on the conversation the context ring describes.
+	const response = await model.sendRequest([request], {}, token);
+	let summary = '';
+	for await (const part of response.stream) {
+		if (part instanceof vscode.LanguageModelTextPart) {
+			summary += part.value;
+		}
+	}
+	return summary;
+}
+
+const COMPACTION_PROMPT = `
+You are compacting a long agent conversation so the work can continue in a smaller context window.
+Write the notes you would need to resume this task with nothing else available.
+
+Use exactly these headings:
+- Goal: what the user asked for, in their terms, with every constraint they stated.
+- Decisions: choices already settled, and the reasoning that still binds the work.
+- Done: changes already made, with exact file paths and what changed in each.
+- Learned: what it took work to find out — paths, symbols, commands that work, error messages, dead ends already ruled out.
+- Pending: what is still open, and the immediate next step.
+
+Keep file paths, symbol names, commands and error text verbatim. Drop pleasantries, tool-call
+mechanics and anything later work superseded. Invent nothing that is not in the transcript below:
+a gap is better than a guess, because the next turns will be trusted against these notes.
+`.trim();
+
+/**
+ * Flattens the conversation into the plain transcript the summariser reads,
+ * within `maxChars`.
+ *
+ * Overflowing it is dropped from the middle, not the end. Compaction runs when
+ * the window is nearly full, so the transcript can be nearly a window wide on
+ * its own — and a summariser request that overflows fails exactly when the
+ * conversation most needed compacting. The opening holds what the user asked
+ * for and the close holds where the work currently stands; the middle is the
+ * part a summary was always going to blur.
+ */
+function renderForSummary(messages: readonly vscode.LanguageModelChatMessage[], maxChars: number): string {
+	const lines: string[] = [];
+	for (const message of messages) {
+		const role = message.role === vscode.LanguageModelChatMessageRole.Assistant ? 'Assistant' : 'User';
+		for (const part of message.content) {
+			if (part instanceof vscode.LanguageModelTextPart) {
+				if (part.value.trim()) {
+					lines.push(`${role}: ${truncate(part.value, SUMMARY_PART_CHARS)}`);
+				}
+			} else if (part instanceof vscode.LanguageModelToolCallPart) {
+				lines.push(`${role} called ${part.name}(${truncate(JSON.stringify(part.input), 400)})`);
+			} else if (part instanceof vscode.LanguageModelToolResultPart) {
+				const text = part.content
+					.filter((inner): inner is vscode.LanguageModelTextPart => inner instanceof vscode.LanguageModelTextPart)
+					.map(inner => inner.value)
+					.join('\n');
+				if (text.trim()) {
+					lines.push(`Tool result: ${truncate(text, SUMMARY_PART_CHARS)}`);
+				}
+			}
+		}
+	}
+
+	const full = lines.join('\n');
+	if (full.length <= maxChars) {
+		return full;
+	}
+	const opening = full.slice(0, Math.floor(maxChars * 0.4));
+	const closing = full.slice(full.length - Math.floor(maxChars * 0.6));
+	return `${opening}\n\n[... middle of the transcript omitted for length ...]\n\n${closing}`;
+}
+
 /** Tokens the messages may spend, once the schemas and the framing are paid for. */
 function messageAllowance(budget: IPromptBudget): number {
 	return Math.max(1024, Math.floor(budget.maxInputTokens * FRAMING_RESERVE) - budget.toolTokens);
+}
+
+/**
+ * Hands the turn's token counts to the chat view, which draws them as the
+ * context-window ring next to the input.
+ *
+ * Called once per model call rather than once per user message, so during a long
+ * agent turn the ring keeps climbing as tool results pile into the prompt —
+ * which is the whole point of showing it. The counts describe the conversation
+ * as a whole, not this call alone: the prompt already carries every earlier
+ * message, so the last call's prompt is the current size of the context.
+ *
+ * Silent when the provider reported nothing: the view keeps whatever it last
+ * showed, which is closer to the truth than zero.
+ */
+function reportContextUsage(stream: vscode.ChatResponseStream, usageToken: string): void {
+	const usage = usageBus.take(usageToken);
+	if (!usage) {
+		return;
+	}
+	stream.usage({ promptTokens: usage.inputTokens, completionTokens: usage.outputTokens });
 }
 
 /**
@@ -796,6 +1086,10 @@ interface IRequestStats {
 	droppedMessages: number;
 	/** Times the server rejected the prompt and the estimate had to be corrected. */
 	overflowRetries: number;
+	/** Tool outputs emptied to free context, the cheapest room there is to make. */
+	evictedToolResults: number;
+	/** Times the conversation was summarised to keep going in the same session. */
+	compactions: number;
 }
 
 /**
@@ -812,7 +1106,9 @@ function finishRequest(outcome: string, stats: IRequestStats, messages: readonly
 	const perTurn = stats.turnsUsed > 0 ? (stats.toolCalls / stats.turnsUsed).toFixed(1) : '0';
 	const dropped = stats.droppedMessages > 0 ? `, ${stats.droppedMessages} mensagens descartadas por limite de contexto` : '';
 	const recalibrated = stats.overflowRetries > 0 ? `, ${stats.overflowRetries} reenvios após estouro de contexto` : '';
-	log(`request: ${outcome} — ${stats.turnsUsed}/${stats.profile.maxTurns} turnos, ${stats.toolCalls} tool calls (${perTurn}/turno), ${seconds}s, modelo ${stats.modelId}, perfil ${stats.profile.id}${dropped}${recalibrated}`);
+	const evicted = stats.evictedToolResults > 0 ? `, ${stats.evictedToolResults} resultados de ferramenta descartados` : '';
+	const compacted = stats.compactions > 0 ? `, ${stats.compactions} compactações da conversa` : '';
+	log(`request: ${outcome} — ${stats.turnsUsed}/${stats.profile.maxTurns} turnos, ${stats.toolCalls} tool calls (${perTurn}/turno), ${seconds}s, modelo ${stats.modelId}, perfil ${stats.profile.id}${evicted}${compacted}${dropped}${recalibrated}`);
 	return { metadata: { [TRANSCRIPT_METADATA_KEY]: serializeTranscript(messages.slice(1)) } };
 }
 

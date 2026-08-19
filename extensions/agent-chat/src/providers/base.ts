@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { ByokStorage, ProviderId } from '../byokStorage.js';
 import { log } from '../logger.js';
+import { IReportedUsage, usageBus } from '../usageBus.js';
 
 export interface ModelSpec {
 	readonly id: string;
@@ -13,6 +14,51 @@ export interface ModelSpec {
 	readonly family: string;
 	readonly maxInputTokens: number;
 	readonly maxOutputTokens: number;
+}
+
+/** The size of a model's context window, in the two halves the chat API models. */
+export interface ITokenLimits {
+	readonly maxInputTokens: number;
+	readonly maxOutputTokens: number;
+}
+
+/**
+ * The window to use for a model an API listing just returned.
+ *
+ * A `/models` listing says which models exist, almost never how large their
+ * context is — so the numbers have to come from the catalog each provider keeps
+ * in this extension. Answering with a single hardcoded pair instead is what made
+ * a 500k Grok and a 65k DeepSeek both report the same 128k: the listing
+ * succeeding threw away the only accurate numbers we had.
+ *
+ * Matching is by id, then by id with the release suffix stripped, so
+ * `claude-sonnet-4-6-20250514` still finds `claude-sonnet-4-6`. What the catalog
+ * does not know falls back to `unknown`, which each provider states for its own
+ * lineup — undershooting only makes the trimmer start early, while overshooting
+ * gets the whole prompt rejected by the server.
+ */
+export function limitsForModel(id: string, catalog: readonly ModelSpec[], unknown: ITokenLimits): ITokenLimits {
+	const exact = catalog.find(model => model.id === id);
+	if (exact) {
+		return { maxInputTokens: exact.maxInputTokens, maxOutputTokens: exact.maxOutputTokens };
+	}
+	const base = stripReleaseSuffix(id);
+	const near = catalog.find(model => stripReleaseSuffix(model.id) === base);
+	if (near) {
+		return { maxInputTokens: near.maxInputTokens, maxOutputTokens: near.maxOutputTokens };
+	}
+	return unknown;
+}
+
+/**
+ * Drops the part of a model id that names a release rather than a model:
+ * `-latest`, a dated suffix, or a trailing build number.
+ */
+function stripReleaseSuffix(id: string): string {
+	return id
+		.replace(/-latest$/, '')
+		.replace(/-\d{4}-\d{2}-\d{2}$/, '')
+		.replace(/-\d{4,8}$/, '');
 }
 
 /** Real token usage reported by a provider's streaming API. */
@@ -126,15 +172,29 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 
 		const startedAt = Date.now();
 		const usage = await this.sendChat(credential ?? '', spec, messages, tools, meteredProgress, token);
-		this.reportUsage(spec, model, messages, outputText, usage, Date.now() - startedAt);
+
+		// What the provider counted, or a character-based estimate when its API
+		// says nothing. Both consumers below want the same pair of numbers.
+		const counted: IReportedUsage = usage
+			? { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, estimated: false }
+			: {
+				inputTokens: messages.reduce((sum, m) => sum + estimateTokens(messageText(m)), 0),
+				outputTokens: estimateTokens(outputText),
+				estimated: true,
+			};
+
+		// Hand the counts to whoever asked for them by tagging the request. Done
+		// before the meter so a slow command cannot delay the context bar.
+		const modelOptions = (options as { modelOptions?: { readonly [name: string]: unknown } }).modelOptions;
+		usageBus.publish(usageBus.tokenFrom(modelOptions), counted);
+
+		this.reportUsage(spec, model, counted, Date.now() - startedAt);
 	}
 
 	/** Reports token usage to the AI Usage meter (best-effort, never throws). */
-	private reportUsage(spec: ModelSpec, model: vscode.LanguageModelChatInformation, messages: readonly vscode.LanguageModelChatRequestMessage[], outputText: string, usage: IProviderUsage | void, durationMs: number): void {
+	private reportUsage(spec: ModelSpec, model: vscode.LanguageModelChatInformation, counted: IReportedUsage, durationMs: number): void {
 		try {
-			const estimated = !usage;
-			const inputTokens = usage ? usage.inputTokens : messages.reduce((sum, m) => sum + estimateTokens(messageText(m)), 0);
-			const outputTokens = usage ? usage.outputTokens : estimateTokens(outputText);
+			const { inputTokens, outputTokens, estimated } = counted;
 			const graphEnabled = vscode.workspace.getConfiguration('agent-chat').get<boolean>('codeGraph.enabled', false);
 			void vscode.commands.executeCommand('_vsgo.aiUsage.record', {
 				timestamp: Date.now(),

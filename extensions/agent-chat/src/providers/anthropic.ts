@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { BaseChatProvider, IProviderUsage, ModelSpec, parseSSE, toAbort } from './base.js';
+import { BaseChatProvider, IProviderUsage, limitsForModel, ModelSpec, parseSSE, toAbort } from './base.js';
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const MODELS_ENDPOINT = 'https://api.anthropic.com/v1/models';
@@ -37,8 +37,7 @@ export class AnthropicProvider extends BaseChatProvider {
 			id: m.id,
 			name: m.display_name ?? m.id,
 			family: m.id.replace(/-\d{8}$/, ''),
-			maxInputTokens: 200000,
-			maxOutputTokens: 8192,
+			...limitsForModel(m.id, FALLBACK, { maxInputTokens: 200000, maxOutputTokens: 8192 }),
 		}));
 	}
 
@@ -76,9 +75,9 @@ export class AnthropicProvider extends BaseChatProvider {
 		let inputTokens = 0;
 		let outputTokens = 0;
 		for await (const evt of parseSSE(response, token)) {
-			const e = evt as { type?: string; index?: number; delta?: { type?: string; text?: string; partial_json?: string }; content_block?: { type?: string; id?: string; name?: string }; message?: { usage?: { input_tokens?: number; output_tokens?: number } }; usage?: { input_tokens?: number; output_tokens?: number } };
+			const e = evt as { type?: string; index?: number; delta?: { type?: string; text?: string; partial_json?: string }; content_block?: { type?: string; id?: string; name?: string }; message?: { usage?: AnthropicUsage }; usage?: AnthropicUsage };
 			if (e.type === 'message_start' && e.message?.usage) {
-				inputTokens = e.message.usage.input_tokens ?? inputTokens;
+				inputTokens = promptTokensOf(e.message.usage) ?? inputTokens;
 				outputTokens = e.message.usage.output_tokens ?? outputTokens;
 			} else if (e.type === 'message_delta' && e.usage) {
 				// message_delta carries the cumulative output token count.
@@ -162,4 +161,32 @@ function toAnthropicToolResult(content: unknown[]): unknown {
 		}
 	}
 	return text.join('\n');
+}
+
+/**
+ * The usage block Anthropic sends, which splits the prompt across three counters.
+ */
+interface AnthropicUsage {
+	readonly input_tokens?: number;
+	readonly output_tokens?: number;
+	readonly cache_read_input_tokens?: number;
+	readonly cache_creation_input_tokens?: number;
+}
+
+/**
+ * The size of the prompt the model actually read.
+ *
+ * `input_tokens` alone is not it: Anthropic reports tokens served from the
+ * prompt cache under separate counters and leaves them out of `input_tokens`.
+ * We do not send `cache_control` today, so those counters are zero and the sum
+ * equals `input_tokens` — but the day caching is turned on, reading only
+ * `input_tokens` would show a 200k conversation as a couple of thousand tokens,
+ * which is exactly the moment the context bar would matter most.
+ */
+function promptTokensOf(usage: AnthropicUsage): number | undefined {
+	const { input_tokens, cache_read_input_tokens, cache_creation_input_tokens } = usage;
+	if (input_tokens === undefined && cache_read_input_tokens === undefined && cache_creation_input_tokens === undefined) {
+		return undefined;
+	}
+	return (input_tokens ?? 0) + (cache_read_input_tokens ?? 0) + (cache_creation_input_tokens ?? 0);
 }

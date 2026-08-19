@@ -1032,19 +1032,11 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	}
 }
 
-/* Context usage widget container - positioned in the secondary toolbar below input */
-.interactive-session .chat-input-toolbars .chat-context-usage-container,
-.interactive-session .chat-secondary-toolbar .chat-context-usage-container {
+/* Context usage ring — a toolbar item sitting right after the model picker. */
+.interactive-session .chat-input-toolbars .chat-context-usage-action-item {
 	display: flex;
 	align-items: center;
 	flex-shrink: 0;
-	margin-left: auto;
-	order: 1;
-}
-
-/* When context usage is inside the toolbars (compact mode), keep the ordering */
-.interactive-session .chat-input-toolbars .chat-context-usage-container {
-	order: 1;
 }
 
 .interactive-session .chat-input-toolbars > .chat-execute-toolbar {

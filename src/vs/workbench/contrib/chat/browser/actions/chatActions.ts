@@ -62,6 +62,7 @@ import { CopilotUsageExtensionFeatureId } from '../../common/languageModelStats.
 import { ILanguageModelToolsConfirmationService } from '../../common/tools/languageModelToolsConfirmationService.js';
 import { ILanguageModelToolsService, IToolData, IToolSet, isToolSet } from '../../common/tools/languageModelToolsService.js';
 import { ChatViewId, IChatWidget, IChatWidgetService, isIChatViewViewContext } from '../chat.js';
+import { ShowContextUsageActionId } from '../widgetHosts/viewPane/chatContextUsageWidget.js';
 import { IChatEditorOptions } from '../widgetHosts/editor/chatEditor.js';
 import { ChatEditorInput, showClearEditingSessionConfirmation } from '../widgetHosts/editor/chatEditorInput.js';
 import { convertBufferToScreenshotVariable } from '../attachments/chatScreenshotContext.js';
@@ -1094,11 +1095,22 @@ export function registerChatActions() {
 	registerAction2(class ShowContextUsageAction extends Action2 {
 		constructor() {
 			super({
-				id: 'workbench.action.chat.showContextUsage',
+				id: ShowContextUsageActionId,
 				title: localize2('interactiveSession.showContextUsage.label', "Show Context Window Usage"),
 				category: CHAT_CATEGORY,
 				f1: true,
 				precondition: ChatContextKeys.enabled,
+				menu: [{
+					// Ordered after the model picker (3) and the session picker (4)
+					// so the ring reads as part of the model it describes.
+					id: MenuId.ChatInput,
+					order: 5,
+					group: 'navigation',
+					when: ContextKeyExpr.and(
+						ChatContextKeys.location.isEqualTo(ChatAgentLocation.Chat),
+						ChatContextKeys.inQuickChat.negate(),
+					),
+				}],
 			});
 		}
 

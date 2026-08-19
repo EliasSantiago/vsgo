@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { BaseChatProvider, IProviderUsage, ModelSpec, parseSSE, toAbort } from './base.js';
+import { BaseChatProvider, IProviderUsage, ITokenLimits, limitsForModel, ModelSpec, parseSSE, toAbort } from './base.js';
 import { log } from '../logger.js';
 
 interface OAIToolCallAccum { id: string; name: string; arguments: string }
@@ -37,6 +37,17 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 	/** Optional: filter model IDs from the /models response. Return true to include the model. */
 	protected filterModelId(_id: string): boolean { return true; }
 
+	/**
+	 * Window assumed for a listed model this provider has no catalog entry for.
+	 *
+	 * Stated per provider because the lineups differ by an order of magnitude,
+	 * and a wrong guess is not symmetric: too small only trims the conversation
+	 * early, too large has the server reject the request outright.
+	 */
+	protected get unknownModelLimits(): ITokenLimits {
+		return { maxInputTokens: 128000, maxOutputTokens: 8192 };
+	}
+
 	protected override async fetchAvailableModels(credential: string, token: vscode.CancellationToken): Promise<ModelSpec[] | undefined> {
 		const endpoint = this.modelsEndpoint;
 		if (!endpoint) {
@@ -60,12 +71,12 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 				log(`[${this.providerId}] ${endpoint} devolveu ${(data.data ?? []).length} modelos, nenhum sobreviveu ao filtro`);
 				return undefined;
 			}
+			const catalog = this.fallbackModels();
 			return ids.map(id => ({
 				id,
 				name: id,
 				family: id.replace(/-\d{4}-\d{2}-\d{2}$/, ''),
-				maxInputTokens: 128000,
-				maxOutputTokens: 8192,
+				...limitsForModel(id, catalog, this.unknownModelLimits),
 			}));
 		} catch (err) {
 			log(`[${this.providerId}] ${endpoint} falhou:`, err instanceof Error ? err.message : String(err));

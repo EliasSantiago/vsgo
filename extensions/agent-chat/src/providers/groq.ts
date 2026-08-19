@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ModelSpec } from './base.js';
+import { ITokenLimits, ModelSpec } from './base.js';
 import { OAICompatProvider } from './oai-compat.js';
 
 const FALLBACK: ModelSpec[] = [
@@ -23,4 +23,12 @@ export class GroqProvider extends OAICompatProvider {
 	}
 
 	fallbackModels(): ModelSpec[] { return FALLBACK; }
+
+	// Groq's catalog spans 8k to 131k, and it is where new models appear fastest.
+	// 32k is the middle ground: wide enough not to trim a modern model to pieces,
+	// narrow enough that an old 8k one only overflows once before the server's
+	// own answer corrects the estimate.
+	protected override get unknownModelLimits(): ITokenLimits {
+		return { maxInputTokens: 32768, maxOutputTokens: 8192 };
+	}
 }

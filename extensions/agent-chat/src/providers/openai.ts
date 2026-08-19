@@ -5,7 +5,7 @@
 
 import * as vscode from 'vscode';
 import { log } from '../logger.js';
-import { BaseChatProvider, ModelSpec, parseSSE, toAbort } from './base.js';
+import { BaseChatProvider, limitsForModel, ModelSpec, parseSSE, toAbort } from './base.js';
 
 const CHAT_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 const RESPONSES_ENDPOINT = 'https://api.openai.com/v1/responses';
@@ -35,7 +35,7 @@ interface OpenAIModelsResponse {
 	data?: Array<{ id: string; object?: string }>;
 }
 
-interface OAIToolCallAccum { id: string; name: string; arguments: string; }
+interface OAIToolCallAccum { id: string; name: string; arguments: string }
 
 export class OpenAIProvider extends BaseChatProvider {
 	fallbackModels(): ModelSpec[] { return FALLBACK; }
@@ -57,8 +57,7 @@ export class OpenAIProvider extends BaseChatProvider {
 			id,
 			name: prettifyName(id),
 			family: id.replace(/-\d{4}-\d{2}-\d{2}$/, ''),
-			maxInputTokens: estimateContextWindow(id),
-			maxOutputTokens: 16384,
+			...limitsForModel(id, FALLBACK, { maxInputTokens: estimateContextWindow(id), maxOutputTokens: 16384 }),
 		}));
 	}
 

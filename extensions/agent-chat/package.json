@@ -828,6 +828,11 @@
 					],
 					"description": "Como o laço do agente é ajustado ao modelo que o conduz."
 				},
+				"agent-chat.compaction.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Quando a conversa enche a janela de contexto, resume o histórico mais antigo e continua na mesma sessão, em vez de descartar as mensagens iniciais. Custa uma chamada extra ao modelo no momento em que o resumo é feito."
+				},
 				"agent-chat.localModels.serverPath": {
 					"type": "string",
 					"default": "",

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ModelSpec } from './base.js';
+import { ITokenLimits, ModelSpec } from './base.js';
 import { OAICompatProvider } from './oai-compat.js';
 
 const FALLBACK: ModelSpec[] = [
@@ -18,4 +18,9 @@ export class MistralProvider extends OAICompatProvider {
 	protected override get chatEndpoint(): string { return 'https://api.mistral.ai/v1/chat/completions'; }
 	protected override get modelsEndpoint(): string { return 'https://api.mistral.ai/v1/models'; }
 	fallbackModels(): ModelSpec[] { return FALLBACK; }
+
+	// The current lineup is 131k save for the 7B and Codestral's 262k.
+	protected override get unknownModelLimits(): ITokenLimits {
+		return { maxInputTokens: 131072, maxOutputTokens: 16384 };
+	}
 }

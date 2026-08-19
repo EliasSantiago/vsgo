@@ -16,7 +16,7 @@ export interface IAutoModeDelegate {
 }
 
 /**
- * Pill button that toggles between "Interativo" (Default) and "Automático" (AutoApprove).
+ * Pill button that toggles between "Perguntar antes de agir" (Default) and "Agir sem perguntar" (AutoApprove).
  * Clicking the button invokes the parent action's run(), which calls delegate.toggle().
  */
 export class AutoModeToggleActionItem extends ActionViewItem {
@@ -56,10 +56,10 @@ export class AutoModeToggleActionItem extends ActionViewItem {
 		this.label.classList.toggle('is-auto', isAuto);
 		this._iconEl.className = `codicon ${isAuto ? 'codicon-zap' : 'codicon-shield'}`;
 		this._labelEl.textContent = isAuto
-			? localize('chat.autoMode', 'Automático')
-			: localize('chat.interactiveMode', 'Interativo');
+			? localize('chat.autoMode', 'Agir sem perguntar')
+			: localize('chat.interactiveMode', 'Perguntar antes de agir');
 		this.label.title = isAuto
-			? localize('chat.autoModeTooltip', 'Modo Automático — o agente executa ações sem pedir confirmação. Clique para alternar.')
-			: localize('chat.interactiveModeTooltip', 'Modo Interativo — o agente pede confirmação antes de executar ações. Clique para alternar.');
+			? localize('chat.autoModeTooltip', 'O agente executa ações sem pedir confirmação. Clique para alternar.')
+			: localize('chat.interactiveModeTooltip', 'O agente pede confirmação antes de executar ações. Clique para alternar.');
 	}
 }

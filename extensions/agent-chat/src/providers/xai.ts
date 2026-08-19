@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ModelSpec } from './base.js';
+import { ITokenLimits, ModelSpec } from './base.js';
 import { OAICompatProvider } from './oai-compat.js';
 
 /**
@@ -29,4 +29,10 @@ export class XAIProvider extends OAICompatProvider {
 	}
 
 	fallbackModels(): ModelSpec[] { return FALLBACK; }
+
+	// Every Grok in the catalog is 262k or wider, so an unlisted one is very
+	// unlikely to be narrower than the smallest of them.
+	protected override get unknownModelLimits(): ITokenLimits {
+		return { maxInputTokens: 262144, maxOutputTokens: 32768 };
+	}
 }

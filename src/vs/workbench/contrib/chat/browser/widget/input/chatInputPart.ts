@@ -129,10 +129,9 @@ import { IModePickerDelegate, ModePickerActionItem } from './modePickerActionIte
 import { IPermissionPickerDelegate, PermissionPickerActionItem } from './permissionPickerActionItem.js';
 import { SessionTypePickerActionItem } from './sessionTargetPickerActionItem.js';
 import { WorkspacePickerActionItem } from './workspacePickerActionItem.js';
-import { ChatContextUsageWidget } from '../../widgetHosts/viewPane/chatContextUsageWidget.js';
+import { ChatContextUsageActionItem, ChatContextUsageWidget, ShowContextUsageActionId } from '../../widgetHosts/viewPane/chatContextUsageWidget.js';
 import { Target } from '../../../common/promptSyntax/promptTypes.js';
 import { findLast } from '../../../../../../base/common/arraysFind.js';
-import { ConfigureToolsAction } from '../../actions/chatToolActions.js';
 
 const $ = dom.$;
 
@@ -330,7 +329,6 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 	private readonly _notificationWidget = this._register(new MutableDisposable<ChatInputNotificationWidget>());
 
 	private contextUsageWidget?: ChatContextUsageWidget;
-	private contextUsageWidgetContainer!: HTMLElement;
 	private readonly _contextUsageDisposables = this._register(new MutableDisposable<DisposableStore>());
 
 	get inputContainerElement(): HTMLElement | undefined {
@@ -2093,9 +2091,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 							dom.h('.chat-input-toolbars@inputToolbars'),
 						]),
 					]),
-					dom.h('.chat-secondary-toolbar@secondaryToolbar', [
-						dom.h('.chat-context-usage-container@contextUsageWidgetContainer'),
-					]),
+					dom.h('.chat-secondary-toolbar@secondaryToolbar'),
 					dom.h('.chat-attachments-container@attachmentsContainer', [
 						dom.h('.chat-attached-context@attachedContextContainer'),
 					]),
@@ -2122,9 +2118,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 						dom.h('.chat-input-toolbars@inputToolbars'),
 					]),
 				]),
-				dom.h('.chat-secondary-toolbar@secondaryToolbar', [
-					dom.h('.chat-context-usage-container@contextUsageWidgetContainer'),
-				]),
+				dom.h('.chat-secondary-toolbar@secondaryToolbar'),
 			]);
 		}
 		this.container = elements.root;
@@ -2159,15 +2153,9 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		this.chatToolConfirmationCarouselContainer = elements.chatToolConfirmationCarouselContainer;
 		dom.hide(this.chatToolConfirmationCarouselContainer);
 		this.chatInputNotificationContainer = elements.chatInputNotificationContainer;
-		this.contextUsageWidgetContainer = elements.contextUsageWidgetContainer;
-
-		if (this.options.isSessionsWindow || this.options.renderStyle === 'compact') {
-			toolbarsContainer.prepend(this.contextUsageWidgetContainer);
-		}
-
-		// Context usage widget — will be positioned in the toolbar after toolbars are created
+		// Context usage ring — rendered by `ChatContextUsageActionItem` as the last
+		// item of the input toolbar, right after the model picker.
 		this.contextUsageWidget = this._register(this.instantiationService.createInstance(ChatContextUsageWidget));
-		this.contextUsageWidgetContainer.appendChild(this.contextUsageWidget.domNode);
 
 		if (this.options.enableImplicitContext && !this._implicitContext) {
 			this._implicitContext = this._register(
@@ -2326,7 +2314,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		this._register(dom.addStandardDisposableListener(this.attachmentsContainer, dom.EventType.CLICK, e => this.inputEditor.focus()));
 		const shorterChatInputActionIds = new Set<string>([
 			OpenModePickerAction.ID,
-			ConfigureToolsAction.ID,
+			ShowContextUsageActionId,
 		]);
 		this.inputActionsToolbar = this._register(this.instantiationService.createInstance(MenuWorkbenchToolBar, this.options.renderInputToolbarBelowInput ? this.attachmentsContainer : toolbarsContainer, MenuId.ChatInput, {
 			telemetrySource: this.options.menus.telemetrySource,
@@ -2383,6 +2371,10 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 						},
 					};
 					return this.modeWidget = this.instantiationService.createInstance(ModePickerActionItem, action, delegate, pickerOptions);
+				} else if (action.id === ShowContextUsageActionId && action instanceof MenuItemAction) {
+					return this.contextUsageWidget
+						? new ChatContextUsageActionItem(action, this.contextUsageWidget)
+						: new HiddenActionViewItem(action);
 				} else if (action.id === ToggleChatAutoModeAction.ID && action instanceof MenuItemAction) {
 					const autoModeDelegate: IAutoModeDelegate = {
 						currentPermissionLevel: this._currentPermissionLevel,
@@ -3655,9 +3647,8 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			const inputToolbarWidth = this.cachedInputToolbarWidth = this.inputActionsToolbar.getItemsWidth();
 			const executeToolbarPadding = (this.executeToolbar.getItemsLength() - 1) * toolbarItemGap;
 			const inputToolbarPadding = this.inputActionsToolbar.getItemsLength() ? (this.inputActionsToolbar.getItemsLength() - 1) * toolbarItemGap : 0;
-			const contextUsageWidth = dom.getTotalWidth(this.contextUsageWidgetContainer);
-			const inputToolbarsPadding = 12; // pdading between input toolbar/execute toolbar/contextUsage.
-			return executeToolbarWidth + executeToolbarPadding + contextUsageWidth + (this.options.renderInputToolbarBelowInput ? 0 : inputToolbarWidth + inputToolbarPadding + inputToolbarsPadding);
+			const inputToolbarsPadding = 12; // padding between input toolbar and execute toolbar.
+			return executeToolbarWidth + executeToolbarPadding + (this.options.renderInputToolbarBelowInput ? 0 : inputToolbarWidth + inputToolbarPadding + inputToolbarsPadding);
 		};
 
 		return {
