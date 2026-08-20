@@ -89,7 +89,7 @@ export class LocalProvider extends OAICompatProvider {
 	}
 
 	protected override async fetchAvailableModels(_credential: string, _token: vscode.CancellationToken): Promise<ModelSpec[] | undefined> {
-		const installed = await this.store.list();
+		const installed = await this.store.listChatModels();
 		if (installed.length === 0) {
 			// Drop the cached list too: the base class keeps the previous models
 			// when a fetch comes back empty, which would leave a model the user

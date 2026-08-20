@@ -25,6 +25,9 @@ interface IInstalledMetadata {
 	readonly contextLength: number;
 	readonly gpuLayers: number;
 	readonly installedAt: number;
+	/** Absent on sidecars written before embedding models existed: treat as 'chat'. */
+	readonly kind?: 'chat' | 'embedding';
+	readonly dims?: number;
 }
 
 export interface IInstalledModel extends IInstalledMetadata {
@@ -85,6 +88,22 @@ export class ModelStore {
 			}
 		}
 		return out.sort((a, b) => a.name.localeCompare(b.name));
+	}
+
+	/**
+	 * Installed models that can answer a prompt.
+	 *
+	 * Embedding weights live in the same directory but cannot serve chat, so
+	 * everything that feeds the model picker or starts the chat server must go
+	 * through here rather than {@link list}.
+	 */
+	async listChatModels(): Promise<IInstalledModel[]> {
+		return (await this.list()).filter(m => (m.kind ?? 'chat') === 'chat');
+	}
+
+	/** Installed models that produce vectors for the semantic index. */
+	async listEmbeddingModels(): Promise<IInstalledModel[]> {
+		return (await this.list()).filter(m => m.kind === 'embedding');
 	}
 
 	async isInstalled(id: string): Promise<boolean> {
@@ -235,6 +254,8 @@ export class ModelStore {
 			contextLength: model.contextLength,
 			gpuLayers,
 			installedAt: Date.now(),
+			kind: model.kind ?? 'chat',
+			dims: model.dims,
 		};
 		await fs.promises.writeFile(path.join(dir, `${model.id}.json`), JSON.stringify(meta, null, '\t'), 'utf8');
 		this._onDidChange.fire();

@@ -650,6 +650,38 @@
 						"target"
 					]
 				}
+			},
+			{
+				"name": "agent_codebase_search",
+				"displayName": "Codebase Search",
+				"modelDescription": "Search the workspace by MEANING using a local semantic index of the code. Use it when you know what you are looking for but not what it is called: \"where is the retry policy for failed requests\", \"how does the app decide which theme to load\". The index is multilingual: write the query in whatever language the answer is most likely written in — English for code and identifiers, the user’s own language when they ask about prose written in it. Returns the most relevant code chunks with their file, line range and body. Prefer `agent_search` instead whenever you already know the literal text — an exact identifier, error message or string constant — because grep is exact and this is not. The two are complementary: run both when a concept and a symbol are both in play. Requires the semantic index to be built; if it is not, this reports so and you should fall back to `agent_search`.",
+				"userDescription": "Buscar no código por significado",
+				"icon": "$(search-fuzzy)",
+				"tags": [
+					"agent-chat",
+					"code"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"query": {
+							"type": "string",
+							"description": "What you are looking for, in natural language. A full question works better than keywords."
+						},
+						"limit": {
+							"type": "number",
+							"description": "Maximum number of chunks to return (default 8, max 20)."
+						},
+						"path": {
+							"type": "string",
+							"description": "Optional: only return results whose path contains this substring."
+						}
+					},
+					"required": [
+						"query"
+					]
+				}
 			}
 		],
 		"commands": [
@@ -755,6 +787,16 @@
 			{
 				"command": "agent-chat.figma.disconnect",
 				"title": "Agent Chat: Desconectar da Figma",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.semanticIndex.rebuild",
+				"title": "Reconstruir Índice Semântico",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.semanticIndex.status",
+				"title": "Mostrar Status do Índice Semântico",
 				"category": "Agent Chat"
 			}
 		],
@@ -865,6 +907,36 @@
 					"type": "string",
 					"default": "",
 					"markdownDescription": "Modelo a carregar na abertura, pelo id do catálogo (por exemplo `qwen2.5-coder-3b`). Vazio significa \"o último que você usou\" — o que só funciona depois da primeira conversa. Ignorado quando `#agent-chat.localModels.preload#` está desligado."
+				},
+				"agent-chat.semanticIndex.enabled": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "Indexa o projeto localmente para que o agente possa buscar código por significado com a ferramenta `agent_codebase_search`. Os vetores são calculados na sua máquina e nada é enviado para fora."
+				},
+				"agent-chat.semanticIndex.model": {
+					"type": "string",
+					"default": "qwen3-embedding-0.6b",
+					"markdownDescription": "Modelo de embeddings usado pelo índice. Trocar o modelo descarta o índice atual e reconstrói. `qwen3-embedding-0.6b` é multilíngue e entende comentários em português, ao custo de ser ~4x mais lento para indexar. `nomic-embed-text-v1.5` é leve e rápido, mas só recupera bem conteúdo em inglês. `bge-small-en-v1.5` é o menor de todos, também só inglês.",
+					"enum": [
+						"qwen3-embedding-0.6b",
+						"nomic-embed-text-v1.5",
+						"bge-small-en-v1.5"
+					]
+				},
+				"agent-chat.semanticIndex.include": {
+					"type": "string",
+					"default": "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,py,go,rs,java,cs,rb,php,c,h,cc,cpp,hpp,swift,kt,scala,sh,sql,vue,svelte,md}",
+					"markdownDescription": "Glob dos arquivos que entram no índice semântico."
+				},
+				"agent-chat.semanticIndex.exclude": {
+					"type": "string",
+					"default": "{**/node_modules/**,**/out/**,**/out-*/**,**/dist/**,**/build/**,**/vendor/**,**/target/**,**/coverage/**,**/__pycache__/**,**/.*/**}",
+					"markdownDescription": "Glob dos arquivos e pastas que o índice semântico ignora. O padrão pula diretórios ocultos, o que evita indexar worktrees do git guardadas dentro do projeto."
+				},
+				"agent-chat.semanticIndex.maxFiles": {
+					"type": "number",
+					"default": 5000,
+					"markdownDescription": "Número máximo de arquivos indexados. Projetos maiores param neste limite."
 				}
 			}
 		},

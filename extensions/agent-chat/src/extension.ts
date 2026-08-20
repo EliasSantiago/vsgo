@@ -8,6 +8,8 @@ import { ByokStorage } from './byokStorage.js';
 import { registerAllProviders } from './providers/index.js';
 import { registerCommands } from './commands.js';
 import { registerTools } from './tools.js';
+import { SemanticIndexService } from './semanticIndex/semanticIndexService.js';
+import { registerSemanticIndexCommands } from './semanticIndex/commands.js';
 import { createChatHandler } from './chatHandler.js';
 import { RulesLoader } from './rules/rulesLoader.js';
 import { MemoryService } from './memory/memoryService.js';
@@ -60,6 +62,10 @@ export function activate(context: vscode.ExtensionContext): void {
 	// has to stop it, and the controller does that at the point of deletion.
 	const modelStoreListener = modelStore.onDidChange(() => localProvider.refresh());
 
+	// Semantic index over the workspace. Scoped to `storageUri` so each workspace
+	// keeps its own vectors, and inert until the embedding model is installed.
+	const semanticIndex = new SemanticIndexService(context.storageUri, context.globalState, modelStore, serverManager);
+
 	const mcpServers = new McpServers();
 
 	const participant = vscode.chat.createChatParticipant(PARTICIPANT_ID, createChatHandler(rulesLoader, memoryService, mcpServers));
@@ -100,7 +106,9 @@ export function activate(context: vscode.ExtensionContext): void {
 		registerMcpCommands(mcpServers),
 		registerAllProviders(storage, localProvider),
 		registerCommands(storage, rulesLoader, memoryService, agentSessionsStore, agentSessionsService, bugBotProvider, serverManager),
-		registerTools(),
+		semanticIndex,
+		registerTools(semanticIndex),
+		registerSemanticIndexCommands(semanticIndex),
 		registerFigma(context.secrets),
 	);
 	// Nothing resolves a credential-less vendor on startup, so ask for the first
@@ -110,6 +118,15 @@ export function activate(context: vscode.ExtensionContext): void {
 	const warmUp = new vscode.CancellationTokenSource();
 	context.subscriptions.push(warmUp);
 	void preloadLastUsedModel(serverManager, warmUp.token);
+	// Indexing runs unattended once provisioned; the first run has to ask,
+	// because it downloads a model.
+	const indexWarmUp = new vscode.CancellationTokenSource();
+	context.subscriptions.push(indexWarmUp);
+	void semanticIndex.ensureReady(indexWarmUp.token).then(ready => {
+		if (!ready) {
+			void semanticIndex.promptForSetup();
+		}
+	});
 	mcpServers.startOnStartupIfConfigured();
 	log('activate: registered participant, providers, commands, tools, rules, memory, agents, bugBot, localModels, mcp');
 }

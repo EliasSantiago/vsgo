@@ -8,6 +8,8 @@ import { exec, execFile, spawn, type ChildProcess } from 'child_process';
 import { resolve, sep } from 'path';
 import { promisify } from 'util';
 import { CodeGraphService, SymbolInfo } from './graphIndex/codeGraphService.js';
+import { SemanticIndexService } from './semanticIndex/semanticIndexService.js';
+import { CodebaseSearchTool } from './semanticIndex/tool.js';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -26,7 +28,7 @@ export interface MultiEditInput { path: string; edits: Array<{ oldText: string; 
 export interface GitInput { path?: string }
 export interface GitDiffInput { path?: string; staged?: boolean }
 
-export function registerTools(): vscode.Disposable {
+export function registerTools(semanticIndex: SemanticIndexService): vscode.Disposable {
 	const subs: vscode.Disposable[] = [];
 	subs.push(vscode.lm.registerTool('agent_read_file', new ReadFileTool()));
 	subs.push(vscode.lm.registerTool('agent_open_file', new OpenFileTool()));
@@ -81,6 +83,26 @@ export function registerTools(): vscode.Disposable {
 		}
 	}));
 	subs.push({ dispose: () => graphToolReg?.dispose() });
+
+	// Semantic search, gated the same way. The index itself belongs to the
+	// extension host so it can outlive any one tool registration.
+	let searchToolReg: vscode.Disposable | undefined;
+	const syncSearchTool = () => {
+		const enabled = SemanticIndexService.isEnabled();
+		if (enabled && !searchToolReg) {
+			searchToolReg = vscode.lm.registerTool('agent_codebase_search', new CodebaseSearchTool(semanticIndex));
+		} else if (!enabled && searchToolReg) {
+			searchToolReg.dispose();
+			searchToolReg = undefined;
+		}
+	};
+	syncSearchTool();
+	subs.push(vscode.workspace.onDidChangeConfiguration(e => {
+		if (e.affectsConfiguration('agent-chat.semanticIndex.enabled')) {
+			syncSearchTool();
+		}
+	}));
+	subs.push({ dispose: () => searchToolReg?.dispose() });
 
 	return vscode.Disposable.from(...subs);
 }

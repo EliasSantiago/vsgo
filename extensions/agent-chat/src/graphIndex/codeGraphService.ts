@@ -4,9 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 import { log } from '../logger.js';
+import { createTypeScriptParser, TSNode, TSParser } from './treeSitter.js';
 
 /** A code symbol definition located by the graph. */
 export interface SymbolInfo {
@@ -16,21 +15,6 @@ export interface SymbolInfo {
 	readonly file: string;
 	/** 1-based line number of the definition. */
 	readonly line: number;
-}
-
-// Minimal shape of the bundled `@vscode/tree-sitter-wasm` module we rely on.
-interface TSNode {
-	readonly type: string;
-	readonly text: string;
-	readonly startPosition: { row: number };
-	readonly namedChildren: TSNode[];
-	childForFieldName(field: string): TSNode | null;
-}
-interface TSTree { readonly rootNode: TSNode; delete(): void }
-interface TSParser { setLanguage(lang: unknown): void; parse(input: string): TSTree; delete(): void }
-interface TSModule {
-	Parser: { init(options: { locateFile(): string }): Promise<void>; new(): TSParser };
-	Language: { load(bytes: Uint8Array): Promise<unknown> };
 }
 
 const NODE_TYPE_TO_KIND: ReadonlyMap<string, SymbolInfo['kind']> = new Map([
@@ -91,25 +75,15 @@ export class CodeGraphService {
 	}
 
 	private async init(): Promise<boolean> {
-		try {
-			// The module and its grammars ship with the app; Node resolves them
-			// from the app's node_modules (walking up from the extension).
-			const treeSitter = require('@vscode/tree-sitter-wasm') as TSModule;
-			const wasmDir = path.dirname(require.resolve('@vscode/tree-sitter-wasm'));
-			await treeSitter.Parser.init({ locateFile: () => path.join(wasmDir, 'tree-sitter.wasm') });
-			const grammar = await fs.promises.readFile(path.join(wasmDir, 'tree-sitter-typescript.wasm'));
-			const language = await treeSitter.Language.load(new Uint8Array(grammar));
-			this.parser = new treeSitter.Parser();
-			this.parser.setLanguage(language);
-			this.available = true;
-			this.installWatcher();
-			log('[codeGraph] parser ready');
-			return true;
-		} catch (err) {
-			log('[codeGraph] initialization failed:', err instanceof Error ? err.message : String(err));
+		this.parser = await createTypeScriptParser();
+		if (!this.parser) {
 			this.available = false;
 			return false;
 		}
+		this.available = true;
+		this.installWatcher();
+		log('[codeGraph] parser ready');
+		return true;
 	}
 
 	private async indexWorkspace(): Promise<void> {

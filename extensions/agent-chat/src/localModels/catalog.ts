@@ -30,6 +30,32 @@ export interface ICatalogModel {
 	readonly supportsTools: boolean;
 	/** Set when the model needs a llama.cpp build that mainline does not provide. */
 	readonly requiresPatchedRuntime?: boolean;
+	/**
+	 * What the weights are for. Only `chat` models are offered in the model
+	 * picker; `embedding` ones exist solely to feed the semantic index.
+	 */
+	readonly kind?: 'chat' | 'embedding';
+	/** Embedding models only: dimensionality of the vectors produced. */
+	readonly dims?: number;
+	/**
+	 * Embedding models only. E5 and Nomic weights are trained with asymmetric
+	 * prefixes and lose a lot of accuracy without them, so each entry carries
+	 * the exact strings its family expects.
+	 */
+	readonly queryPrefix?: string;
+	readonly documentPrefix?: string;
+	/**
+	 * Embedding models only. How llama.cpp turns per-token states into one
+	 * vector: BERT-family encoders average them, while an embedder built on a
+	 * causal LM carries the meaning in its final position.
+	 */
+	readonly pooling?: 'mean' | 'last';
+	/**
+	 * Embedding models only. True when the weights are a causal LM rather than
+	 * an encoder, which means every sequence in a batch needs its own slice of
+	 * KV cache instead of sharing one context.
+	 */
+	readonly causal?: boolean;
 }
 
 /**
@@ -259,7 +285,70 @@ export const MODEL_CATALOG: readonly ICatalogModel[] = [
 		supportsTools: true,
 		requiresPatchedRuntime: true,
 	},
+	// Embedding models. These never answer a prompt — they turn code chunks and
+	// queries into vectors for the semantic index, and are hidden from the model
+	// picker. They are small enough to run on CPU alongside a chat model.
+	{
+		id: 'qwen3-embedding-0.6b',
+		name: 'Qwen3 Embedding 0.6B (embeddings)',
+		description: 'Padrão do índice semântico. Multilíngue de verdade: entende comentários e documentação em português. Bem mais pesado que os alternativos.',
+		repo: 'Qwen/Qwen3-Embedding-0.6B-GGUF',
+		quant: 'Q8_0',
+		sizeMB: 610,
+		params: '0.6B',
+		layers: 28,
+		contextLength: 512,
+		kvMBPer1kCtx: 28,
+		supportsTools: false,
+		kind: 'embedding',
+		dims: 1024,
+		// The task line is part of what the model was tuned on; dropping it costs
+		// real accuracy. Documents are embedded bare.
+		queryPrefix: 'Instruct: Given a question about a codebase, retrieve the code or documentation that answers it\nQuery: ',
+		documentPrefix: '',
+		pooling: 'last',
+		causal: true,
+	},
+	{
+		id: 'nomic-embed-text-v1.5',
+		name: 'Nomic Embed Text v1.5 (embeddings)',
+		description: 'Leve e rápido, o melhor custo-benefício em código. Treinado em inglês: perde conteúdo escrito em português.',
+		repo: 'nomic-ai/nomic-embed-text-v1.5-GGUF',
+		quant: 'q8_0',
+		sizeMB: 139,
+		params: '137M',
+		layers: 12,
+		contextLength: 2048,
+		kvMBPer1kCtx: 8,
+		supportsTools: false,
+		kind: 'embedding',
+		dims: 768,
+		queryPrefix: 'search_query: ',
+		documentPrefix: 'search_document: ',
+	},
+	{
+		id: 'bge-small-en-v1.5',
+		name: 'BGE Small EN v1.5 (embeddings)',
+		description: 'O menor e mais rápido, com um terço do tamanho. Recupera um pouco pior que o Nomic.',
+		repo: 'CompendiumLabs/bge-small-en-v1.5-gguf',
+		quant: 'q8_0',
+		sizeMB: 35,
+		params: '33M',
+		layers: 12,
+		contextLength: 512,
+		kvMBPer1kCtx: 4,
+		supportsTools: false,
+		kind: 'embedding',
+		dims: 384,
+		queryPrefix: 'Represent this sentence for searching relevant passages: ',
+		documentPrefix: '',
+	},
 ];
+
+/** True when the entry produces vectors rather than chat completions. */
+export function isEmbeddingModel(model: Pick<ICatalogModel, 'kind'>): boolean {
+	return model.kind === 'embedding';
+}
 
 export type FitLevel = 'ideal' | 'ok' | 'tight' | 'unsupported';
 

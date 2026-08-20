@@ -55,6 +55,7 @@ When the user asks you to change a function, class, method, variable, or any sym
 3. The active file shown in context is only a hint, not the only place to look. The symbol is often defined in a different file.
 4. \`agent_search\` looks INSIDE files, so it never matches a filename. When you are after a FILE rather than a symbol, use \`agent_find_files\` — it matches names at any depth, so a project whose convention you guessed wrong (\`app.routes.ts\`, not \`app-routing.module.ts\`) still turns up on a shorter fragment.
 5. An empty result narrows the guess; it does not answer the question. Retry with a shorter fragment, or search for what the code would contain rather than what it is called, before reporting anything as absent.
+6. When you do NOT know what the thing is called — the user describes a behaviour, a concept or a responsibility rather than a name — use \`agent_codebase_search\`. It searches a local semantic index by meaning, so "where does it decide which theme to load" finds the code even when none of those words appear in it. Write its query in the language the answer is most likely written in — English for code and identifiers, the user's own language when they ask about documentation or comments written in it. Use it FIRST for that kind of question, then \`agent_search\` to confirm the exact symbol it points you at. Grep and semantics answer different questions: reach for grep when you have a name, for semantic search when you have an intention.
 
 ## File editing rules (CRITICAL)
 When asked to refactor, fix, add, remove, or otherwise change code in a file:
@@ -180,6 +181,7 @@ const REPEATABLE_READ_TOOLS: ReadonlySet<string> = new Set([
 	'agent_list_dir',
 	'agent_search',
 	'agent_find_files',
+	'agent_codebase_search',
 ]);
 
 /**
@@ -219,6 +221,7 @@ const AGENT_TOOL_NAMES: ReadonlySet<string> = new Set([
 	'agent_run_command',
 	'agent_read_terminal',
 	'agent_code_graph',
+	'agent_codebase_search',
 	FIGMA_TOOL_NAME,
 	...BROWSER_TOOL_NAMES,
 ]);
@@ -1258,6 +1261,9 @@ function collectTools(profile: IAgentProfile, browserWanted: boolean): vscode.La
 	// fails to invoke — and a model that gets an error with no way forward stops
 	// and asks the user to do the work by hand.
 	const graphEnabled = config.get<boolean>('codeGraph.enabled', false);
+	// Same reasoning for the semantic index: the manifest always contributes the
+	// tool, but it only has an implementation while the setting is on.
+	const semanticIndexEnabled = config.get<boolean>('semanticIndex.enabled', true);
 	const mcpEnabled = config.get<boolean>('mcp.enabled', true);
 	const mcpLimit = config.get<number>('mcp.maxTools', 48);
 	const result: vscode.LanguageModelChatTool[] = [];
@@ -1281,6 +1287,9 @@ function collectTools(profile: IAgentProfile, browserWanted: boolean): vscode.La
 			continue;
 		}
 		if (!graphEnabled && info.name === 'agent_code_graph') {
+			continue;
+		}
+		if (!semanticIndexEnabled && info.name === 'agent_codebase_search') {
 			continue;
 		}
 		result.push({

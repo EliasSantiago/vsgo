@@ -194,7 +194,7 @@ export class ServerManager {
 		if (!binary) {
 			return this.setStatus({ state: 'error', message: 'O llama-server ainda não está instalado.' });
 		}
-		const installed = await this.store.list();
+		const installed = await this.store.listChatModels();
 		if (installed.length === 0) {
 			return this.setStatus({ state: 'error', message: 'Nenhum modelo local baixado ainda.' });
 		}
@@ -336,7 +336,7 @@ export class ServerManager {
 	 * go on, and loading the wrong few gigabytes is worse than loading none.
 	 */
 	async lastUsedModel(): Promise<IInstalledModel | undefined> {
-		const installed = await this.store.list();
+		const installed = await this.store.listChatModels();
 		if (installed.length === 0) {
 			return undefined;
 		}
@@ -497,7 +497,7 @@ function matchesFragment(assetName: string, fragment: string): boolean {
  * session. Falls back to the root alone when the group is already gone, so a
  * second call after the tree exited is harmless.
  */
-function signalTree(child: ChildProcess, signal: NodeJS.Signals): void {
+export function signalTree(child: ChildProcess, signal: NodeJS.Signals): void {
 	const pid = child.pid;
 	if (pid === undefined) {
 		return;
@@ -513,7 +513,7 @@ function signalTree(child: ChildProcess, signal: NodeJS.Signals): void {
 	}
 }
 
-async function waitForHealth(baseUrl: string, child: ChildProcess, token: vscode.CancellationToken): Promise<boolean> {
+export async function waitForHealth(baseUrl: string, child: ChildProcess, token: vscode.CancellationToken): Promise<boolean> {
 	const deadline = Date.now() + 180_000;
 	while (Date.now() < deadline) {
 		if (token.isCancellationRequested || child.exitCode !== null) {
@@ -536,7 +536,7 @@ async function waitForHealth(baseUrl: string, child: ChildProcess, token: vscode
  * llama.cpp release archives ship shared libraries next to the executable, so
  * the loader needs to be pointed at that directory.
  */
-function withLibraryPath(env: NodeJS.ProcessEnv, binDir: string): NodeJS.ProcessEnv {
+export function withLibraryPath(env: NodeJS.ProcessEnv, binDir: string): NodeJS.ProcessEnv {
 	const key = process.platform === 'darwin' ? 'DYLD_LIBRARY_PATH'
 		: process.platform === 'win32' ? 'PATH'
 			: 'LD_LIBRARY_PATH';
@@ -662,7 +662,7 @@ async function isExecutable(target: string): Promise<boolean> {
 	}
 }
 
-async function freePort(): Promise<number> {
+export async function freePort(): Promise<number> {
 	return new Promise((resolve, reject) => {
 		const server = net.createServer();
 		server.once('error', reject);
