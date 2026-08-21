@@ -112,7 +112,55 @@ function fromLocal(extensionPath: string, forWeb: boolean, _disableMangle: boole
 		});
 	}
 
+	if (!forWeb) {
+		input = assertEntryPointIsPackaged(input, extensionPath, isBundled);
+	}
+
 	return input;
+}
+
+/**
+ * Fails the build when a built-in extension's entry point is not among the
+ * files being packaged.
+ *
+ * Nothing else notices. The manifest still declares every command, participant
+ * and contribution, so the extension looks installed and the UI keeps offering
+ * what it contributes — but the extension host cannot load `main`, so nothing
+ * that extension registers at runtime ever exists, and every button that
+ * reaches for it dies quietly in the shipped app. That is invisible when
+ * running from source, where `main` is whatever the compile task just wrote.
+ *
+ * An extension that compiles TypeScript without a bundler config is the way in:
+ * packaging copies the source tree minus what `.vscodeignore` excludes, and
+ * `out/` is not part of a clean checkout.
+ */
+function assertEntryPointIsPackaged(input: Stream, extensionPath: string, isBundled: boolean): Stream {
+	const manifest = JSON.parse(fs.readFileSync(path.join(extensionPath, 'package.json'), 'utf8'));
+	if (!manifest.main) {
+		return input;
+	}
+
+	// Mirrors the rewrite above, so the check runs against the path the
+	// packaged manifest will actually point at.
+	const main = isBundled ? manifest.main.replace('/out/', '/dist/') : manifest.main;
+	const entry = main.replace(/^\.\//, '');
+	// Node resolves an extension-less entry, and a directory through its index.
+	const candidates = [entry, `${entry}.js`, `${entry}/index.js`];
+	const packaged = new Set<string>();
+
+	return input.pipe(es.through(function (file: File) {
+		packaged.add(file.relative.replace(/\\/g, '/'));
+		this.emit('data', file);
+	}, function () {
+		if (candidates.some(candidate => packaged.has(candidate))) {
+			this.emit('end');
+			return;
+		}
+
+		this.emit('error', new Error(
+			`Extension '${path.basename(extensionPath)}' declares main '${manifest.main}', but '${entry}' is not among the files being packaged. `
+			+ `An extension compiled with tsc alone ships only what is in the checkout, and 'out/' is not — add an esbuild.mts (see extensions/merge-conflict) so the entry point is bundled into 'dist/'.`));
+	}));
 }
 
 export function typeCheckExtension(extensionPath: string, forWeb: boolean): Promise<void> {
