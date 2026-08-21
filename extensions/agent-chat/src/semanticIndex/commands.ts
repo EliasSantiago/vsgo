@@ -6,8 +6,21 @@
 import * as vscode from 'vscode';
 import { SemanticIndexService } from './semanticIndexService.js';
 
+/** Runs `work` with a token source that is always disposed. */
+async function withToken<T>(work: (token: vscode.CancellationToken) => Promise<T>): Promise<T> {
+	const source = new vscode.CancellationTokenSource();
+	try {
+		return await work(source.token);
+	} finally {
+		source.dispose();
+	}
+}
+
 export function registerSemanticIndexCommands(index: SemanticIndexService): vscode.Disposable {
 	return vscode.Disposable.from(
+		vscode.commands.registerCommand('agent-chat.semanticIndex.chooseProvider', async () => {
+			await index.changeProvider();
+		}),
 		vscode.commands.registerCommand('agent-chat.semanticIndex.rebuild', async () => {
 			await vscode.window.withProgress({
 				location: vscode.ProgressLocation.Notification,
@@ -16,30 +29,30 @@ export function registerSemanticIndexCommands(index: SemanticIndexService): vsco
 			}, async (_progress, token) => {
 				await index.rebuild(token);
 			});
-			const stats = await index.stats();
+			const stats = await withToken(token => index.stats(token));
 			vscode.window.showInformationMessage(`Índice reconstruído: ${stats.chunks} trechos de ${stats.files} arquivos.`);
 		}),
 		vscode.commands.registerCommand('agent-chat.semanticIndex.status', async () => {
-			const stats = await index.stats();
+			const stats = await withToken(token => index.stats(token));
 			if (!stats.enabled) {
 				vscode.window.showInformationMessage('A busca semântica está desligada (`agent-chat.semanticIndex.enabled`).');
 				return;
 			}
 			if (!stats.provisioned) {
-				const setUp = 'Configurar';
+				const choose = 'Escolher provedor';
 				const choice = await vscode.window.showInformationMessage(
-					`A busca semântica ainda não foi configurada: falta baixar o modelo ${stats.modelId}.`,
-					setUp,
+					`A busca semântica não está pronta: ${stats.provider}.`,
+					choose,
 				);
-				if (choice === setUp) {
-					await index.promptForSetup();
+				if (choice === choose) {
+					await index.changeProvider();
 				}
 				return;
 			}
 			const megabytes = (stats.bytesOnDisk / 1048576).toFixed(1);
 			const progress = stats.indexing ? ' Indexação ainda em andamento — a busca já funciona sobre o que foi indexado.' : '';
 			vscode.window.showInformationMessage(
-				`Índice semântico: ${stats.chunks} trechos de ${stats.files} arquivos, ${megabytes} MB em disco. Modelo ${stats.modelId} (${stats.dims ?? '?'} dimensões).${progress}`,
+				`Índice semântico: ${stats.chunks} trechos de ${stats.files} arquivos, ${megabytes} MB em disco. ${stats.provider} (${stats.dims ?? '?'} dimensões).${progress}`,
 			);
 		}),
 	);

@@ -798,6 +798,11 @@
 				"command": "agent-chat.semanticIndex.status",
 				"title": "Mostrar Status do Índice Semântico",
 				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.semanticIndex.chooseProvider",
+				"title": "Escolher Provedor de Embeddings",
+				"category": "Agent Chat"
 			}
 		],
 		"configuration": {
@@ -916,7 +921,7 @@
 				"agent-chat.semanticIndex.model": {
 					"type": "string",
 					"default": "qwen3-embedding-0.6b",
-					"markdownDescription": "Modelo de embeddings usado pelo índice. Trocar o modelo descarta o índice atual e reconstrói. `qwen3-embedding-0.6b` é multilíngue e entende comentários em português, ao custo de ser ~4x mais lento para indexar. `nomic-embed-text-v1.5` é leve e rápido, mas só recupera bem conteúdo em inglês. `bge-small-en-v1.5` é o menor de todos, também só inglês.",
+					"markdownDescription": "Modelo de embeddings usado quando `#agent-chat.semanticIndex.provider#` é `local`. `qwen3-embedding-0.6b` é multilíngue e entende comentários em português, ao custo de ser ~6x mais lento para indexar. `nomic-embed-text-v1.5` é leve e rápido, mas só recupera bem conteúdo em inglês. `bge-small-en-v1.5` é o menor de todos, também só inglês.",
 					"enum": [
 						"qwen3-embedding-0.6b",
 						"nomic-embed-text-v1.5",
@@ -937,6 +942,33 @@
 					"type": "number",
 					"default": 5000,
 					"markdownDescription": "Número máximo de arquivos indexados. Projetos maiores param neste limite."
+				},
+				"agent-chat.semanticIndex.provider": {
+					"type": "string",
+					"default": "local",
+					"enum": [
+						"local",
+						"openai",
+						"mistral",
+						"ollama"
+					],
+					"enumDescriptions": [
+						"Calcula os embeddings na sua máquina com llama.cpp. Nada sai do computador; é a opção mais lenta.",
+						"Usa o endpoint de embeddings da OpenAI. Muito mais rápido e melhor, mas envia trechos do código.",
+						"Usa o endpoint de embeddings da Mistral. Muito mais rápido e melhor, mas envia trechos do código.",
+						"Usa um servidor Ollama seu, local ou na sua rede, com modelos maiores que o embutido."
+					],
+					"markdownDescription": "De onde vêm os vetores do índice semântico. Trocar descarta o índice e reconstrói. Use o comando **Escolher Provedor de Embeddings** para configurar com ajuda."
+				},
+				"agent-chat.semanticIndex.apiModel": {
+					"type": "string",
+					"default": "",
+					"markdownDescription": "Modelo de embeddings do provedor escolhido, por exemplo `text-embedding-3-small`. Vazio usa o padrão do provedor. Ignorado quando o provedor é `local`."
+				},
+				"agent-chat.semanticIndex.apiBaseUrl": {
+					"type": "string",
+					"default": "",
+					"markdownDescription": "Endpoint compatível com OpenAI, terminando em `/v1`. Vazio usa o endereço padrão do provedor. Útil para apontar o Ollama para outra máquina."
 				}
 			}
 		},

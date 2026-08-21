@@ -7,11 +7,12 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { chunkFile, ICodeChunk } from './chunker.js';
 import { EmbeddingServer } from './embeddingServer.js';
+import { IEmbeddingProvider } from './embeddingProvider.js';
+import { LocalEmbeddingProvider } from './localEmbeddingProvider.js';
+import { chooseEmbeddingProvider, createEmbeddingProvider, describeSelection, hasChosenProvider, IProviderDependencies, PROVIDER_SETTINGS } from './providerSelection.js';
 import { IChunkMeta, ISearchHit, VectorStore } from './vectorStore.js';
 import { evaluateFit } from '../localModels/catalog.js';
 import { detectHardware } from '../localModels/hardware.js';
-import { ModelStore } from '../localModels/modelStore.js';
-import { ServerManager } from '../localModels/serverManager.js';
 import { log, showLog as revealLog } from '../logger.js';
 
 const DEFAULT_INCLUDE = '**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,py,go,rs,java,cs,rb,php,c,h,cc,cpp,hpp,swift,kt,scala,sh,sql,vue,svelte,md}';
@@ -53,7 +54,8 @@ export interface IIndexStats {
 	readonly ready: boolean;
 	/** The index is usable but still being filled in. */
 	readonly indexing: boolean;
-	readonly modelId: string;
+	/** Human-readable description of where the vectors come from. */
+	readonly provider: string;
 	readonly dims: number | undefined;
 	readonly chunks: number;
 	readonly files: number;
@@ -71,7 +73,7 @@ export interface IIndexStats {
  */
 export class SemanticIndexService {
 
-	private readonly embeddings: EmbeddingServer;
+	private embeddings: IEmbeddingProvider;
 	private store: VectorStore | undefined;
 	private readyPromise: Promise<boolean> | undefined;
 	private watcher: vscode.FileSystemWatcher | undefined;
@@ -83,14 +85,25 @@ export class SemanticIndexService {
 	private reportedUnavailable = false;
 	/** True while the first pass over the workspace is still running. */
 	private indexing = false;
+	/** What the settings said when the current provider was built. */
+	private selection: string;
+	private readonly configListener: vscode.Disposable;
 
 	constructor(
 		private readonly storageUri: vscode.Uri | undefined,
 		private readonly globalState: vscode.Memento,
-		private readonly modelStore: ModelStore,
-		private readonly serverManager: ServerManager,
+		private readonly deps: IProviderDependencies,
 	) {
-		this.embeddings = new EmbeddingServer(modelStore, serverManager, globalState);
+		this.embeddings = createEmbeddingProvider(deps);
+		this.selection = describeSelection();
+		// The picker is not the only way in: someone editing settings.json by hand
+		// must get the same rebuild, or the index would keep serving vectors from
+		// a provider that is no longer selected.
+		this.configListener = vscode.workspace.onDidChangeConfiguration(event => {
+			if (PROVIDER_SETTINGS.some(setting => event.affectsConfiguration(setting)) && describeSelection() !== this.selection) {
+				void this.applyProviderChange();
+			}
+		});
 	}
 
 	private get indexDir(): string | undefined {
@@ -133,17 +146,19 @@ export class SemanticIndexService {
 	}
 
 	private async load(token: vscode.CancellationToken): Promise<boolean> {
-		if (!await this.embeddings.isProvisioned()) {
-			log('[semanticIndex] runtime or embedding model missing');
+		const status = await this.embeddings.status();
+		if (!status.ready) {
+			log(`[semanticIndex] ${status.label} is not usable: ${status.problem ?? 'unknown reason'}`);
 			return false;
 		}
-		const dims = await this.embeddings.dims();
+		const dims = await this.embeddings.dims(token);
 		const dir = this.indexDir;
 		if (!dims || !dir) {
+			log('[semanticIndex] could not determine the vector width');
 			return false;
 		}
-		const modelId = EmbeddingServer.configuredModelId();
-		this.store = await VectorStore.load(dir, modelId, dims) ?? new VectorStore(modelId, dims);
+		const key = this.embeddings.indexKey;
+		this.store = await VectorStore.load(dir, key, dims) ?? new VectorStore(key, dims);
 		this.installWatcher();
 		// Deliberately not awaited. A first pass over a large workspace runs for
 		// minutes, and holding every search until it finished would block the tool
@@ -157,48 +172,131 @@ export class SemanticIndexService {
 		return true;
 	}
 
+	/** Label of whatever is currently producing vectors. */
+	private get providerLabel(): string {
+		return this.embeddings.kind === 'local' ? 'O servidor de embeddings local' : 'O provedor de embeddings';
+	}
+
 	/**
-	 * Offers to install the runtime and the embedding model.
+	 * Proves vectors can actually be produced before a long run starts.
 	 *
-	 * Indexing is automatic once provisioned, but the first run would otherwise
-	 * pull a few hundred megabytes unannounced — so the download is the one
-	 * thing that always asks.
+	 * For the local provider that means the process comes up — weights the
+	 * runtime cannot load fail in milliseconds, and finding out once beats
+	 * finding out per file.
+	 */
+	private async canEmbed(token: vscode.CancellationToken): Promise<boolean> {
+		if (this.embeddings instanceof LocalEmbeddingProvider) {
+			return this.embeddings.ensureStarted(token);
+		}
+		return (await this.embeddings.status()).ready;
+	}
+
+	/**
+	 * Walks the user through choosing where embeddings come from.
+	 *
+	 * Asked once, on the first workspace that would be indexed, because the
+	 * answer decides whether a few hundred megabytes get downloaded or whether
+	 * chunks of the code get sent to a third party. Neither is a reasonable
+	 * default to assume — hence a question rather than a setting nobody finds.
 	 */
 	async promptForSetup(): Promise<void> {
 		if (this.disposed || !SemanticIndexService.isEnabled() || !this.indexDir) {
 			return;
 		}
-		if (this.globalState.get<boolean>(DISMISSED_SETUP_KEY, false) || await this.embeddings.isProvisioned()) {
+		if (this.globalState.get<boolean>(DISMISSED_SETUP_KEY, false)) {
+			return;
+		}
+		if ((await this.embeddings.status()).ready) {
+			return;
+		}
+
+		if (!hasChosenProvider()) {
+			const choose = 'Escolher';
+			const never = 'Não perguntar mais';
+			const answer = await vscode.window.showInformationMessage(
+				'A busca semântica indexa este projeto para que o agente encontre código por significado. Escolha se os embeddings são calculados na sua máquina ou por um provedor.',
+				choose,
+				'Agora não',
+				never,
+			);
+			if (answer === never) {
+				await this.globalState.update(DISMISSED_SETUP_KEY, true);
+				return;
+			}
+			if (answer !== choose) {
+				return;
+			}
+			if (!await chooseEmbeddingProvider(this.deps.storage)) {
+				return;
+			}
+			await this.applyProviderChange();
+			return;
+		}
+
+		// A provider is chosen but unusable. Local means the weights are missing,
+		// which we can offer to fix; anything else needs the user's own action.
+		if (!(this.embeddings instanceof LocalEmbeddingProvider)) {
+			const status = await this.embeddings.status();
+			const change = 'Trocar provedor';
+			const answer = await vscode.window.showWarningMessage(
+				`Busca semântica indisponível: ${status.problem ?? status.label}`,
+				change,
+			);
+			if (answer === change) {
+				await this.changeProvider();
+			}
 			return;
 		}
 		const entry = EmbeddingServer.configuredCatalogEntry();
 		if (!entry) {
 			return;
 		}
-		const setUp = 'Configurar';
-		const never = 'Não perguntar mais';
+		const setUp = 'Baixar';
+		const change = 'Trocar provedor';
 		const choice = await vscode.window.showInformationMessage(
-			`A busca semântica precisa baixar o modelo de embeddings ${entry.name} (~${entry.sizeMB} MB) para indexar este projeto. Tudo roda localmente.`,
+			`A busca semântica local precisa baixar o modelo ${entry.name} (~${entry.sizeMB} MB). Tudo roda na sua máquina.`,
 			setUp,
+			change,
 			'Agora não',
-			never,
 		);
-		if (choice === never) {
-			await this.globalState.update(DISMISSED_SETUP_KEY, true);
+		if (choice === change) {
+			await this.changeProvider();
 			return;
 		}
 		if (choice !== setUp) {
 			return;
 		}
-		const installed = await this.provision();
-		if (installed) {
-			this.readyPromise = undefined;
-			const source = new vscode.CancellationTokenSource();
-			try {
-				await this.ensureReady(source.token);
-			} finally {
-				source.dispose();
-			}
+		if (await this.provision()) {
+			await this.applyProviderChange();
+		}
+	}
+
+	/**
+	 * Re-asks where embeddings come from, and rebuilds when the answer changes.
+	 *
+	 * Vectors from two providers are not comparable, so the old index is worth
+	 * nothing the moment the provider changes.
+	 */
+	async changeProvider(): Promise<void> {
+		if (!await chooseEmbeddingProvider(this.deps.storage)) {
+			return;
+		}
+		await this.applyProviderChange();
+	}
+
+	/** Rebuilds the provider from settings and starts the index over. */
+	private async applyProviderChange(): Promise<void> {
+		const previous = this.embeddings;
+		this.embeddings = createEmbeddingProvider(this.deps);
+		this.selection = describeSelection();
+		previous.dispose();
+		log(`[semanticIndex] embeddings now come from ${this.embeddings.indexKey}`);
+		this.reportedUnavailable = false;
+		const source = new vscode.CancellationTokenSource();
+		try {
+			await this.rebuild(source.token);
+		} finally {
+			source.dispose();
 		}
 	}
 
@@ -213,13 +311,13 @@ export class SemanticIndexService {
 			cancellable: true,
 		}, async (progress, token) => {
 			try {
-				if (!await this.serverManager.findBinary()) {
-					await this.serverManager.installBinary(message => progress.report({ message }), token);
+				if (!await this.deps.serverManager.findBinary()) {
+					await this.deps.serverManager.installBinary((message: string) => progress.report({ message }), token);
 				}
 				const profile = await detectHardware();
 				const fit = evaluateFit(entry, profile);
 				progress.report({ message: `Baixando ${entry.name}…` });
-				await this.modelStore.download(entry, fit.gpuLayers, ({ receivedBytes, totalBytes }) => {
+				await this.deps.modelStore.download(entry, fit.gpuLayers, ({ receivedBytes, totalBytes }: { receivedBytes: number; totalBytes: number }) => {
 					const mb = (receivedBytes / 1048576).toFixed(0);
 					const totalMb = (totalBytes / 1048576).toFixed(0);
 					progress.report({ message: `Baixando ${entry.name} — ${mb} / ${totalMb} MB` });
@@ -278,7 +376,7 @@ export class SemanticIndexService {
 		// Prove the server comes up before walking thousands of files. Weights
 		// llama.cpp cannot load fail in milliseconds, and finding that out once
 		// beats finding it out per file.
-		if (!await this.embeddings.ensureStarted(token)) {
+		if (!await this.canEmbed(token)) {
 			this.reportUnavailable();
 			return;
 		}
@@ -327,7 +425,7 @@ export class SemanticIndexService {
 		this.reportedUnavailable = true;
 		const showLog = 'Ver o log';
 		void vscode.window.showErrorMessage(
-			`Não foi possível iniciar o servidor de embeddings com o modelo ${EmbeddingServer.configuredModelId()}. A busca semântica ficará indisponível nesta sessão.`,
+			`${this.providerLabel} não conseguiu gerar embeddings. A busca semântica ficará indisponível nesta sessão.`,
 			showLog,
 		).then(choice => {
 			if (choice === showLog) {
@@ -401,15 +499,15 @@ export class SemanticIndexService {
 		return rerank(candidates, limit);
 	}
 
-	async stats(): Promise<IIndexStats> {
+	async stats(token: vscode.CancellationToken): Promise<IIndexStats> {
 		const dir = this.indexDir;
 		return {
 			enabled: SemanticIndexService.isEnabled(),
-			provisioned: await this.embeddings.isProvisioned(),
+			provisioned: (await this.embeddings.status()).ready,
 			ready: !!this.store,
 			indexing: this.indexing,
-			modelId: EmbeddingServer.configuredModelId(),
-			dims: await this.embeddings.dims(),
+			provider: (await this.embeddings.status()).label,
+			dims: await this.embeddings.dims(token),
 			chunks: this.store?.size ?? 0,
 			files: this.store?.fileCount ?? 0,
 			bytesOnDisk: dir ? await VectorStore.sizeOnDisk(dir) : 0,
@@ -427,7 +525,9 @@ export class SemanticIndexService {
 			this.store = undefined;
 			this.readyPromise = undefined;
 			this.reportedUnavailable = false;
-			this.embeddings.resetStartFailure();
+			if (this.embeddings instanceof LocalEmbeddingProvider) {
+				this.embeddings.resetStartFailure();
+			}
 		});
 		await this.ensureReady(token);
 	}
@@ -498,6 +598,7 @@ export class SemanticIndexService {
 			clearTimeout(this.debounce);
 			this.debounce = undefined;
 		}
+		this.configListener.dispose();
 		this.watcher?.dispose();
 		this.watcher = undefined;
 		this.embeddings.dispose();

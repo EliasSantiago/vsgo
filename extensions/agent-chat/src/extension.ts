@@ -64,7 +64,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	// Semantic index over the workspace. Scoped to `storageUri` so each workspace
 	// keeps its own vectors, and inert until the embedding model is installed.
-	const semanticIndex = new SemanticIndexService(context.storageUri, context.globalState, modelStore, serverManager);
+	const semanticIndex = new SemanticIndexService(context.storageUri, context.globalState, { modelStore, serverManager, storage, memento: context.globalState });
 
 	const mcpServers = new McpServers();
 
