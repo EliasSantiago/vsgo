@@ -37,8 +37,12 @@ export function hygiene(some: NodeJS.ReadWriteStream | string[] | undefined, run
 	const productJson = es.through(function (file: VinylFile) {
 		const product = JSON.parse(file.contents!.toString('utf8'));
 
-		if (product.extensionsGallery) {
-			console.error(`product.json: Contains 'extensionsGallery'`);
+		// This fork ships its own gallery (Open VSX) in product.json on purpose.
+		// The check exists to keep Microsoft's proprietary marketplace out of an
+		// OSS build, so only that one is refused.
+		const galleryServiceUrl: string = product.extensionsGallery?.serviceUrl ?? '';
+		if (/marketplace\.visualstudio\.com|vscode-marketplace/i.test(galleryServiceUrl)) {
+			console.error(`product.json: Contains Microsoft's 'extensionsGallery'`);
 			errorCount++;
 		}
 
