@@ -663,7 +663,15 @@ export class ModelPickerWidget extends Disposable {
 
 		this._renderLabel();
 
-		this._registerButtonAction(this._nameButton, () => this.show());
+		this._registerButtonAction(this._nameButton, () => {
+			// With no provider set up there is no model list worth opening, so the
+			// button leads to provider configuration instead.
+			if (this._hasNoModels()) {
+				this._commandService.executeCommand('workbench.action.chat.manageAIProviders');
+			} else {
+				this.show();
+			}
+		});
 		this._registerButtonAction(this._effortButton, () => this._showEffortPicker());
 		this._registerButtonAction(this._tokensButton, () => this._cycleTokens());
 	}
@@ -804,6 +812,11 @@ export class ModelPickerWidget extends Disposable {
 		}
 	}
 
+	/** No model selected and none to select: the provider still has to be set up. */
+	private _hasNoModels(): boolean {
+		return !this._selectedModel && this._languageModelsService.getLanguageModelIds().length === 0;
+	}
+
 	private _renderLabel(): void {
 		if (!this._domNode || !this._nameButton) {
 			return;
@@ -816,8 +829,20 @@ export class ModelPickerWidget extends Disposable {
 		if (statusIcon) {
 			nameChildren.push(renderIcon(statusIcon));
 		}
-		const modelLabel = name ?? localize('chat.modelPicker.auto', "Auto");
-		nameChildren.push(dom.$('span.chat-input-picker-label', undefined, modelLabel));
+		const noModels = this._hasNoModels();
+		const modelLabel = noModels
+			? localize('chat.modelPicker.configureProvider', "Configurar provedor de modelo")
+			: name ?? localize('chat.modelPicker.auto', "Auto");
+
+		if (noModels) {
+			nameChildren.push(renderIcon(Codicon.gear));
+			this._nameButton.ariaLabel = modelLabel;
+			this._nameButton.title = modelLabel;
+		} else {
+			nameChildren.push(dom.$('span.chat-input-picker-label', undefined, modelLabel));
+			this._nameButton.ariaLabel = null;
+			this._nameButton.title = '';
+		}
 		if (this._badgeIcon) {
 			nameChildren.push(this._badgeIcon);
 		}
@@ -853,7 +878,9 @@ export class ModelPickerWidget extends Disposable {
 		}
 
 		// Aria
-		this._domNode.ariaLabel = localize('chat.modelPicker.ariaLabel', "Pick Model, {0}", modelLabel);
+		this._domNode.ariaLabel = noModels
+			? modelLabel
+			: localize('chat.modelPicker.ariaLabel', "Pick Model, {0}", modelLabel);
 	}
 
 	private _getConfigProperty(group: string) {
