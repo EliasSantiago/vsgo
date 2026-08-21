@@ -51,6 +51,7 @@ import { ChatAgentLocation, ChatConfiguration, ChatModeKind } from '../../../com
 import { AgentSessionsControl } from '../../agentSessions/agentSessionsControl.js';
 import { ACTION_ID_NEW_CHAT } from '../../actions/chatActions.js';
 import { ChatSessionTabsControl } from './chatSessionTabs.js';
+import { ChatUpdateBanner } from './chatUpdateBanner.js';
 import { ChatWidget } from '../../widget/chatWidget.js';
 import { ChatViewWelcomeController, IViewWelcomeDelegate } from '../../viewsWelcome/chatViewWelcomeController.js';
 import { IChatViewsWelcomeDescriptor } from '../../viewsWelcome/chatViewsWelcome.js';
@@ -319,6 +320,9 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 
 	private createControls(parent: HTMLElement): void {
 
+		// Update Banner (announces a new version right where people are working)
+		this.createUpdateBanner(parent);
+
 		// Sessions Tabs (horizontal tab strip with a trailing "New Chat" button)
 		this.createSessionTabsControl(parent);
 
@@ -353,11 +357,19 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 	private sessionsControlContainer: HTMLElement | undefined;
 	private sessionsControl: AgentSessionsControl | undefined;
 	private sessionTabsControl: ChatSessionTabsControl | undefined;
+	private updateBanner: ChatUpdateBanner | undefined;
 
 	// When true, the chat area shows the session history list (grouped by date) instead of the conversation
 	private historyVisible = false;
 
 	get agentSessionsControl(): AgentSessionsControl | undefined { return this.sessionsControl; }
+
+	private createUpdateBanner(parent: HTMLElement): void {
+		this.updateBanner = this._register(this.instantiationService.createInstance(ChatUpdateBanner, parent));
+
+		// The banner collapses to zero height when there is nothing to announce
+		this._register(this.updateBanner.onDidChangeHeight(() => this.relayout()));
+	}
 
 	private createSessionTabsControl(parent: HTMLElement): void {
 		this.sessionTabsControl = this._register(this.instantiationService.createInstance(ChatSessionTabsControl, parent, {
@@ -951,6 +963,9 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 
 		let remainingHeight = height;
 		const remainingWidth = width;
+
+		// Update Banner
+		remainingHeight -= this.updateBanner?.height ?? 0;
 
 		// Session Tabs Control
 		const sessionTabsHeight = this.sessionTabsControl?.height ?? 0;

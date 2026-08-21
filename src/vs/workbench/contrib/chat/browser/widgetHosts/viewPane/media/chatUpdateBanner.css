@@ -1,0 +1,71 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.chat-viewpane .chat-update-banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	box-sizing: border-box;
+	height: 40px;
+	padding: 0 8px 0 10px;
+	overflow: hidden;
+	background-color: var(--vscode-banner-background);
+	color: var(--vscode-banner-foreground);
+	border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.chat-viewpane .chat-update-banner.empty {
+	display: none;
+}
+
+.chat-viewpane .chat-update-banner .chat-update-banner-icon {
+	flex: 0 0 auto;
+	color: var(--vscode-banner-iconForeground);
+}
+
+.chat-viewpane .chat-update-banner .chat-update-banner-icon.spinning {
+	animation: chat-update-banner-spin 1.5s linear infinite;
+}
+
+@keyframes chat-update-banner-spin {
+	100% {
+		transform: rotate(360deg);
+	}
+}
+
+.chat-viewpane .chat-update-banner .chat-update-banner-message {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.chat-viewpane .chat-update-banner .monaco-button.chat-update-banner-action {
+	flex: 0 0 auto;
+	width: auto;
+	padding: 2px 10px;
+	line-height: 18px;
+}
+
+.chat-viewpane .chat-update-banner .chat-update-banner-dismiss {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.chat-viewpane .chat-update-banner .chat-update-banner-dismiss:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.chat-viewpane .chat-update-banner .chat-update-banner-dismiss:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
