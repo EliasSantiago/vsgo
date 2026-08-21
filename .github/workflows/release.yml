@@ -41,11 +41,11 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           lfs: true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -74,7 +74,7 @@ jobs:
       - name: Build (.deb + .tar.gz)
         run: bash scripts/build-linux.sh $BUILD_FLAG
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vsgo-linux-x64
           path: dist/*
@@ -82,14 +82,19 @@ jobs:
 
   windows:
     name: Windows x64
-    runs-on: windows-latest
+    # Pinado de propósito: o windows-latest migrou para Windows 2025 com Visual
+    # Studio 2026, e o node-gyp 11.2.0 (o que o npm 10 embute e o que o repo
+    # empacota em build/npm/gyp) não reconhece essa versão — o npm ci falha com
+    # "Could not find any Visual Studio installation to use". O 2022 tem o VS que
+    # ele entende. Ao trocar, confira antes se o node-gyp já suporta o VS da imagem.
+    runs-on: windows-2022
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           lfs: true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -105,6 +110,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "npm ci falhou" }
         env:
           npm_config_arch: x64
+          npm_config_msvs_version: 2022
           VSCODE_ARCH: x64
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -118,7 +124,7 @@ jobs:
         shell: bash
         run: bash scripts/build-win.sh $BUILD_FLAG --all
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vsgo-win32-x64
           path: dist/*
@@ -129,18 +135,18 @@ jobs:
     # Os dois builds rodam em Apple Silicon: o SDK do Xcode cross-compila x86_64
     # sem problema (ao contrário de Linux→macOS). Se algum módulo nativo passar a
     # dar erro no alvo x64, mova este job para um runner Intel.
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
         arch: [arm64, x64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           lfs: true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -163,7 +169,7 @@ jobs:
       - name: Build (.dmg + .zip)
         run: bash scripts/build-mac.sh --arch ${{ matrix.arch }} $BUILD_FLAG
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vsgo-darwin-${{ matrix.arch }}
           path: dist/*
@@ -174,14 +180,14 @@ jobs:
     needs: [linux, windows, macos]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
 
       - name: Baixar artefatos dos três sistemas
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: staging
           merge-multiple: true
@@ -190,7 +196,7 @@ jobs:
         run: bash scripts/make-manifest.sh "$GITHUB_WORKSPACE/staging"
 
       - name: Pasta pronta para o servidor de download
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vsgo-download
           path: staging/*
