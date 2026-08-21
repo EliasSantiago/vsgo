@@ -93,6 +93,8 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!scripts/dev.sh',
 	'!scripts/watch-dev.sh',
 	'!scripts/build-win.sh',
+	'!scripts/build-mac.sh',
+	'!scripts/make-manifest.sh',
 	'!scripts/release.sh',
 ]);
 

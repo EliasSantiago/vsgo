@@ -1,0 +1,203 @@
+# Gera os instaladores do vsgo para Windows, macOS e Linux.
+#
+# Cada sistema é compilado em um runner do seu próprio SO: os módulos nativos
+# (node-pty, spdlog, sqlite3, native-keymap, @parcel/watcher) são binários
+# específicos de plataforma e não podem ser cross-compilados. Buildar tudo em
+# uma máquina só produz pacotes que instalam mas quebram terminal, log, storage
+# e file watcher.
+#
+# Disparo:
+#   - automático ao enviar uma tag "v*"  (bash scripts/release.sh --tag)
+#   - manual pela aba Actions → Release → Run workflow
+#
+# Os artefatos saem como artifact do workflow e, quando disparado por tag,
+# também ficam anexados à release do GitHub.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      minified:
+        description: 'Build de produção (minificado)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  # workflow_dispatch manda string; push de tag não manda nada (default: produção).
+  BUILD_FLAG: ${{ (github.event_name == 'push' || inputs.minified) && '--min' || '' }}
+
+jobs:
+  linux:
+    name: Linux x64
+    # 22.04 de propósito: o glibc do runner vira o piso de compatibilidade do
+    # pacote. Runner mais novo = exige distro mais nova no usuário final.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependências do sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbfile-dev libkrb5-dev libsecret-1-dev \
+            fakeroot dpkg-dev
+
+      - name: npm ci
+        run: |
+          for i in 1 2 3; do npm ci && break; echo "npm ci falhou ($i), tentando de novo..."; done
+        env:
+          npm_config_arch: x64
+          VSCODE_ARCH: x64
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Baixar extensões embutidas
+        run: node build/lib/builtInExtensions.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (.deb + .tar.gz)
+        run: bash scripts/build-linux.sh $BUILD_FLAG
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsgo-linux-x64
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: npm ci
+        shell: pwsh
+        run: |
+          for ($i = 1; $i -le 3; $i++) {
+            npm ci
+            if ($LASTEXITCODE -eq 0) { break }
+            Write-Host "npm ci falhou ($i), tentando de novo..."
+          }
+          if ($LASTEXITCODE -ne 0) { throw "npm ci falhou" }
+        env:
+          npm_config_arch: x64
+          VSCODE_ARCH: x64
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Baixar extensões embutidas
+        run: node build/lib/builtInExtensions.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (instaladores .exe)
+        shell: bash
+        run: bash scripts/build-win.sh $BUILD_FLAG --all
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsgo-win32-x64
+          path: dist/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    # Os dois builds rodam em Apple Silicon: o SDK do Xcode cross-compila x86_64
+    # sem problema (ao contrário de Linux→macOS). Se algum módulo nativo passar a
+    # dar erro no alvo x64, mova este job para um runner Intel.
+    runs-on: macos-14
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: npm ci
+        run: |
+          python3 -m pip install --break-system-packages setuptools || true
+          for i in 1 2 3; do npm ci && break; echo "npm ci falhou ($i), tentando de novo..."; done
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          VSCODE_ARCH: ${{ matrix.arch }}
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Baixar extensões embutidas
+        run: node build/lib/builtInExtensions.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (.dmg + .zip)
+        run: bash scripts/build-mac.sh --arch ${{ matrix.arch }} $BUILD_FLAG
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsgo-darwin-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publicar
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Baixar artefatos dos três sistemas
+        uses: actions/download-artifact@v4
+        with:
+          path: staging
+          merge-multiple: true
+
+      - name: Gerar checksums, manifesto e página de download
+        run: bash scripts/make-manifest.sh "$GITHUB_WORKSPACE/staging"
+
+      - name: Pasta pronta para o servidor de download
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsgo-download
+          path: staging/*
+          if-no-files-found: error
+
+      - name: Anexar à release do GitHub
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: gh release create "${GITHUB_REF_NAME}" staging/* --title "vsgo ${GITHUB_REF_NAME#v}" --notes-file staging/COMO-INSTALAR.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
