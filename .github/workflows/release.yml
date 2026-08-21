@@ -202,8 +202,22 @@ jobs:
           path: staging/*
           if-no-files-found: error
 
-      - name: Anexar à release do GitHub
+      # Só os instaladores vão para a release: quem chega ali quer baixar e usar.
+      # O manifest.json, o index.html e o SHA256SUMS.txt servem ao servidor de
+      # download próprio e continuam completos no artifact vsgo-download. O
+      # COMO-INSTALAR.md vira o texto da release, não um anexo. O hash de cada
+      # arquivo o próprio GitHub já mostra na página.
+      - name: Anexar os instaladores à release do GitHub
         if: startsWith(github.ref, 'refs/tags/v')
-        run: gh release create "${GITHUB_REF_NAME}" staging/* --title "vsgo ${GITHUB_REF_NAME#v}" --notes-file staging/COMO-INSTALAR.md
+        run: |
+          shopt -s nullglob
+          assets=(staging/*.exe staging/*.dmg staging/*.zip staging/*.deb staging/*.tar.gz)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "Nenhum instalador encontrado em staging/" >&2
+            exit 1
+          fi
+          gh release create "${GITHUB_REF_NAME}" "${assets[@]}" \
+            --title "vsgo ${GITHUB_REF_NAME#v}" \
+            --notes-file staging/COMO-INSTALAR.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
