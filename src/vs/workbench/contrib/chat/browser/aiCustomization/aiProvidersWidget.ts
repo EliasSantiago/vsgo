@@ -11,6 +11,8 @@ import { Disposable, DisposableStore } from '../../../../../base/common/lifecycl
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { localize } from '../../../../../nls.js';
+import { IExtensionService } from '../../../../services/extensions/common/extensions.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
@@ -56,6 +58,8 @@ export class AIProvidersWidget extends Disposable {
 		@IDialogService private readonly dialogService: IDialogService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IExtensionService private readonly extensionService: IExtensionService,
+		@INotificationService private readonly notificationService: INotificationService,
 	) {
 		super();
 		this.element = $('.ai-providers-widget');
@@ -222,11 +226,37 @@ export class AIProvidersWidget extends Disposable {
 	 * served — a third-party provider may declare `manageModelsCommand` without
 	 * implementing the local models protocol the panel speaks.
 	 */
+	/**
+	 * Whether the local models backend is reachable.
+	 *
+	 * `_vsgo.localModels.state` is registered at runtime by the provider extension
+	 * rather than declared in its manifest, so calling it cannot activate that
+	 * extension. On a window that has just opened the first probe therefore fails
+	 * even though the backend is about to exist — wait for startup activation and
+	 * ask again before giving up.
+	 */
+	private async hasLocalModelsBackend(): Promise<boolean> {
+		const probe = () => this.commandService.executeCommand('_vsgo.localModels.state').then(() => true, () => false);
+		if (await probe()) {
+			return true;
+		}
+
+		await this.extensionService.activateByEvent('onStartupFinished');
+		return probe();
+	}
+
 	private async showLocalModels(vendor: ILanguageModelProviderDescriptor, fallbackCommand: string): Promise<void> {
 		if (!this.localModelsWidget) {
-			const known = await this.commandService.executeCommand('_vsgo.localModels.state').then(() => true, () => false);
+			const known = await this.hasLocalModelsBackend();
 			if (!known) {
-				void this.commandService.executeCommand(fallbackCommand);
+				// Providers that manage models through their own UI handle this
+				// themselves. If that call fails too, say so — silently reopening
+				// the editor the user is already looking at reads as a dead button.
+				try {
+					await this.commandService.executeCommand(fallbackCommand);
+				} catch {
+					this.notificationService.info(localize('localModelsUnavailable', "O gerenciamento de modelos locais não está disponível no momento."));
+				}
 				return;
 			}
 			this.localModelsWidget = this._register(this.instantiationService.createInstance(LocalModelsWidget));

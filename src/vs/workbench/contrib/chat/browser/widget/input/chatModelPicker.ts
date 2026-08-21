@@ -8,6 +8,7 @@ import { StandardKeyboardEvent } from '../../../../../../base/browser/keyboardEv
 import { renderIcon } from '../../../../../../base/browser/ui/iconLabel/iconLabels.js';
 import { IStringDictionary } from '../../../../../../base/common/collections.js';
 import { Codicon } from '../../../../../../base/common/codicons.js';
+import { AICustomizationManagementCommands, AICustomizationManagementSection } from '../../aiCustomization/aiCustomizationManagement.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { MarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { KeyCode } from '../../../../../../base/common/keyCodes.js';
@@ -667,7 +668,7 @@ export class ModelPickerWidget extends Disposable {
 			// With no provider set up there is no model list worth opening, so the
 			// button leads to provider configuration instead.
 			if (this._hasNoModels()) {
-				this._commandService.executeCommand('workbench.action.chat.manageAIProviders');
+				this._commandService.executeCommand(AICustomizationManagementCommands.OpenEditor, AICustomizationManagementSection.AIProviders);
 			} else {
 				this.show();
 			}
@@ -831,11 +832,13 @@ export class ModelPickerWidget extends Disposable {
 		}
 		const noModels = this._hasNoModels();
 		const modelLabel = noModels
-			? localize('chat.modelPicker.configureProvider', "Configurar provedor de modelo")
+			? localize('chat.modelPicker.configureProvider', "Configurar Modelo LLM")
 			: name ?? localize('chat.modelPicker.auto', "Auto");
 
 		if (noModels) {
-			nameChildren.push(renderIcon(Codicon.gear));
+			// A labelled button, not an icon: on first run this is the one thing the
+			// user has to do, and a bare gear does not say what it leads to.
+			nameChildren.push(dom.$('span.chat-input-picker-label', undefined, modelLabel));
 			this._nameButton.ariaLabel = modelLabel;
 			this._nameButton.title = modelLabel;
 		} else {
