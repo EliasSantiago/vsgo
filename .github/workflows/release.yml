@@ -216,8 +216,16 @@ jobs:
             echo "Nenhum instalador encontrado em staging/" >&2
             exit 1
           fi
-          gh release create "${GITHUB_REF_NAME}" "${assets[@]}" \
-            --title "vsgo ${GITHUB_REF_NAME#v}" \
-            --notes-file staging/COMO-INSTALAR.md
+          # A release pode já existir: criá-la pela interface do GitHub é uma das
+          # formas de criar a tag que dispara este workflow. Nesse caso os
+          # instaladores entram na release que já está lá, em vez de o build
+          # inteiro falhar no último passo.
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${assets[@]}" \
+              --title "vsgo ${GITHUB_REF_NAME#v}" \
+              --notes-file staging/COMO-INSTALAR.md
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
