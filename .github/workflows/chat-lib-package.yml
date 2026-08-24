@@ -19,7 +19,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # macos-latest saiu por custo (minuto de runner macOS = 10x o do Linux);
+        # devolva-o à lista para voltar a testar no macOS.
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout

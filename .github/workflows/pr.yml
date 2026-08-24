@@ -133,26 +133,30 @@ jobs:
       job_name: Remote
       remote_tests: true
 
-  macos-electron-tests:
-    name: macOS
-    uses: ./.github/workflows/pr-darwin-test.yml
-    with:
-      job_name: Electron
-      electron_tests: true
-
-  macos-browser-tests:
-    name: macOS
-    uses: ./.github/workflows/pr-darwin-test.yml
-    with:
-      job_name: Browser
-      browser_tests: true
-
-  macos-remote-tests:
-    name: macOS
-    uses: ./.github/workflows/pr-darwin-test.yml
-    with:
-      job_name: Remote
-      remote_tests: true
+#   ── macOS: DESATIVADO por custo. Os três jobs rodam em macos-14-xlarge (o
+#   runner mais caro do GitHub Actions) a cada pull request. Para reativar,
+#   descomente o bloco inteiro.
+#
+#   macos-electron-tests:
+#     name: macOS
+#     uses: ./.github/workflows/pr-darwin-test.yml
+#     with:
+#       job_name: Electron
+#       electron_tests: true
+#
+#   macos-browser-tests:
+#     name: macOS
+#     uses: ./.github/workflows/pr-darwin-test.yml
+#     with:
+#       job_name: Browser
+#       browser_tests: true
+#
+#   macos-remote-tests:
+#     name: macOS
+#     uses: ./.github/workflows/pr-darwin-test.yml
+#     with:
+#       job_name: Remote
+#       remote_tests: true
 
   windows-electron-tests:
     name: Windows

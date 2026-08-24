@@ -1,10 +1,15 @@
-# Gera os instaladores do vsgo para Windows, macOS e Linux.
+# Gera os instaladores do vsgo para Windows e Linux.
 #
 # Cada sistema é compilado em um runner do seu próprio SO: os módulos nativos
 # (node-pty, spdlog, sqlite3, native-keymap, @parcel/watcher) são binários
 # específicos de plataforma e não podem ser cross-compilados. Buildar tudo em
 # uma máquina só produz pacotes que instalam mas quebram terminal, log, storage
 # e file watcher.
+#
+# O job de macOS está comentado por CUSTO: minuto de runner macOS é cobrado a
+# 10x o do Linux (e o build roda em matriz arm64 + x64, dobrando a conta). Para
+# voltar a publicar .dmg/.zip, descomente o job "macos" abaixo e coloque macos
+# de volta em "needs" do job publish.
 #
 # Disparo:
 #   - automático ao enviar uma tag "v*"  (bash scripts/release.sh --tag)
@@ -130,54 +135,58 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  macos:
-    name: macOS ${{ matrix.arch }}
-    # Os dois builds rodam em Apple Silicon: o SDK do Xcode cross-compila x86_64
-    # sem problema (ao contrário de Linux→macOS). Se algum módulo nativo passar a
-    # dar erro no alvo x64, mova este job para um runner Intel.
-    runs-on: macos-15
-    timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [arm64, x64]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          lfs: true
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: npm ci
-        run: |
-          python3 -m pip install --break-system-packages setuptools || true
-          for i in 1 2 3; do npm ci && break; echo "npm ci falhou ($i), tentando de novo..."; done
-        env:
-          npm_config_arch: ${{ matrix.arch }}
-          VSCODE_ARCH: ${{ matrix.arch }}
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Baixar extensões embutidas
-        run: node build/lib/builtInExtensions.ts
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build (.dmg + .zip)
-        run: bash scripts/build-mac.sh --arch ${{ matrix.arch }} $BUILD_FLAG
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: vsgo-darwin-${{ matrix.arch }}
-          path: dist/*
-          if-no-files-found: error
+#   ── macOS: DESATIVADO por custo (runner macOS = 10x o preço/minuto do Linux).
+#   Para reativar: descomente o bloco inteiro e volte a incluir "macos" no
+#   needs do job publish.
+#
+#   macos:
+#     name: macOS ${{ matrix.arch }}
+#     # Os dois builds rodam em Apple Silicon: o SDK do Xcode cross-compila x86_64
+#     # sem problema (ao contrário de Linux→macOS). Se algum módulo nativo passar a
+#     # dar erro no alvo x64, mova este job para um runner Intel.
+#     runs-on: macos-15
+#     timeout-minutes: 180
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         arch: [arm64, x64]
+#     steps:
+#       - uses: actions/checkout@v6
+#         with:
+#           lfs: true
+#
+#       - uses: actions/setup-node@v6
+#         with:
+#           node-version-file: .nvmrc
+#           cache: npm
+#
+#       - name: npm ci
+#         run: |
+#           python3 -m pip install --break-system-packages setuptools || true
+#           for i in 1 2 3; do npm ci && break; echo "npm ci falhou ($i), tentando de novo..."; done
+#         env:
+#           npm_config_arch: ${{ matrix.arch }}
+#           VSCODE_ARCH: ${{ matrix.arch }}
+#           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#
+#       - name: Baixar extensões embutidas
+#         run: node build/lib/builtInExtensions.ts
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#
+#       - name: Build (.dmg + .zip)
+#         run: bash scripts/build-mac.sh --arch ${{ matrix.arch }} $BUILD_FLAG
+#
+#       - uses: actions/upload-artifact@v7
+#         with:
+#           name: vsgo-darwin-${{ matrix.arch }}
+#           path: dist/*
+#           if-no-files-found: error
 
   publish:
     name: Publicar
-    needs: [linux, windows, macos]
+    needs: [linux, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -186,7 +195,7 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Baixar artefatos dos três sistemas
+      - name: Baixar artefatos dos sistemas buildados
         uses: actions/download-artifact@v7
         with:
           path: staging

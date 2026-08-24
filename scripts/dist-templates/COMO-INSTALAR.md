@@ -18,6 +18,10 @@ usuários** do computador e pede senha de administrador. Use-o só se precisar d
 Para atualizar, baixe a versão mais nova e execute o instalador por cima — ele
 reconhece a instalação anterior e atualiza.
 
+<!-- macOS: build desativado no CI por custo de runner (10x o Linux).
+     Ao reativar o job "macos" em .github/workflows/release.yml, descomente
+     esta seção.
+
 ## macOS
 
 1. Baixe o `.dmg` da sua arquitetura:
@@ -33,6 +37,7 @@ Se o macOS bloquear mesmo assim, rode no Terminal:
 ```
 xattr -dr com.apple.quarantine /Applications/vsgo.app
 ```
+-->
 
 ## Linux (Ubuntu/Debian)
 

@@ -7,10 +7,14 @@
 #
 # Cada instalador precisa ser compilado NO SEU PRÓPRIO sistema operacional: os
 # módulos nativos (terminal, log, storage, file watcher) não cruzam de um SO
-# para outro. Por isso, o caminho normal para gerar Windows + macOS + Linux de
-# uma vez é o GitHub Actions:
+# para outro. Por isso, o caminho normal para gerar Windows + Linux de uma vez
+# é o GitHub Actions:
 #
 #   bash scripts/release.sh --tag        # sobe a versão, cria a tag e dispara o CI
+#
+# O build de macOS está desativado no CI (o job está comentado em
+# .github/workflows/release.yml) porque o minuto de runner macOS custa 10x o do
+# Linux. Para gerar um .dmg hoje, rode 'bash scripts/release.sh mac' num Mac.
 #
 # Uso local (só o SO desta máquina):
 #   bash scripts/release.sh                    # sobe patch, build de produção
@@ -76,7 +80,7 @@ VERSION="$(node -p "require('./package.json').version")"
 echo "==> vsgo release — versão $VERSION"
 echo ""
 
-# ─── Modo CI: dispara o workflow que builda os três sistemas ──────────────────
+# ─── Modo CI: dispara o workflow que builda Windows e Linux ───────────────────
 if [[ "$DO_TAG" -eq 1 ]]; then
 	if git rev-parse "v$VERSION" >/dev/null 2>&1; then
 		echo "ERRO: a tag v$VERSION já existe. Suba a versão ou apague a tag antiga."
@@ -109,8 +113,9 @@ if [[ "$DO_TAG" -eq 1 ]]; then
 	echo "✅ Tag enviada. O workflow de release começou a rodar."
 	echo "   Acompanhe em: https://github.com/EliasSantiago/vsgo/actions"
 	echo ""
-	echo "   Ao terminar, os instaladores de Windows, macOS e Linux ficam"
-	echo "   anexados à release v$VERSION e também como artifact do workflow."
+	echo "   Ao terminar, os instaladores de Windows e Linux ficam anexados"
+	echo "   à release v$VERSION e também como artifact do workflow."
+	echo "   (o build de macOS está desativado no CI por custo de runner)"
 	exit 0
 fi
 
@@ -153,6 +158,6 @@ echo ""
 
 echo "✅ Release $VERSION concluído para: $TARGET"
 echo ""
-echo "   Este build cobre só o SO desta máquina. Para gerar Windows + macOS +"
-echo "   Linux de uma vez, com os módulos nativos corretos de cada um:"
+echo "   Este build cobre só o SO desta máquina. Para gerar Windows + Linux"
+echo "   de uma vez, com os módulos nativos corretos de cada um:"
 echo "     bash scripts/release.sh --no-bump --tag"
