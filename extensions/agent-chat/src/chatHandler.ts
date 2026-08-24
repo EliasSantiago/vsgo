@@ -314,6 +314,12 @@ export async function handleChatRequest(
 	};
 	// Bounded so a server that keeps rejecting cannot spin the turn forever.
 	let overflowRetries = 0;
+	// Consecutive turns in which the model generated nothing at all. Reset by
+	// any turn that produces text or a tool call.
+	let emptyTurns = 0;
+	// The previous turn's calls, to recognise a model that keeps re-issuing them.
+	let lastTurnSignature: string | undefined;
+	let repeatedTurns = 0;
 
 	for (let turn = 0; turn < profile.maxTurns; turn++) {
 		if (token.isCancellationRequested) {
@@ -381,13 +387,34 @@ export async function handleChatRequest(
 		}
 
 		if (toolCalls.length === 0) {
-			// Closing answer: keep it in the transcript so a follow-up sees what was said.
-			if (assistantText) {
-				messages.push(vscode.LanguageModelChatMessage.Assistant(assistantText));
+			// A turn with no call and no text is not an answer: the model generated
+			// nothing at all. Small local models do this after a tool result they
+			// cannot make progress from, and treating it as the closing answer ends
+			// the request reporting success while the user is left with a reply that
+			// simply stops mid-task. Nudge and let it try again, bounded, and say so
+			// out loud when it keeps coming back empty.
+			// The other way a turn carries no answer: the model started writing a
+			// call and never finished it, so recovery found nothing and what is
+			// left is the wreckage of the attempt. Accepting it as the closing
+			// answer ends the task on a block of broken JSON.
+			const brokenCall = profile.parseTextToolCalls && looksLikeUnfinishedToolCall(assistantText, offeredTools);
+			if (!assistantText.trim() || brokenCall) {
+				if (emptyTurns < MAX_EMPTY_TURNS) {
+					emptyTurns++;
+					log(`unusable turn ${emptyTurns}/${MAX_EMPTY_TURNS} (${brokenCall ? 'broken tool call' : 'empty'}): nudging the model to continue`);
+					messages.push(vscode.LanguageModelChatMessage.User(brokenCall ? BROKEN_CALL_NUDGE : EMPTY_TURN_NUDGE));
+					continue;
+				}
+				stream.markdown('\n\n_O modelo encerrou o turno sem gerar uma resposta utilizável e a tarefa ficou pela metade. Isso é comum em modelos locais pequenos: reenvie a mensagem, ou escolha um modelo maior._');
+				return finishRequest(brokenCall ? 'chamada malformada' : 'resposta vazia', stats, messages);
 			}
+			emptyTurns = 0;
+			// Closing answer: keep it in the transcript so a follow-up sees what was said.
+			messages.push(vscode.LanguageModelChatMessage.Assistant(assistantText));
 			return finishRequest('concluído', stats, messages);
 		}
 
+		emptyTurns = 0;
 		stats.toolCalls += toolCalls.length;
 
 		const assistantParts: Array<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart> = [];
@@ -398,6 +425,24 @@ export async function handleChatRequest(
 			assistantParts.push(new vscode.LanguageModelToolCallPart(tc.callId, tc.name, tc.input));
 		}
 		messages.push(vscode.LanguageModelChatMessage.Assistant(assistantParts));
+
+		// A model that answers with exactly the calls it just made is stuck. The
+		// result was the same last turn and would be the same again, so running it
+		// once more only spends a turn — and for a command that writes, it repeats
+		// the side effect. Answer the calls instead of running them, saying what
+		// has to change. The signature covers the whole turn, so a call that comes
+		// back after any other step in between is a legitimate retry and still
+		// runs.
+		const signature = toolCalls.map(tc => `${tc.name}:${JSON.stringify(tc.input)}`).join('|');
+		repeatedTurns = signature === lastTurnSignature ? repeatedTurns + 1 : 0;
+		lastTurnSignature = signature;
+		if (repeatedTurns >= MAX_REPEATED_TURNS) {
+			log(`same tool call for ${repeatedTurns + 1} turns in a row; answering it instead of running it again`);
+			messages.push(vscode.LanguageModelChatMessage.User(toolCalls.map(tc =>
+				new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(REPEATED_CALL_NUDGE)]),
+			)));
+			continue;
+		}
 
 		const resultParts: vscode.LanguageModelToolResultPart[] = [];
 
@@ -627,6 +672,54 @@ const FRAMING_RESERVE = 0.9;
 
 /** Attempts allowed at correcting the estimate before the error reaches the user. */
 const MAX_OVERFLOW_RETRIES = 2;
+
+/**
+ * Empty turns tolerated in a row before the request is given up on.
+ *
+ * Two, because the first one is usually recoverable — the model lost the thread
+ * for a turn and picks it back up when told to — while a model that answers
+ * nothing twice in a row is stuck, and every further attempt costs another full
+ * generation on CPU inference.
+ */
+const MAX_EMPTY_TURNS = 2;
+
+/**
+ * Turns of identical calls tolerated before they stop being run.
+ *
+ * Two, so the same call still runs once more after its first result — a retry
+ * that is genuinely worth making happens on the second attempt, never on the
+ * third with nothing changed in between.
+ */
+const MAX_REPEATED_TURNS = 2;
+
+/** Sent back in place of a tool call the model has been repeating unchanged. */
+const REPEATED_CALL_NUDGE = 'You have made this exact call, with these exact arguments, on the last turns in a row, and it was not run again because the result cannot have changed. Do something different: take the next step of the task with a different tool or different arguments, or write the final answer for the user.';
+
+/**
+ * Whether `text` is a tool call the model failed to finish.
+ *
+ * Only asked once recovery has already come up empty, so a well-formed call
+ * never lands here — what this catches is the truncated one, most often a
+ * `agent_write_file` whose file content ran on until the model stopped
+ * mid-string. The test is deliberately narrow: an opening tool tag, or text
+ * that opens with a JSON object naming a tool that was actually offered.
+ */
+function looksLikeUnfinishedToolCall(text: string, tools: readonly vscode.LanguageModelChatTool[]): boolean {
+	const trimmed = text.trimStart();
+	if (trimmed.includes('<tool_call>')) {
+		return true;
+	}
+	if (!trimmed.startsWith('{') || !trimmed.includes('"name"')) {
+		return false;
+	}
+	return tools.some(tool => trimmed.includes(`"${tool.name}"`));
+}
+
+/** Sent back when the model wrote a tool call it never finished. */
+const BROKEN_CALL_NUDGE = 'Your last turn was a tool call that never finished — it was cut off before the JSON closed, so nothing ran. Make the call again, and keep it small: write one file at a time, and never paste a whole file into the chat.';
+
+/** Sent back when the model returns a turn with neither text nor a tool call. */
+const EMPTY_TURN_NUDGE = 'Your last turn was empty — you generated nothing. Do not stop here. Look at the tool results above, then either call the next tool or write the final answer for the user.';
 
 /**
  * Drops the oldest turns until the conversation fits the model's input budget.

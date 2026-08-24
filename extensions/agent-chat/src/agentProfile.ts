@@ -290,16 +290,26 @@ export function extractTextToolCalls(
 	// Unfenced call: the model narrates a plan and drops the bare object into the
 	// middle of it. Brace matching finds it wherever it sits, and `knownTools`
 	// keeps prose that merely looks like JSON from becoming a call. Only the
-	// first is taken — a narrated plan often lists several steps, and running
-	// them blind is exactly what the one-call-per-turn rule exists to prevent.
+	// first is run — a narrated plan often lists several steps, and running them
+	// blind is exactly what the one-call-per-turn rule exists to prevent.
+	//
+	// The ones that are not run are still stripped. Left in the text they would
+	// be shown to the user, kept in the transcript, and read back by the model on
+	// the next turn as an example of what to write — which is how a small model
+	// ends up re-emitting the same block of calls every turn, advancing one step
+	// at a time while paying to generate the whole list again.
 	if (calls.length === 0) {
+		let taken = false;
 		for (const candidate of jsonObjectsIn(remaining)) {
 			const call = toToolCall(candidate, knownTools);
-			if (call) {
-				calls.push(call);
-				remaining = remaining.replace(candidate, '');
-				break;
+			if (!call) {
+				continue;
 			}
+			if (!taken) {
+				calls.push(call);
+				taken = true;
+			}
+			remaining = remaining.replace(candidate, '');
 		}
 	}
 
