@@ -68,6 +68,21 @@
 
 /* Global Styles */
 
+/* Native scrollbars (any `overflow: auto` container that is not backed by a
+DomScrollableElement) take their colors from the used color-scheme. Chromium
+defaults to `light`, so on a dark theme those scrollbars render as a white bar.
+Tying the color-scheme to the theme type makes them follow it — and native form
+controls (select, checkbox, range) match the theme too. */
+.monaco-workbench.vs-dark,
+.monaco-workbench.hc-black {
+	color-scheme: dark;
+}
+
+.monaco-workbench.vs,
+.monaco-workbench.hc-light {
+	color-scheme: light;
+}
+
 body {
 	height: 100%;
 	width: 100%;

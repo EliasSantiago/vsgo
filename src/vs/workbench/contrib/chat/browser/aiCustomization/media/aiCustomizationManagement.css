@@ -11,6 +11,19 @@
 	overflow: hidden;
 }
 
+/* The panes in this editor scroll natively (they are not backed by a
+DomScrollableElement), so the platform draws their scrollbars. `color-scheme` in
+the workbench styles already keeps those from rendering white on a dark theme;
+this makes them look like the sliders used everywhere else in the UI. The
+properties inherit, so they reach every scroller inside the editor. */
+.ai-customization-management-editor,
+.ai-customization-list-widget,
+.mcp-list-widget,
+.ai-usage-widget {
+	scrollbar-width: thin;
+	scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
+}
+
 /* Sidebar */
 .ai-customization-management-editor .management-sidebar {
 	background-color: var(--vscode-sideBar-background);
