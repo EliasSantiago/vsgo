@@ -8,14 +8,13 @@
 # Cada instalador precisa ser compilado NO SEU PRÓPRIO sistema operacional: os
 # módulos nativos (terminal, log, storage, file watcher) não cruzam de um SO
 # para outro. O caminho normal para publicar uma versão é o GitHub Actions, que
-# hoje gera SÓ o Linux:
+# gera os pacotes de Linux e Windows:
 #
 #   bash scripts/release.sh --tag        # sobe a versão, cria a tag e dispara o CI
 #
-# Os builds de Windows e de macOS estão desativados no CI (os jobs estão
-# comentados em .github/workflows/release.yml) por custo de runner: o minuto do
-# runner Windows custa 2x o do Linux e o do macOS, 10x. Para gerar esses
-# pacotes hoje, rode 'bash scripts/release.sh win' num Windows ou
+# O build de macOS está desativado no CI (o job está comentado em
+# .github/workflows/release.yml) por custo de runner: o minuto do runner macOS
+# custa 10x o do Linux. Para gerar esse pacote hoje, rode
 # 'bash scripts/release.sh mac' num Mac.
 #
 # Uso local (só o SO desta máquina):
@@ -82,7 +81,7 @@ VERSION="$(node -p "require('./package.json').version")"
 echo "==> vsgo release — versão $VERSION"
 echo ""
 
-# ─── Modo CI: dispara o workflow que builda o Linux ───────────────────────────
+# ─── Modo CI: dispara o workflow que builda Windows e Linux ───────────────────
 if [[ "$DO_TAG" -eq 1 ]]; then
 	if git rev-parse "v$VERSION" >/dev/null 2>&1; then
 		echo "ERRO: a tag v$VERSION já existe. Suba a versão ou apague a tag antiga."
@@ -115,16 +114,16 @@ if [[ "$DO_TAG" -eq 1 ]]; then
 	echo "✅ Tag enviada. O workflow de release começou a rodar."
 	echo "   Acompanhe em: https://github.com/EliasSantiago/vsgo/actions"
 	echo ""
-	echo "   Ao terminar, os pacotes de Linux (.deb + .tar.gz) ficam anexados"
-	echo "   à release v$VERSION e também como artifact do workflow."
-	echo "   (os builds de Windows e macOS estão desativados no CI por custo)"
+	echo "   Ao terminar, os pacotes de Windows e Linux (.exe, .deb, .tar.gz)"
+	echo "   ficam anexados à release v$VERSION e também como artifact do workflow."
+	echo "   (o build de macOS está desativado no CI por custo)"
 	exit 0
 fi
 
 # ─── Build local ──────────────────────────────────────────────────────────────
 if [[ -z "$TARGET" ]]; then
 	echo "ERRO: não sei buildar para este sistema ($(uname -s))."
-	echo "Use 'bash scripts/release.sh --tag' para gerar o pacote Linux pelo GitHub Actions."
+	echo "Use 'bash scripts/release.sh --tag' para gerar os pacotes pelo GitHub Actions."
 	exit 1
 fi
 
@@ -161,5 +160,5 @@ echo ""
 echo "✅ Release $VERSION concluído para: $TARGET"
 echo ""
 echo "   Este build cobre só o SO desta máquina. Para publicar a versão pelo"
-echo "   CI (hoje, só Linux):"
+echo "   CI (Windows e Linux):"
 echo "     bash scripts/release.sh --no-bump --tag"

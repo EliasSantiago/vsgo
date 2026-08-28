@@ -2,10 +2,6 @@
 
 Baixe o arquivo do seu sistema operacional e siga o passo a passo.
 
-<!-- Windows: build desativado no CI por custo de runner (2x o Linux).
-     Ao reativar o job "windows" em .github/workflows/release.yml, descomente
-     esta seção.
-
 ## Windows
 
 1. Baixe `vsgoUserSetup-x64-<versão>.exe`.
@@ -21,7 +17,6 @@ usuários** do computador e pede senha de administrador. Use-o só se precisar d
 
 Para atualizar, baixe a versão mais nova e execute o instalador por cima — ele
 reconhece a instalação anterior e atualiza.
--->
 
 <!-- macOS: build desativado no CI por custo de runner (10x o Linux).
      Ao reativar o job "macos" em .github/workflows/release.yml, descomente

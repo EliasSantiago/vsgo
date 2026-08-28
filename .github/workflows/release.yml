@@ -6,11 +6,10 @@
 # uma máquina só produz pacotes que instalam mas quebram terminal, log, storage
 # e file watcher.
 #
-# Os jobs de Windows e de macOS estão comentados por CUSTO de runner: o minuto
-# de runner Windows custa 2x o do Linux e o de macOS 10x (e o macOS ainda roda
-# em matriz arm64 + x64, dobrando a conta). Hoje só o Linux é publicado. Para
-# voltar a gerar .exe ou .dmg/.zip, descomente o job "windows" ou "macos"
-# abaixo e coloque-o de volta em "needs" do job publish.
+# Os jobs de macOS estão comentados por CUSTO de runner: o minuto
+# de runner macOS custa 10x o de Linux (e ainda roda em matriz arm64 + x64).
+# Hoje Linux e Windows são publicados. Para voltar a gerar .dmg/.zip,
+# descomente o job "macos" abaixo e coloque-o de volta em "needs" do job publish.
 #
 # Disparo:
 #   - automático ao enviar uma tag "v*"  (bash scripts/release.sh --tag)
@@ -86,60 +85,55 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-#   ── Windows: DESATIVADO por custo (runner Windows = 2x o preço/minuto do
-#   Linux). A distribuição do vsgo passou a ser só Linux. Para reativar:
-#   descomente o bloco inteiro e volte a incluir "windows" no needs do job
-#   publish.
-#
-#   windows:
-#     name: Windows x64
-#     # Pinado de propósito: o windows-latest migrou para Windows 2025 com Visual
-#     # Studio 2026, e o node-gyp 11.2.0 (o que o npm 10 embute e o que o repo
-#     # empacota em build/npm/gyp) não reconhece essa versão — o npm ci falha com
-#     # "Could not find any Visual Studio installation to use". O 2022 tem o VS que
-#     # ele entende. Ao trocar, confira antes se o node-gyp já suporta o VS da imagem.
-#     runs-on: windows-2022
-#     timeout-minutes: 180
-#     steps:
-#       - uses: actions/checkout@v6
-#         with:
-#           lfs: true
-#
-#       - uses: actions/setup-node@v6
-#         with:
-#           node-version-file: .nvmrc
-#           cache: npm
-#
-#       - name: npm ci
-#         shell: pwsh
-#         run: |
-#           for ($i = 1; $i -le 3; $i++) {
-#             npm ci
-#             if ($LASTEXITCODE -eq 0) { break }
-#             Write-Host "npm ci falhou ($i), tentando de novo..."
-#           }
-#           if ($LASTEXITCODE -ne 0) { throw "npm ci falhou" }
-#         env:
-#           npm_config_arch: x64
-#           npm_config_msvs_version: 2022
-#           VSCODE_ARCH: x64
-#           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#
-#       - name: Baixar extensões embutidas
-#         run: node build/lib/builtInExtensions.ts
-#         env:
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#
-#       - name: Build (instaladores .exe)
-#         shell: bash
-#         run: bash scripts/build-win.sh $BUILD_FLAG --all
-#
-#       - uses: actions/upload-artifact@v7
-#         with:
-#           name: vsgo-win32-x64
-#           path: dist/*
-#           if-no-files-found: error
+  windows:
+    name: Windows x64
+    # Pinado de propósito: o windows-latest migrou para Windows 2025 com Visual
+    # Studio 2026, e o node-gyp 11.2.0 (o que o npm 10 embute e o que o repo
+    # empacota em build/npm/gyp) não reconhece essa versão — o npm ci falha com
+    # "Could not find any Visual Studio installation to use". O 2022 tem o VS que
+    # ele entende. Ao trocar, confira antes se o node-gyp já suporta o VS da imagem.
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: npm ci
+        shell: pwsh
+        run: |
+          for ($i = 1; $i -le 3; $i++) {
+            npm ci
+            if ($LASTEXITCODE -eq 0) { break }
+            Write-Host "npm ci falhou ($i), tentando de novo..."
+          }
+          if ($LASTEXITCODE -ne 0) { throw "npm ci falhou" }
+        env:
+          npm_config_arch: x64
+          npm_config_msvs_version: 2022
+          VSCODE_ARCH: x64
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Baixar extensões embutidas
+        run: node build/lib/builtInExtensions.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (instaladores .exe)
+        shell: bash
+        run: bash scripts/build-win.sh $BUILD_FLAG --all
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vsgo-win32-x64
+          path: dist/*
+          if-no-files-found: error
 
 #   ── macOS: DESATIVADO por custo (runner macOS = 10x o preço/minuto do Linux).
 #   Para reativar: descomente o bloco inteiro e volte a incluir "macos" no
@@ -192,7 +186,7 @@ jobs:
 
   publish:
     name: Publicar
-    needs: [linux]
+    needs: [linux, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
