@@ -2,6 +2,8 @@
 
 Baixe o arquivo do seu sistema operacional e siga o passo a passo.
 
+Documentação, política de privacidade e termos de uso: <https://vsgo.orkestrai.com.br>
+
 ## Windows
 
 1. Baixe `vsgoUserSetup-x64-<versão>.exe`.
