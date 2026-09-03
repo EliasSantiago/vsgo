@@ -5,9 +5,10 @@
 
 import * as vscode from 'vscode';
 
-export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'local' | 'mistral' | 'groq' | 'deepseek' | 'xai';
+export type ProviderId = 'vsgo' | 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'local' | 'mistral' | 'groq' | 'deepseek' | 'xai';
 
 export const PROVIDER_LABELS: Record<ProviderId, string> = {
+	vsgo: 'Conta vsgo',
 	anthropic: 'Anthropic',
 	openai: 'OpenAI',
 	gemini: 'Google Gemini',
@@ -20,6 +21,7 @@ export const PROVIDER_LABELS: Record<ProviderId, string> = {
 };
 
 export const PROVIDER_KEY_HINTS: Record<ProviderId, string> = {
+	vsgo: 'tsk_... (chave da sua conta vsgo)',
 	anthropic: 'sk-ant-...',
 	openai: 'sk-...',
 	gemini: 'AIza...',
@@ -54,7 +56,7 @@ export class ByokStorage {
 	}
 
 	async list(): Promise<ProviderId[]> {
-		const all: ProviderId[] = ['anthropic', 'openai', 'gemini', 'ollama', 'local', 'mistral', 'groq', 'deepseek', 'xai'];
+		const all: ProviderId[] = ['vsgo', 'anthropic', 'openai', 'gemini', 'ollama', 'local', 'mistral', 'groq', 'deepseek', 'xai'];
 		const found: ProviderId[] = [];
 		for (const p of all) {
 			const value = await this.get(p);

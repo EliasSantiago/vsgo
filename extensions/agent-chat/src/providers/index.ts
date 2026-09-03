@@ -14,10 +14,14 @@ import { MistralProvider } from './mistral.js';
 import { GroqProvider } from './groq.js';
 import { DeepSeekProvider } from './deepseek.js';
 import { XAIProvider } from './xai.js';
+import { VsgoProvider } from './vsgo.js';
 
 export function registerAllProviders(storage: ByokStorage, local: LocalProvider): vscode.Disposable {
 	const subs: vscode.Disposable[] = [];
 	subs.push(vscode.lm.registerLanguageModelChatProvider('local', local));
+	// A conta vsgo primeiro: é o caminho de quem não quer administrar chave de
+	// provedor, e a ordem aqui é a ordem em que a paleta oferece.
+	subs.push(vscode.lm.registerLanguageModelChatProvider('vsgo', new VsgoProvider('vsgo', storage)));
 	subs.push(vscode.lm.registerLanguageModelChatProvider('anthropic', new AnthropicProvider('anthropic', storage)));
 	subs.push(vscode.lm.registerLanguageModelChatProvider('openai', new OpenAIProvider('openai', storage)));
 	subs.push(vscode.lm.registerLanguageModelChatProvider('gemini', new GeminiProvider('gemini', storage)));

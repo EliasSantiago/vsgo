@@ -49,6 +49,23 @@
 				"manageModelsCommand": "agent-chat.localModels.manage"
 			},
 			{
+				"vendor": "vsgo",
+				"displayName": "Conta vsgo",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "Chave da sua conta vsgo (tsk_...), emitida no painel",
+							"title": "Chave da conta"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
+			},
+			{
 				"vendor": "anthropic",
 				"displayName": "Anthropic",
 				"configuration": {
@@ -969,6 +986,11 @@
 					"type": "string",
 					"default": "",
 					"markdownDescription": "Endpoint compatível com OpenAI, terminando em `/v1`. Vazio usa o endereço padrão do provedor. Útil para apontar o Ollama para outra máquina."
+				},
+				"agentChat.vsgo.baseUrl": {
+					"type": "string",
+					"default": "https://vsgo.orkestrai.com.br",
+					"markdownDescription": "Endereço do gateway da conta vsgo. Troque para apontar a uma instância própria do Tensoria ou ao seu ambiente de desenvolvimento (`http://localhost:3000`)."
 				}
 			}
 		},
