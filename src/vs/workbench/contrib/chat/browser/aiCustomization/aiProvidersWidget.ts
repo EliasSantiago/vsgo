@@ -136,10 +136,31 @@ export class AIProvidersWidget extends Disposable {
 		const manageCommand = vendor.manageModelsCommand;
 		const selfManaged = !!manageCommand && !vendor.configuration;
 
+		// An account-backed provider — the vsgo account — has no credential to
+		// type either: signing in through the browser is what produces it. It
+		// declares `managementCommand` and no configuration schema, and the
+		// generic "Configurar" flow below would only prompt for a name and a key
+		// that do not exist for it.
+		const accountCommand = !vendor.configuration && !selfManaged ? vendor.managementCommand : undefined;
+
+		// Both credential-less kinds count models instead of configurations: it is
+		// the only signal they have that the provider is actually usable.
+		const modelCount = accountCommand || selfManaged
+			? this.languageModelsService.getLanguageModelGroups(vendor.vendor)
+				.reduce((total, group) => total + group.modelIdentifiers.length, 0)
+			: 0;
+
 		const subEl = DOM.append(details, $('.ai-provider-status'));
-		if (selfManaged) {
-			const modelCount = this.languageModelsService.getLanguageModelGroups(vendor.vendor)
-				.reduce((total, group) => total + group.modelIdentifiers.length, 0);
+		if (accountCommand) {
+			if (modelCount === 0) {
+				subEl.textContent = localize('accountNotConnected', "Nenhuma conta conectada");
+				subEl.classList.add('not-configured');
+			} else {
+				subEl.textContent = modelCount === 1
+					? localize('oneModelInAccount', "1 modelo na sua conta")
+					: localize('nModelsInAccount', "{0} modelos na sua conta", modelCount);
+			}
+		} else if (selfManaged) {
 			if (modelCount === 0) {
 				subEl.textContent = localize('noModelsDownloaded', "Nenhum modelo baixado");
 				subEl.classList.add('not-configured');
@@ -168,7 +189,18 @@ export class AIProvidersWidget extends Disposable {
 			}));
 		}
 
-		if (!selfManaged) {
+		if (accountCommand) {
+			const accountBtn = this.listDisposables.add(new Button(actions, { ...defaultButtonStyles, supportIcons: true }));
+			accountBtn.label = '$(account) ' + localize('manageAccount', "Gerenciar Conta");
+			this.listDisposables.add(this.hoverService.setupDelayedHover(accountBtn.element, () => ({ content: localize('manageAccountTooltip', "Entre na sua conta para usar os modelos que o seu plano libera"), appearance: { showPointer: true } }), { groupId: 'ai-providers' }));
+			this.listDisposables.add(accountBtn.onDidClick(async () => {
+				try {
+					await this.commandService.executeCommand(accountCommand, vendor.vendor);
+				} catch {
+					this.notificationService.info(localize('accountUnavailable', "O gerenciamento da conta não está disponível no momento."));
+				}
+			}));
+		} else if (!selfManaged) {
 			const primaryBtn = this.listDisposables.add(new Button(actions, { ...defaultButtonStyles, supportIcons: true, secondary: groups.length > 0 }));
 			primaryBtn.label = groups.length === 0
 				? '$(add) ' + localize('configureProvider', "Configurar")

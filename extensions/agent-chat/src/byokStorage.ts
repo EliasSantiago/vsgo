@@ -21,7 +21,7 @@ export const PROVIDER_LABELS: Record<ProviderId, string> = {
 };
 
 export const PROVIDER_KEY_HINTS: Record<ProviderId, string> = {
-	vsgo: 'tsk_... (chave da sua conta vsgo)',
+	vsgo: 'Entre pelo navegador — nenhuma chave para colar',
 	anthropic: 'sk-ant-...',
 	openai: 'sk-...',
 	gemini: 'AIza...',
@@ -55,8 +55,16 @@ export class ByokStorage {
 		this._onChange.fire(provider);
 	}
 
+	/**
+	 * Provedores com credencial guardada aqui.
+	 *
+	 * `vsgo` ficou de fora: a conta não é uma chave colada, é uma sessão aberta
+	 * pelo navegador e guardada por `account/vsgoAuth.ts`. Listá-la aqui
+	 * ofereceria "remover a chave da vsgo" para algo que se desfaz saindo da
+	 * conta.
+	 */
 	async list(): Promise<ProviderId[]> {
-		const all: ProviderId[] = ['vsgo', 'anthropic', 'openai', 'gemini', 'ollama', 'local', 'mistral', 'groq', 'deepseek', 'xai'];
+		const all: ProviderId[] = ['anthropic', 'openai', 'gemini', 'ollama', 'local', 'mistral', 'groq', 'deepseek', 'xai'];
 		const found: ProviderId[] = [];
 		for (const p of all) {
 			const value = await this.get(p);

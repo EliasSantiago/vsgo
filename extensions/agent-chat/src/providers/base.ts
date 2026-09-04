@@ -221,7 +221,12 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		return Math.ceil(value.length / 4);
 	}
 
-	private async resolveCredential(options: { readonly configuration?: { readonly [key: string]: any }; readonly modelConfiguration?: { readonly [key: string]: any } }): Promise<string | undefined> {
+	/**
+	 * Protected so a provider whose credential does not come from the BYOK vault
+	 * can answer for itself — the vsgo account resolves it from the signed-in
+	 * session instead.
+	 */
+	protected async resolveCredential(options: { readonly configuration?: { readonly [key: string]: any }; readonly modelConfiguration?: { readonly [key: string]: any } }): Promise<string | undefined> {
 		const fromOptions = readCredential(options.modelConfiguration, this.credentialKey)
 			?? readCredential(options.configuration, this.credentialKey);
 		if (fromOptions) {

@@ -21,6 +21,9 @@ import { WorktreeService } from './agentsWindow/worktreeService.js';
 import { BugBotProvider } from './bugBot/bugBotProvider.js';
 import { BugBotService } from './bugBot/bugBotService.js';
 import { LocalProvider } from './providers/local.js';
+import { VsgoProvider } from './providers/vsgo.js';
+import { registerVsgoAuth } from './account/vsgoAuth.js';
+import { registerAccountCommands } from './account/accountCommands.js';
 import { detectHardware } from './localModels/hardware.js';
 import { LocalModelsController, registerLocalModelsCommands } from './localModels/localModelsController.js';
 import { ModelStore } from './localModels/modelStore.js';
@@ -48,6 +51,14 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	const bugBotProvider = new BugBotProvider();
 	const bugBotService = new BugBotService(bugBotProvider);
+
+	// A conta vsgo: provedor de autenticação (menu de Contas, handler do
+	// `vsgo://` de retorno) e o provedor de modelos que se apoia nela.
+	const vsgoAuth = registerVsgoAuth(context.secrets);
+	const vsgoProvider = new VsgoProvider('vsgo', storage, vsgoAuth.provider);
+	// Entrar ou sair por qualquer caminho — este comando, o menu de Contas do
+	// editor, outra janela — muda a lista de modelos da conta.
+	const vsgoSessionListener = vsgoAuth.provider.onDidChangeSessions(() => vsgoProvider.refresh());
 
 	const modelStore = new ModelStore(context.globalStorageUri);
 	const serverManager = new ServerManager(context.globalStorageUri, modelStore, context.globalState);
@@ -86,6 +97,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	context.subscriptions.push(
 		participant,
+		vsgoAuth.disposable,
+		vsgoProvider,
+		vsgoSessionListener,
 		rulesLoader,
 		memoryService,
 		memoryTree,
@@ -104,7 +118,8 @@ export function activate(context: vscode.ExtensionContext): void {
 		{ dispose: () => clearInterval(diffRefreshTimer) },
 		registerLocalModelsCommands(localModelsController),
 		registerMcpCommands(mcpServers),
-		registerAllProviders(storage, localProvider),
+		registerAllProviders(storage, localProvider, vsgoProvider),
+		registerAccountCommands(vsgoAuth.provider, vsgoProvider),
 		registerCommands(storage, rulesLoader, memoryService, agentSessionsStore, agentSessionsService, bugBotProvider, serverManager),
 		semanticIndex,
 		registerTools(semanticIndex),

@@ -51,19 +51,7 @@
 			{
 				"vendor": "vsgo",
 				"displayName": "Conta vsgo",
-				"configuration": {
-					"properties": {
-						"apiKey": {
-							"type": "string",
-							"secret": true,
-							"description": "Chave da sua conta vsgo (tsk_...), emitida no painel",
-							"title": "Chave da conta"
-						}
-					},
-					"required": [
-						"apiKey"
-					]
-				}
+				"managementCommand": "agent-chat.vsgo.manageAccount"
 			},
 			{
 				"vendor": "anthropic",
@@ -702,6 +690,22 @@
 			}
 		],
 		"commands": [
+			{
+				"command": "agent-chat.vsgo.signIn",
+				"title": "vsgo: Entrar na conta"
+			},
+			{
+				"command": "agent-chat.vsgo.signOut",
+				"title": "vsgo: Sair da conta"
+			},
+			{
+				"command": "agent-chat.vsgo.manageAccount",
+				"title": "vsgo: Gerenciar a conta"
+			},
+			{
+				"command": "agent-chat.vsgo.openDashboard",
+				"title": "vsgo: Abrir o painel da conta"
+			},
 			{
 				"command": "agent-chat.mcp.manage",
 				"title": "Agent Chat: Servidores MCP",

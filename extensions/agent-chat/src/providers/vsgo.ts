@@ -6,22 +6,29 @@
 import * as vscode from 'vscode';
 import { ITokenLimits, ModelSpec, toAbort } from './base.js';
 import { OAICompatProvider } from './oai-compat.js';
+import { ByokStorage } from '../byokStorage.js';
+import { VsgoAuthProvider, vsgoBaseUrl } from '../account/vsgoAuth.js';
 import { log } from '../logger.js';
 
 /**
- * A conta vsgo: uma chave só, emitida por nós, que fala com todos os provedores.
+ * A conta vsgo: uma credencial só, emitida por nós, que fala com todos os
+ * provedores.
  *
  * É o contraponto ao BYOK dos outros nove provedores desta pasta. Ali a chave é
- * sua, a conta é sua e a fatura vem do provedor; aqui a chave é `tsk_…`, o
- * gateway resolve qual provedor atende cada modelo, e o consumo sai da cota do
- * plano. Os dois caminhos convivem: ter a conta não desativa a sua chave.
+ * sua, a conta é sua e a fatura vem do provedor; aqui quem autentica é a conta
+ * vsgo, o gateway resolve qual provedor atende cada modelo, e o consumo sai da
+ * cota do plano. Os dois caminhos convivem: ter a conta não desativa a sua
+ * chave.
+ *
+ * A credencial não é digitada: vem da sessão aberta em `account/vsgoAuth.ts`,
+ * pelo navegador. Pedir a chave `tsk_…` na mão era transferir para a pessoa um
+ * trabalho que o login resolve, e ainda deixava a chave passeando pela área de
+ * transferência.
  *
  * O gateway fala o formato da OpenAI, então quase tudo vem de graça de
- * `OAICompatProvider`. O que esta classe acrescenta é o endereço configurável e
- * o aproveitamento do catálogo, abaixo.
+ * `OAICompatProvider`. O que esta classe acrescenta é a sessão, o endereço
+ * configurável e o aproveitamento do catálogo, abaixo.
  */
-
-const DEFAULT_BASE_URL = 'https://vsgo.orkestrai.com.br';
 
 /** Resposta de `GET /v1/models` do gateway, com as extensões do Tensoria. */
 interface VsgoModelsResponse {
@@ -35,16 +42,71 @@ interface VsgoModelsResponse {
 
 export class VsgoProvider extends OAICompatProvider {
 
+	private readonly _onDidChange = new vscode.EventEmitter<void>();
+
+	/**
+	 * Entrar e sair mudam a lista inteira de modelos, e o workbench só
+	 * re-resolve um vendor quando a configuração dele muda — o que aqui nunca
+	 * acontece, porque a credencial não está na configuração.
+	 */
+	readonly onDidChangeLanguageModelChatInformation = this._onDidChange.event;
+
+	constructor(
+		providerId: 'vsgo',
+		storage: ByokStorage,
+		private readonly auth: VsgoAuthProvider,
+	) {
+		super(providerId, storage);
+	}
+
+	/** Pede ao workbench a lista de modelos de novo (login, logout, upgrade). */
+	refresh(): void {
+		this._onDidChange.fire();
+	}
+
+	dispose(): void {
+		this._onDidChange.dispose();
+	}
+
 	/**
 	 * Endereço do gateway. Configurável porque o mesmo binário aponta para
 	 * produção, para uma instância própria ou para o localhost de quem
 	 * desenvolve — e porque quem hospeda o próprio Tensoria precisa disto.
 	 */
 	private get baseUrl(): string {
-		const configured = vscode.workspace
-			.getConfiguration('agentChat.vsgo')
-			.get<string>('baseUrl');
-		return (configured || DEFAULT_BASE_URL).replace(/\/$/, '');
+		return vsgoBaseUrl();
+	}
+
+	/**
+	 * A credencial é a da conta conectada, nunca uma chave digitada.
+	 *
+	 * Sem sessão, devolver `undefined` faz a base responder com nenhum modelo —
+	 * que é a resposta certa para quem ainda não entrou, e o que leva o seletor
+	 * a mostrar a conta como não configurada em vez de oferecer modelos que
+	 * responderiam 401.
+	 */
+	protected override async resolveCredential(): Promise<string | undefined> {
+		return (await this.auth.currentSession())?.accessToken;
+	}
+
+	/**
+	 * Recusa cedo, com o nome do comando que resolve.
+	 *
+	 * A base lançaria "Missing credential for vsgo", verdadeiro e inútil: quem
+	 * lê está no meio de uma conversa e precisa saber que falta entrar na conta,
+	 * não que falta uma variável.
+	 */
+	override async provideLanguageModelChatResponse(
+		model: vscode.LanguageModelChatInformation,
+		messages: readonly vscode.LanguageModelChatRequestMessage[],
+		options: vscode.ProvideLanguageModelChatResponseOptions,
+		progress: vscode.Progress<vscode.LanguageModelResponsePart2>,
+		token: vscode.CancellationToken,
+	): Promise<void> {
+		if (!await this.auth.currentSession()) {
+			throw new Error('Entre na sua conta vsgo para usar estes modelos: comando "vsgo: Entrar na conta".');
+		}
+		return super.provideLanguageModelChatResponse(model, messages, options, progress, token);
 	}
 
 	protected override get chatEndpoint(): string {
@@ -92,6 +154,13 @@ export class VsgoProvider extends OAICompatProvider {
 				// Sem isto, chave recusada e gateway fora do ar ficam
 				// indistinguíveis: os dois somem numa lista de modelos vazia.
 				log(`[vsgo] ${this.modelsEndpoint} respondeu ${res.status}: ${(await res.text()).slice(0, 300)}`);
+				// 401 aqui significa credencial que o servidor não aceita mais
+				// (desconectada no painel, conta suspensa). Guardá-la só faria a
+				// lista continuar vazia sem dizer por quê; descartada, a próxima
+				// tentativa oferece entrar de novo.
+				if (res.status === 401) {
+					await this.auth.invalidate();
+				}
 				return undefined;
 			}
 			const data = await res.json() as VsgoModelsResponse;
