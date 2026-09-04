@@ -1,3 +1,12 @@
+# Suíte de testes do Code OSS em Linux (unit, integração e smoke), num runner
+# público do GitHub.
+#
+# Está SEM CHAMADOR desde que os workflows de PR herdados do upstream saíram:
+# eles pediam runners self-hosted da Microsoft (1ES.Pool) e ficavam presos em
+# "queued" para sempre neste fork. Este aqui foi o único que rodava em runner
+# público, então ficou de propósito — é a peça pronta para um CI de PR próprio,
+# bastando um workflow com `on: pull_request` que o chame.
+#
 on:
   workflow_call:
     inputs:
