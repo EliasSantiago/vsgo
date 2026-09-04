@@ -27,10 +27,10 @@ const fadeDuration = 200;
 const resetMessageDuration = 2000;
 const dismissDuration = 250;
 const fallbackChatAgentLinks = {
-	termsStatementUrl: 'https://aka.ms/github-copilot-terms-statement',
-	privacyStatementUrl: 'https://aka.ms/github-copilot-privacy-statement',
-	publicCodeMatchesUrl: 'https://aka.ms/github-copilot-match-public-code',
-	manageSettingsUrl: 'https://aka.ms/github-copilot-settings'
+	termsStatementUrl: 'https://vsgo.orkestrai.com.br/termos',
+	privacyStatementUrl: 'https://vsgo.orkestrai.com.br/privacidade',
+	publicCodeMatchesUrl: 'https://vsgo.orkestrai.com.br/docs/codigo-publico',
+	manageSettingsUrl: 'https://vsgo.orkestrai.com.br/docs/configuracoes'
 };
 
 /**
@@ -531,13 +531,13 @@ export class SessionsWalkthroughOverlay extends Disposable {
 		const publicCodeLink = this._appendDisclaimerLink(publicCodeMatchesUrl, localize('walkthrough.disclaimer.publicCode', "public code"));
 		const settingsLink = this._appendDisclaimerLink(manageSettingsUrl, localize('walkthrough.disclaimer.settings', "settings"));
 
-		append(disclaimer, document.createTextNode(localize('walkthrough.disclaimer.prefix', "By continuing, you agree to GitHub's ")));
+		append(disclaimer, document.createTextNode(localize('walkthrough.disclaimer.prefix', "By continuing, you agree to the ")));
 		disclaimer.appendChild(termsLink);
 		append(disclaimer, document.createTextNode(localize('walkthrough.disclaimer.middle', " and ")));
 		disclaimer.appendChild(privacyLink);
-		append(disclaimer, document.createTextNode(localize('walkthrough.disclaimer.suffix', ". GitHub Copilot may show ")));
+		append(disclaimer, document.createTextNode(localize('walkthrough.disclaimer.suffix', ". Prompts and code go straight from this machine to the AI provider you configure, under that provider's terms. Generated code may match ")));
 		disclaimer.appendChild(publicCodeLink);
-		append(disclaimer, document.createTextNode(localize('walkthrough.disclaimer.final', " suggestions and use your data to improve the product. You can change these ")));
+		append(disclaimer, document.createTextNode(localize('walkthrough.disclaimer.final', ", so review what you accept. You can change these ")));
 		disclaimer.appendChild(settingsLink);
 		append(disclaimer, document.createTextNode(localize('walkthrough.disclaimer.end', " anytime.")));
 

@@ -247,7 +247,12 @@ export class MainThreadMcp extends Disposable implements MainThreadMcpShape {
 		}
 
 		if (!providerId) {
-			const provider = await this._authenticationService.createDynamicAuthenticationProvider(authorizationServer, authDetails.authorizationServerMetadata, authDetails.resourceMetadata, authDetails.clientId);
+			// The flag has to travel in here too, not just into _getSessionForProvider
+			// below: creating the provider is itself capable of prompting, when the
+			// server's dynamic registration fails and the only way forward is asking
+			// for a client id. Guarding only the session step let that modal through
+			// on every background start.
+			const provider = await this._authenticationService.createDynamicAuthenticationProvider(authorizationServer, authDetails.authorizationServerMetadata, authDetails.resourceMetadata, authDetails.clientId, errorOnUserInteraction);
 			if (!provider) {
 				return undefined;
 			}

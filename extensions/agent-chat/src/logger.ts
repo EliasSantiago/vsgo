@@ -20,3 +20,8 @@ export function log(...parts: unknown[]): void {
 	const line = parts.map(p => typeof p === 'string' ? p : JSON.stringify(p)).join(' ');
 	channel.appendLine(`[${ts}] ${line}`);
 }
+
+/** Brings the Agent Chat output channel to the front. */
+export function showLog(): void {
+	channel?.show();
+}

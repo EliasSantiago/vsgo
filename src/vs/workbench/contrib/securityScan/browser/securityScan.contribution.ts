@@ -22,6 +22,7 @@ import { SecurityScanView } from './securityScanView.js';
 import {
 	ApplyFixCommand,
 	ClearFindingsAction,
+	EditScanInstructionsAction,
 	ExportReportAction,
 	IgnoreFindingCommand,
 	OpenLatestReportAction,
@@ -30,6 +31,7 @@ import {
 	RevealFindingCommand,
 	ScanActiveFileAction,
 	ScanWorkspaceAction,
+	SelectSecurityScanModelAction,
 	StopScanAction,
 	ToggleShowIgnoredAction,
 	UnignoreFindingCommand,
@@ -98,15 +100,31 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 			maximum: 16,
 			markdownDescription: localize('securityScan.concurrency', "How many files to scan in parallel."),
 		},
+		[`${SECURITY_SCAN_CONFIG_SECTION}.aiReview`]: {
+			type: 'boolean',
+			default: true,
+			markdownDescription: localize('securityScan.aiReview', "Depois das regras determinísticas, pede a um modelo que revise cada arquivo em busca do que um padrão de texto não enxerga. Desligue para um scan puramente local e instantâneo — as regras continuam rodando."),
+		},
+		[`${SECURITY_SCAN_CONFIG_SECTION}.aiReviewMaxFiles`]: {
+			type: 'number',
+			default: 100,
+			minimum: 0,
+			markdownDescription: localize('securityScan.aiReviewMaxFiles', "Teto de arquivos **novos ou alterados** enviados ao modelo em um scan. Arquivos já revisados e inalterados vêm do cache sem consumir o teto, e arquivos sem superfície de ataque nunca são enviados — então a cobertura cresce a cada scan até chegar ao projeto inteiro. As regras determinísticas rodam sempre em todos os arquivos. Use 0 para desligar só a revisão por IA."),
+		},
+		[`${SECURITY_SCAN_CONFIG_SECTION}.instructionsFile`]: {
+			type: 'string',
+			default: '.vsgo/security/instructions.md',
+			markdownDescription: localize('securityScan.instructionsFile', "Arquivo do projeto cujo conteúdo é anexado ao prompt da revisão por IA — para descrever o modelo de ameaças, apontar o que é dado confiável, ou silenciar um padrão que neste projeto é seguro. Caminho relativo à raiz da workspace. Use o comando \"Security Scan: Edit Scan Instructions\" para criar o arquivo já com um modelo."),
+		},
 		[`${SECURITY_SCAN_CONFIG_SECTION}.modelVendor`]: {
 			type: 'string',
 			default: '',
-			markdownDescription: localize('securityScan.modelVendor', "Preferred AI provider vendor (empty = any available)."),
+			markdownDescription: localize('securityScan.modelVendor', "Provedor de IA usado pelo scan. Vazio aceita qualquer um. Mais fácil de escolher pelo botão de modelo no título da view."),
 		},
 		[`${SECURITY_SCAN_CONFIG_SECTION}.modelId`]: {
 			type: 'string',
 			default: '',
-			markdownDescription: localize('securityScan.modelId', "Preferred model identifier (empty = first available for vendor)."),
+			markdownDescription: localize('securityScan.modelId', "Modelo usado pelo scan. Vazio significa o primeiro disponível — ou seja, o que o primeiro provedor a responder oferecer, que não é necessariamente o do chat."),
 		},
 		[`${SECURITY_SCAN_CONFIG_SECTION}.severityThreshold`]: {
 			type: 'string',
@@ -122,7 +140,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		[`${SECURITY_SCAN_CONFIG_SECTION}.persistReports`]: {
 			type: 'boolean',
 			default: true,
-			markdownDescription: localize('securityScan.persistReports', "Persist scan results to JSON reports inside the workspace storage area and restore them on startup."),
+			markdownDescription: localize('securityScan.persistReports', "Persist scan results as `latest.json` (internal) and `latest.sarif` (SARIF v2.1.0 interchange) inside `.vsgo/security/` in the workspace root, and restore them on startup."),
 		},
 		[`${SECURITY_SCAN_CONFIG_SECTION}.reportRetention`]: {
 			type: 'number',
@@ -138,6 +156,8 @@ registerAction2(ScanWorkspaceAction);
 registerAction2(ScanActiveFileAction);
 registerAction2(StopScanAction);
 registerAction2(ClearFindingsAction);
+registerAction2(SelectSecurityScanModelAction);
+registerAction2(EditScanInstructionsAction);
 registerAction2(ToggleShowIgnoredAction);
 registerAction2(OpenSecurityScanViewAction);
 registerAction2(ApplyFixCommand);
@@ -183,8 +203,8 @@ class SecurityScanStatusBar extends Disposable implements IWorkbenchContribution
 			return {
 				name: localize('securityScan.statusName', "Security Scan"),
 				text: progress.total > 0
-					? localize('securityScan.statusScanningCount', "$(sync~spin) Scanning {0}/{1}", progress.current, progress.total)
-					: localize('securityScan.statusScanning', "$(sync~spin) Scanning…"),
+					? '$(sync~spin) ' + localize('securityScan.statusScanningCount', "Scanning {0}/{1}", progress.current, progress.total)
+					: '$(sync~spin) ' + localize('securityScan.statusScanning', "Scanning…"),
 				ariaLabel: localize('securityScan.statusAria', "Security scan in progress"),
 				tooltip: localize('securityScan.statusScanningTooltip', "Security scan in progress. Click to open the Security view."),
 				command: 'securityScan.openView',
@@ -195,7 +215,7 @@ class SecurityScanStatusBar extends Disposable implements IWorkbenchContribution
 		if (findings.length === 0) {
 			return undefined;
 		}
-		const counts = { error: 0, warning: 0, info: 0 } as { error: number; warning: number; info: number };
+		const counts: Record<'error' | 'warning' | 'info', number> = { error: 0, warning: 0, info: 0 };
 		for (const f of findings) { counts[f.severity]++; }
 		const text = `$(shield) ${findings.length}`;
 		return {

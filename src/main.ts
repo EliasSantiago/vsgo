@@ -411,16 +411,20 @@ function createDefaultArgvConfigSync(argvConfigPath: string): void {
 
 		// Default argv content
 		const defaultArgvConfigContent = [
-			'// This configuration file allows you to pass permanent command line arguments to VS Code.',
-			'// Only a subset of arguments is currently supported to reduce the likelihood of breaking',
-			'// the installation.',
+			'// Este arquivo permite configurar argumentos permanentes de inicialização do vsgo.',
+			'// Apenas um subconjunto de argumentos é suportado.',
 			'//',
-			'// PLEASE DO NOT CHANGE WITHOUT UNDERSTANDING THE IMPACT',
+			'// ATENÇÃO: Alterar este arquivo requer reiniciar o vsgo.',
 			'//',
-			'// NOTE: Changing this file requires a restart of VS Code.',
+			'// Para trocar o idioma da interface: use o comando "Configurar Idioma de Exibição"',
+			'// (Ctrl+Shift+P → "Configure Display Language") ou edite o campo "locale" abaixo.',
 			'{',
-			'	// Use software rendering instead of hardware accelerated rendering.',
-			'	// This can help in cases where you see rendering issues in VS Code.',
+			'	// Idioma padrão da interface. Exemplos: "pt-br", "en", "es", "fr", "de".',
+			'	// Instale o pacote de idioma correspondente pela aba de Extensões antes de trocar.',
+			'	"locale": "pt-br",',
+			'',
+			'	// Use renderização por software em vez de aceleração de hardware.',
+			'	// Pode ajudar em casos de problemas visuais.',
 			'	// "disable-hardware-acceleration": true',
 			'}'
 		];

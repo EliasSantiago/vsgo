@@ -21,7 +21,8 @@
 		"chatParticipantAdditions",
 		"chatProvider",
 		"languageModelCapabilities",
-		"languageModelSystem"
+		"languageModelSystem",
+		"languageModelThinkingPart"
 	],
 	"contributes": {
 		"chatParticipants": [
@@ -42,6 +43,16 @@
 			}
 		],
 		"languageModelChatProviders": [
+			{
+				"vendor": "local",
+				"displayName": "Modelos Locais",
+				"manageModelsCommand": "agent-chat.localModels.manage"
+			},
+			{
+				"vendor": "vsgo",
+				"displayName": "Conta vsgo",
+				"managementCommand": "agent-chat.vsgo.manageAccount"
+			},
 			{
 				"vendor": "anthropic",
 				"displayName": "Anthropic",
@@ -109,13 +120,81 @@
 						"baseUrl"
 					]
 				}
+			},
+			{
+				"vendor": "mistral",
+				"displayName": "Mistral AI",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "API key from console.mistral.ai",
+							"title": "API Key"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
+			},
+			{
+				"vendor": "groq",
+				"displayName": "Groq",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "API key from console.groq.com",
+							"title": "API Key"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
+			},
+			{
+				"vendor": "deepseek",
+				"displayName": "DeepSeek",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "API key from platform.deepseek.com",
+							"title": "API Key"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
+			},
+			{
+				"vendor": "xai",
+				"displayName": "xAI (Grok)",
+				"configuration": {
+					"properties": {
+						"apiKey": {
+							"type": "string",
+							"secret": true,
+							"description": "API key from console.x.ai",
+							"title": "API Key"
+						}
+					},
+					"required": [
+						"apiKey"
+					]
+				}
 			}
 		],
 		"languageModelTools": [
 			{
 				"name": "agent_read_file",
 				"displayName": "Read File",
-				"modelDescription": "Read the contents of a file from the workspace. Use a path relative to the workspace root, or an absolute path.",
+				"modelDescription": "Read a file from the workspace. Returns the whole file by default. For a large file, pass `offset` (1-based first line) and `limit` (how many lines) to read it in parts — when the result is cut short it tells you the offset that continues it, so nothing is unreachable. The text comes back exactly as it is on disk, with no line numbers, so you can copy from it straight into agent_edit_file.",
 				"userDescription": "Read a workspace file",
 				"icon": "$(file)",
 				"tags": [
@@ -129,6 +208,42 @@
 						"path": {
 							"type": "string",
 							"description": "Path of the file to read"
+						},
+						"offset": {
+							"type": "number",
+							"description": "First line to read, 1-based. Defaults to 1."
+						},
+						"limit": {
+							"type": "number",
+							"description": "How many lines to read from `offset`. Defaults to the rest of the file."
+						}
+					},
+					"required": [
+						"path"
+					]
+				}
+			},
+			{
+				"name": "agent_open_file",
+				"displayName": "Open File",
+				"modelDescription": "Open a file in the user's editor so they can see it. Use it whenever the user asks to open, show or reveal a file — naming the file in your answer does not open it. Optionally scroll to a line. This does NOT return the contents; use agent_read_file for that.",
+				"userDescription": "Open a file in the editor",
+				"icon": "$(go-to-file)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"path": {
+							"type": "string",
+							"description": "Path of the file to open"
+						},
+						"line": {
+							"type": "number",
+							"description": "Line to scroll to, 1-based"
 						}
 					},
 					"required": [
@@ -139,7 +254,7 @@
 			{
 				"name": "agent_write_file",
 				"displayName": "Write File",
-				"modelDescription": "Create or overwrite a file with the given content. Use a path relative to the workspace root, or an absolute path. Parent directories must already exist.",
+				"modelDescription": "Overwrite a file with COMPLETE new content, creating it if needed. Use this ONLY for a new file or a full rewrite — to change part of an existing file use agent_edit_file, which is far cheaper and cannot accidentally drop the parts you did not mean to touch.",
 				"userDescription": "Write a workspace file",
 				"icon": "$(edit)",
 				"tags": [
@@ -166,6 +281,95 @@
 				}
 			},
 			{
+				"name": "agent_edit_file",
+				"displayName": "Edit File",
+				"modelDescription": "Change part of an existing file by replacing an exact stretch of text. PREFER THIS over agent_write_file for any change to a file that already exists: you emit only the lines that differ instead of the whole file. `oldText` must match the file exactly, including indentation, and must be unique — include surrounding lines until it is, or pass replaceAll to change every occurrence. Read the file first so you copy the text exactly.",
+				"userDescription": "Edit part of a file",
+				"icon": "$(edit)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"path": {
+							"type": "string",
+							"description": "Path of the file to edit"
+						},
+						"oldText": {
+							"type": "string",
+							"description": "Exact text to replace, copied verbatim from the file including indentation"
+						},
+						"newText": {
+							"type": "string",
+							"description": "Text to put in its place"
+						},
+						"replaceAll": {
+							"type": "boolean",
+							"description": "Replace every occurrence instead of requiring a unique match. Defaults to false."
+						}
+					},
+					"required": [
+						"path",
+						"oldText",
+						"newText"
+					]
+				}
+			},
+			{
+				"name": "agent_multi_edit",
+				"displayName": "Multi Edit",
+				"modelDescription": "Apply SEVERAL replacements to one file in a single call. Prefer this over repeated agent_edit_file when a change touches more than one place: each edit follows the same rules as agent_edit_file, and they are applied in order, each against the result of the previous. All or nothing — if any edit fails, none is applied and the reply says which one and why, so you can resend a corrected batch.",
+				"userDescription": "Apply several edits to a file",
+				"icon": "$(edit)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"path": {
+							"type": "string",
+							"description": "Path of the file to edit"
+						},
+						"edits": {
+							"type": "array",
+							"minItems": 1,
+							"description": "Replacements, in the order they should be applied.",
+							"items": {
+								"type": "object",
+								"required": [
+									"oldText",
+									"newText"
+								],
+								"properties": {
+									"oldText": {
+										"type": "string",
+										"description": "Exact text to replace, copied verbatim from the file"
+									},
+									"newText": {
+										"type": "string",
+										"description": "Text to put in its place"
+									},
+									"replaceAll": {
+										"type": "boolean",
+										"description": "Replace every occurrence instead of requiring a unique match"
+									}
+								}
+							}
+						}
+					},
+					"required": [
+						"path",
+						"edits"
+					]
+				}
+			},
+			{
 				"name": "agent_list_dir",
 				"displayName": "List Directory",
 				"modelDescription": "List the immediate entries of a directory in the workspace.",
@@ -187,9 +391,69 @@
 				}
 			},
 			{
+				"name": "agent_search",
+				"displayName": "Search Code",
+				"modelDescription": "Search the contents of all files in the workspace for a string or regex. Use this to locate where a function, class, method, or symbol is defined or used BEFORE concluding it does not exist. Returns matches as 'relativePath:line: text'. This looks INSIDE files only — to find a file by its name, use agent_find_files instead.",
+				"userDescription": "Search the workspace",
+				"icon": "$(search)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"query": {
+							"type": "string",
+							"description": "Text or regex to search for (e.g. a function name like getUserAndServiceFromProtocol)"
+						},
+						"isRegex": {
+							"type": "boolean",
+							"description": "Treat the query as a regular expression. Defaults to false (literal text)."
+						},
+						"path": {
+							"type": "string",
+							"description": "Subdirectory to limit the search to (defaults to workspace root)"
+						}
+					},
+					"required": [
+						"query"
+					]
+				}
+			},
+			{
+				"name": "agent_find_files",
+				"displayName": "Find Files",
+				"modelDescription": "Find files by NAME anywhere in the workspace, at any depth. Use this whenever you know or can guess part of a filename (e.g. 'routes', 'app.config.ts', '*.service.ts') but not where it lives. Prefer this over walking directories with agent_list_dir. If an exact name finds nothing, retry with a shorter fragment. Returns one relative path per line.",
+				"userDescription": "Find files by name",
+				"icon": "$(file-code)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"name": {
+							"type": "string",
+							"description": "Filename or fragment of one (e.g. 'routes', 'app.routes.ts'). A glob such as '**/*.routes.ts' also works. A plain fragment matches anywhere in the path."
+						},
+						"path": {
+							"type": "string",
+							"description": "Subdirectory to limit the search to (defaults to workspace root)"
+						}
+					},
+					"required": [
+						"name"
+					]
+				}
+			},
+			{
 				"name": "agent_run_command",
 				"displayName": "Run Command",
-				"modelDescription": "Run a shell command on the user's machine. Use sparingly; the user will be asked to confirm before each invocation. Returns stdout/stderr.",
+				"modelDescription": "Run a shell command on the user's machine. Returns stdout/stderr.",
 				"userDescription": "Run a shell command",
 				"icon": "$(terminal)",
 				"tags": [
@@ -213,9 +477,240 @@
 						"command"
 					]
 				}
+			},
+			{
+				"name": "agent_read_terminal",
+				"displayName": "Read Terminal",
+				"modelDescription": "Read what a command started with `agent_run_command` and `\"background\": true` has printed since the last read. Pass the terminal id it returned. Optionally wait up to 30 seconds for new output, which is how you tell a server that really started from one that logged \"ready\" and then crashed.",
+				"userDescription": "Read output from a background command",
+				"icon": "$(terminal)",
+				"tags": [
+					"agent-chat",
+					"terminal"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"terminalId": {
+							"type": "string",
+							"description": "Id returned by agent_run_command. Defaults to the most recent terminal."
+						},
+						"waitSeconds": {
+							"type": "number",
+							"description": "Seconds to wait for new output before returning, up to 30. Defaults to 0 (return immediately)."
+						}
+					}
+				}
+			},
+			{
+				"name": "agent_code_graph",
+				"displayName": "Code Graph",
+				"modelDescription": "Look up where symbols (functions, classes, interfaces, types, enums) are defined in the workspace using a tree-sitter code graph. Cheaper and more precise than reading whole files. Returns matching definitions as `kind name — path:line`. Only available when the code graph is enabled.",
+				"userDescription": "Query the code knowledge graph",
+				"icon": "$(graph)",
+				"tags": [
+					"agent-chat",
+					"code"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"query": {
+							"type": "string",
+							"description": "Symbol name or partial name to search for"
+						},
+						"kind": {
+							"type": "string",
+							"description": "Optional filter: function, class, interface, type or enum",
+							"enum": [
+								"function",
+								"class",
+								"interface",
+								"type",
+								"enum"
+							]
+						}
+					},
+					"required": [
+						"query"
+					]
+				}
+			},
+			{
+				"name": "agent_diagnostics",
+				"displayName": "Diagnostics",
+				"modelDescription": "List the errors and warnings the language servers report — the same ones in the Problems panel. Use it right after editing code to check you did not break anything: it is immediate and needs no build. Note it only covers files the language server has analysed, so open a file with agent_open_file if it is missing from the list.",
+				"userDescription": "List errors and warnings",
+				"icon": "$(warning)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"path": {
+							"type": "string",
+							"description": "Limit to one file. Omit for the whole workspace."
+						},
+						"severity": {
+							"type": "string",
+							"enum": [
+								"error",
+								"warning",
+								"all"
+							],
+							"description": "Lowest severity to include. Defaults to \"error\"."
+						}
+					}
+				}
+			},
+			{
+				"name": "agent_git_status",
+				"displayName": "Git Status",
+				"modelDescription": "Show which files are modified, staged or untracked, plus the current branch. Use it to see what you have changed so far.",
+				"userDescription": "Show git status",
+				"icon": "$(source-control)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"path": {
+							"type": "string",
+							"description": "Directory to inspect. Defaults to the workspace root."
+						}
+					}
+				}
+			},
+			{
+				"name": "agent_git_diff",
+				"displayName": "Git Diff",
+				"modelDescription": "Show the actual changes as a unified diff. Use it to review what you or the user changed before summarising or committing. Pass `path` to look at one file when the full diff is large.",
+				"userDescription": "Show git diff",
+				"icon": "$(diff)",
+				"tags": [
+					"agent-chat",
+					"files"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"path": {
+							"type": "string",
+							"description": "Limit the diff to this file or directory"
+						},
+						"staged": {
+							"type": "boolean",
+							"description": "Show what is staged instead of the working tree. Defaults to false."
+						}
+					}
+				}
+			},
+			{
+				"name": "agent_figma",
+				"displayName": "Figma Design",
+				"modelDescription": "Read a Figma design through Figma's REST API: structure, geometry, colours, typography and auto-layout, as compact text you can turn into code. Pass `target` as the Figma URL the user gave you (a link like https://www.figma.com/design/KEY/Name?node-id=1-234) or a bare file key. `action: \"outline\"` maps the file — pages and top-level frames — and every line ends with the node id. `action: \"inspect\"` (the default when a node is known) opens one node and is what you use before writing UI code: it returns sizes in px, hex fills and strokes, corner radii, auto-layout (equivalent to flexbox) and text styles. `action: \"image\"` returns a temporary PNG URL you cannot see yourself — pass it to the user in markdown if they want to look; use `inspect` for anything you need to implement. Requires a Figma personal access token; if none is set the tool says so and the user runs 'Agent Chat: Conectar à Figma'.",
+				"userDescription": "Read a Figma design (structure, sizes, colours, typography)",
+				"icon": "$(symbol-color)",
+				"tags": [
+					"agent-chat",
+					"figma",
+					"design"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"target": {
+							"type": "string",
+							"description": "Figma URL (preferred — it carries the file and the selected node) or a bare file key."
+						},
+						"action": {
+							"type": "string",
+							"enum": [
+								"outline",
+								"inspect",
+								"image"
+							],
+							"description": "outline = map the file; inspect = one node in detail (default when a node is known); image = temporary PNG URL."
+						},
+						"nodeId": {
+							"type": "string",
+							"description": "Node to act on, as '1:234' or '1-234'. Optional when the URL already carries node-id."
+						},
+						"depth": {
+							"type": "number",
+							"description": "How deep to walk the tree. Defaults to 2 for outline and 12 for inspect."
+						}
+					},
+					"required": [
+						"target"
+					]
+				}
+			},
+			{
+				"name": "agent_codebase_search",
+				"displayName": "Codebase Search",
+				"modelDescription": "Search the workspace by MEANING using a local semantic index of the code. Use it when you know what you are looking for but not what it is called: \"where is the retry policy for failed requests\", \"how does the app decide which theme to load\". The index is multilingual: write the query in whatever language the answer is most likely written in — English for code and identifiers, the user’s own language when they ask about prose written in it. Returns the most relevant code chunks with their file, line range and body. Prefer `agent_search` instead whenever you already know the literal text — an exact identifier, error message or string constant — because grep is exact and this is not. The two are complementary: run both when a concept and a symbol are both in play. Requires the semantic index to be built; if it is not, this reports so and you should fall back to `agent_search`.",
+				"userDescription": "Buscar no código por significado",
+				"icon": "$(search-fuzzy)",
+				"tags": [
+					"agent-chat",
+					"code"
+				],
+				"canBeReferencedInPrompt": false,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"query": {
+							"type": "string",
+							"description": "What you are looking for, in natural language. A full question works better than keywords."
+						},
+						"limit": {
+							"type": "number",
+							"description": "Maximum number of chunks to return (default 8, max 20)."
+						},
+						"path": {
+							"type": "string",
+							"description": "Optional: only return results whose path contains this substring."
+						}
+					},
+					"required": [
+						"query"
+					]
+				}
 			}
 		],
 		"commands": [
+			{
+				"command": "agent-chat.vsgo.signIn",
+				"title": "vsgo: Entrar na conta"
+			},
+			{
+				"command": "agent-chat.vsgo.signOut",
+				"title": "vsgo: Sair da conta"
+			},
+			{
+				"command": "agent-chat.vsgo.manageAccount",
+				"title": "vsgo: Gerenciar a conta"
+			},
+			{
+				"command": "agent-chat.vsgo.openDashboard",
+				"title": "vsgo: Abrir o painel da conta"
+			},
+			{
+				"command": "agent-chat.mcp.manage",
+				"title": "Agent Chat: Servidores MCP",
+				"category": "Agent Chat"
+			},
 			{
 				"command": "agent-chat.addApiKey",
 				"title": "Agent Chat: Add API Key...",
@@ -234,6 +729,16 @@
 			{
 				"command": "agent-chat.reloadRules",
 				"title": "Agent Chat: Reload Rules",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.localModels.manage",
+				"title": "Agent Chat: Gerenciar Modelos Locais",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.localModels.stopServer",
+				"title": "Agent Chat: Parar o Servidor de Modelos Locais",
 				"category": "Agent Chat"
 			},
 			{
@@ -294,11 +799,41 @@
 				"title": "Agent Chat: Split Working Tree into PRs...",
 				"category": "Agent Chat",
 				"icon": "$(git-pull-request)"
+			},
+			{
+				"command": "agent-chat.figma.connect",
+				"title": "Agent Chat: Conectar à Figma",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.figma.disconnect",
+				"title": "Agent Chat: Desconectar da Figma",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.semanticIndex.rebuild",
+				"title": "Reconstruir Índice Semântico",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.semanticIndex.status",
+				"title": "Mostrar Status do Índice Semântico",
+				"category": "Agent Chat"
+			},
+			{
+				"command": "agent-chat.semanticIndex.chooseProvider",
+				"title": "Escolher Provedor de Embeddings",
+				"category": "Agent Chat"
 			}
 		],
 		"configuration": {
 			"title": "Agent Chat",
 			"properties": {
+				"agent-chat.autoApproveTools": {
+					"type": "boolean",
+					"default": true,
+					"description": "Quando ativado, o agente executa todas as ferramentas automaticamente sem pedir confirmação. Desative para que comandos perigosos exijam aprovação explícita."
+				},
 				"agent-chat.bugBot.enabled": {
 					"type": "boolean",
 					"default": false,
@@ -312,8 +847,154 @@
 				"agent-chat.bugBot.minSeverity": {
 					"type": "string",
 					"default": "warning",
-					"enum": ["info", "warning", "error"],
+					"enum": [
+						"info",
+						"warning",
+						"error"
+					],
 					"description": "Hide findings below this severity."
+				},
+				"agent-chat.codeGraph.enabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Build a local code knowledge graph (functions, classes, interfaces, types) using tree-sitter and expose it to the agent as a tool. Can reduce token usage and improve accuracy by letting the agent look up symbols instead of reading whole files. Opt-in."
+				},
+				"agent-chat.mcp.enabled": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "Entrega ao agente as ferramentas dos servidores MCP configurados em `mcp.json`. Desligue para que ele use apenas as ferramentas próprias. Use **Agent Chat: Servidores MCP** para ver o que ele está enxergando."
+				},
+				"agent-chat.mcp.startOnStartup": {
+					"type": "boolean",
+					"default": false,
+					"markdownDescription": "Sobe os servidores MCP junto com a janela, em vez de no primeiro turno do chat. Desligado por padrão: um servidor `stdio` é um processo novo, e subir todos na abertura pesa em máquinas sem RAM sobrando. Servidores `http` custam pouco, então ligar aqui faz mais sentido quando só se usa esses."
+				},
+				"agent-chat.mcp.startTimeout": {
+					"type": "number",
+					"default": 15,
+					"minimum": 0,
+					"markdownDescription": "Segundos que o chat espera pelos servidores MCP antes de começar o turno. Esgotado o prazo, a conversa segue com as ferramentas que já estiverem de pé, e as demais entram no turno seguinte — um servidor preso aguardando login não trava o chat."
+				},
+				"agent-chat.mcp.maxTools": {
+					"type": "number",
+					"default": 48,
+					"minimum": 0,
+					"markdownDescription": "Teto de ferramentas MCP oferecidas ao modelo por turno. As ferramentas próprias do agente nunca são cortadas; o excesso sai daqui. Cada ferramenta custa o schema dela em todo turno, e um punhado de servidores passa fácil das cem — sem teto, a janela de contexto acaba antes da conversa."
+				},
+				"agent-chat.agentProfile": {
+					"type": "string",
+					"enum": [
+						"auto",
+						"compact",
+						"full"
+					],
+					"default": "auto",
+					"enumDescriptions": [
+						"Escolhe pelo modelo: compacto para modelos rodando nesta máquina, completo para os hospedados.",
+						"Prompt curto e uma chamada de ferramenta por turno. Pensado para modelos pequenos.",
+						"Prompt completo e chamadas em paralelo. Pensado para modelos de fronteira."
+					],
+					"description": "Como o laço do agente é ajustado ao modelo que o conduz."
+				},
+				"agent-chat.compaction.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Quando a conversa enche a janela de contexto, resume o histórico mais antigo e continua na mesma sessão, em vez de descartar as mensagens iniciais. Custa uma chamada extra ao modelo no momento em que o resumo é feito."
+				},
+				"agent-chat.localModels.serverPath": {
+					"type": "string",
+					"default": "",
+					"description": "Caminho para um binário llama-server próprio. Vazio usa o runtime baixado pela extensão."
+				},
+				"agent-chat.localModels.modelsDirectory": {
+					"type": "string",
+					"default": "",
+					"description": "Pasta onde os modelos baixados são guardados. Vazio usa o armazenamento global da extensão."
+				},
+				"agent-chat.localModels.extraModels": {
+					"type": "array",
+					"default": [],
+					"description": "Modelos adicionais no catálogo de download, além dos que já vêm com a extensão.",
+					"items": {
+						"type": "object"
+					}
+				},
+				"agent-chat.localModels.thinking": {
+					"type": "boolean",
+					"default": false,
+					"markdownDescription": "Deixa modelos locais com modo de raciocínio (como o Gemma 4) pensarem em voz alta antes de responder. Melhora a qualidade em tarefas difíceis, mas em CPU multiplica o tempo de cada turno do agente. Modelos sem modo de raciocínio ignoram esta opção."
+				},
+				"agent-chat.localModels.preload": {
+					"type": "boolean",
+					"default": false,
+					"markdownDescription": "Carrega na memória, alguns segundos depois de abrir a janela, o último modelo local que você usou — assim a primeira mensagem não paga a leitura dos pesos. Desligado por padrão: em máquinas sem RAM sobrando, subir o servidor junto com a janela derruba a aplicação. Com a opção desligada o servidor sobe só quando você clica em **Iniciar** no painel de Modelos Locais ou envia a primeira mensagem para um modelo local. Não faz nada se você nunca conversou com um modelo local, nem quando a RAM livre não comporta o modelo."
+				},
+				"agent-chat.localModels.preloadModel": {
+					"type": "string",
+					"default": "",
+					"markdownDescription": "Modelo a carregar na abertura, pelo id do catálogo (por exemplo `qwen2.5-coder-3b`). Vazio significa \"o último que você usou\" — o que só funciona depois da primeira conversa. Ignorado quando `#agent-chat.localModels.preload#` está desligado."
+				},
+				"agent-chat.semanticIndex.enabled": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "Indexa o projeto localmente para que o agente possa buscar código por significado com a ferramenta `agent_codebase_search`. Os vetores são calculados na sua máquina e nada é enviado para fora."
+				},
+				"agent-chat.semanticIndex.model": {
+					"type": "string",
+					"default": "qwen3-embedding-0.6b",
+					"markdownDescription": "Modelo de embeddings usado quando `#agent-chat.semanticIndex.provider#` é `local`. `qwen3-embedding-0.6b` é multilíngue e entende comentários em português, ao custo de ser ~6x mais lento para indexar. `nomic-embed-text-v1.5` é leve e rápido, mas só recupera bem conteúdo em inglês. `bge-small-en-v1.5` é o menor de todos, também só inglês.",
+					"enum": [
+						"qwen3-embedding-0.6b",
+						"nomic-embed-text-v1.5",
+						"bge-small-en-v1.5"
+					]
+				},
+				"agent-chat.semanticIndex.include": {
+					"type": "string",
+					"default": "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,py,go,rs,java,cs,rb,php,c,h,cc,cpp,hpp,swift,kt,scala,sh,sql,vue,svelte,md}",
+					"markdownDescription": "Glob dos arquivos que entram no índice semântico."
+				},
+				"agent-chat.semanticIndex.exclude": {
+					"type": "string",
+					"default": "{**/node_modules/**,**/out/**,**/out-*/**,**/dist/**,**/build/**,**/vendor/**,**/target/**,**/coverage/**,**/__pycache__/**,**/.*/**}",
+					"markdownDescription": "Glob dos arquivos e pastas que o índice semântico ignora. O padrão pula diretórios ocultos, o que evita indexar worktrees do git guardadas dentro do projeto."
+				},
+				"agent-chat.semanticIndex.maxFiles": {
+					"type": "number",
+					"default": 5000,
+					"markdownDescription": "Número máximo de arquivos indexados. Projetos maiores param neste limite."
+				},
+				"agent-chat.semanticIndex.provider": {
+					"type": "string",
+					"default": "local",
+					"enum": [
+						"local",
+						"openai",
+						"mistral",
+						"ollama"
+					],
+					"enumDescriptions": [
+						"Calcula os embeddings na sua máquina com llama.cpp. Nada sai do computador; é a opção mais lenta.",
+						"Usa o endpoint de embeddings da OpenAI. Muito mais rápido e melhor, mas envia trechos do código.",
+						"Usa o endpoint de embeddings da Mistral. Muito mais rápido e melhor, mas envia trechos do código.",
+						"Usa um servidor Ollama seu, local ou na sua rede, com modelos maiores que o embutido."
+					],
+					"markdownDescription": "De onde vêm os vetores do índice semântico. Trocar descarta o índice e reconstrói. Use o comando **Escolher Provedor de Embeddings** para configurar com ajuda."
+				},
+				"agent-chat.semanticIndex.apiModel": {
+					"type": "string",
+					"default": "",
+					"markdownDescription": "Modelo de embeddings do provedor escolhido, por exemplo `text-embedding-3-small`. Vazio usa o padrão do provedor. Ignorado quando o provedor é `local`."
+				},
+				"agent-chat.semanticIndex.apiBaseUrl": {
+					"type": "string",
+					"default": "",
+					"markdownDescription": "Endpoint compatível com OpenAI, terminando em `/v1`. Vazio usa o endereço padrão do provedor. Útil para apontar o Ollama para outra máquina."
+				},
+				"agentChat.vsgo.baseUrl": {
+					"type": "string",
+					"default": "https://vsgo.orkestrai.com.br",
+					"markdownDescription": "Endereço do gateway da conta vsgo. Troque para apontar a uma instância própria do Tensoria ou ao seu ambiente de desenvolvimento (`http://localhost:3000`)."
 				}
 			}
 		},

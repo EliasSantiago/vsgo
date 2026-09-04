@@ -64,12 +64,42 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!extensions/**/colorize-fixtures/**',
 	'!extensions/terminal-suggest/src/shell/fishBuiltinsCache.ts',
 
-	// extensions/copilot has its own code style
-	'!extensions/copilot/**',
 
 	'!src/vs/base/browser/dompurify/**',
 	'!src/vs/workbench/services/keybinding/browser/keyboardLayouts/**',
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
+
+	// vsgo: features authored with intentional pt-BR content (localized strings,
+	// LLM prompt/markdown templates, build scripts) where non-ASCII is expected.
+	'!src/main.ts',
+	'!src/vs/workbench/api/common/extHostChatAgents2.ts',
+	'!src/vs/workbench/contrib/chat/common/chatModes.ts',
+	'!src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingEditorActions.ts',
+	'!src/vs/workbench/contrib/chat/browser/actions/chatExecuteActions.ts',
+	'!src/vs/workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatTerminalToolConfirmationSubPart.ts',
+	'!src/vs/workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatToolConfirmationSubPart.ts',
+	'!src/vs/workbench/contrib/chat/browser/widget/input/autoModeToggleActionItem.ts',
+	'!src/vs/workbench/contrib/chat/browser/widget/input/modePickerActionItem.ts',
+	'!src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts',
+	'!src/vs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatUpdateBanner.ts',
+	'!src/vs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.ts',
+	'!src/vs/workbench/contrib/chat/browser/widget/input/chatModelPicker.ts',
+	'!src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupProviders.ts',
+	'!src/vs/workbench/contrib/chat/browser/aiCustomization/**',
+	'!src/vs/workbench/contrib/chat/common/aiFeatureModel.ts',
+	'!src/vs/workbench/api/browser/mainThreadChatAgents2.ts',
+	'!src/vs/workbench/contrib/specDriven/**',
+	'!src/vs/workbench/contrib/welcomeOnboarding/**',
+	'!src/vs/workbench/contrib/qa/**',
+	'!src/vs/workbench/contrib/securityScan/**',
+	'!extensions/agent-chat/**',
+	'!scripts/build-linux.sh',
+	'!scripts/dev.sh',
+	'!scripts/watch-dev.sh',
+	'!scripts/build-win.sh',
+	'!scripts/build-mac.sh',
+	'!scripts/make-manifest.sh',
+	'!scripts/release.sh',
 ]);
 
 export const indentationFilter = Object.freeze<string[]>([
@@ -130,8 +160,15 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!extensions/**/themes/**',
 	'!extensions/**/colorize-fixtures/**',
 
-	// extensions/copilot has its own code style
-	'!extensions/copilot/**',
+
+	// vsgo: template literals embedding JS/JSON/markdown, whose content is
+	// intentionally space-indented and must not be reflowed to tabs.
+	'!src/vs/workbench/contrib/qa/browser/qaService.ts',
+	'!src/vs/workbench/contrib/securityScan/browser/securityScanService.ts',
+	'!src/vs/workbench/contrib/securityScan/browser/securityScanActions.ts',
+	'!src/vs/workbench/contrib/specDriven/browser/specKitTemplates.ts',
+	'!src/vs/workbench/contrib/specDriven/browser/specDrivenService.ts',
+	'!extensions/agent-chat/src/agentProfile.ts',
 
 	// except specific file types
 	'!src/vs/*/**/*.d.ts',
@@ -206,8 +243,6 @@ export const copyrightFilter = Object.freeze<string[]>([
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
 	'!extensions/mermaid-chat-features/chat-webview-out/**',
 
-	// extensions/copilot has its own code style
-	'!extensions/copilot/**',
 ]);
 
 export const tsFormattingFilter = Object.freeze<string[]>([
@@ -228,8 +263,6 @@ export const tsFormattingFilter = Object.freeze<string[]>([
 	'!extensions/terminal-suggest/src/shell/zshBuiltinsCache.ts',
 	'!extensions/terminal-suggest/src/shell/fishBuiltinsCache.ts',
 
-	// extensions/copilot has its own code style
-	'!extensions/copilot/**',
 ]);
 
 export const eslintFilter = Object.freeze<string[]>([

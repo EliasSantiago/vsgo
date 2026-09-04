@@ -6,10 +6,12 @@
 import './media/chatContextUsageWidget.css';
 import * as dom from '../../../../../../base/browser/dom.js';
 import { EventType, addDisposableListener } from '../../../../../../base/browser/dom.js';
+import { BaseActionViewItem } from '../../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { IDelayedHoverOptions } from '../../../../../../base/browser/ui/hover/hover.js';
+import { IAction } from '../../../../../../base/common/actions.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../../../base/common/lifecycle.js';
-import { IObservable, observableValue } from '../../../../../../base/common/observable.js';
+import { autorun, IObservable, observableValue } from '../../../../../../base/common/observable.js';
 import { localize } from '../../../../../../nls.js';
 import { IHoverService } from '../../../../../../platform/hover/browser/hover.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
@@ -25,6 +27,9 @@ import { StandardKeyboardEvent } from '../../../../../../base/browser/keyboardEv
 import { KeyCode } from '../../../../../../base/common/keyCodes.js';
 
 const $ = dom.$;
+
+/** Command that opens the context usage details, and the toolbar item that hosts the ring. */
+export const ShowContextUsageActionId = 'workbench.action.chat.showContextUsage';
 
 /**
  * A reusable circular progress indicator that displays a ring.
@@ -329,5 +334,36 @@ export class ChatContextUsageWidget extends Disposable {
 			this._isVisible.set(false, undefined);
 			this._onDidChangeVisibility.fire();
 		}
+	}
+}
+
+/**
+ * Hosts the {@link ChatContextUsageWidget} inside the chat input toolbar, so the
+ * ring sits with the model picker rather than on a row of its own under the
+ * input box.
+ *
+ * The widget brings its own mouse and keyboard handling and stops the click from
+ * propagating, so the action behind this item is what runs from the command
+ * palette, not what runs on a click here.
+ */
+export class ChatContextUsageActionItem extends BaseActionViewItem {
+
+	constructor(
+		action: IAction,
+		private readonly widget: ChatContextUsageWidget,
+	) {
+		super(undefined, action);
+	}
+
+	override render(container: HTMLElement): void {
+		super.render(container);
+		container.classList.add('chat-context-usage-action-item');
+		container.appendChild(this.widget.domNode);
+
+		// The widget hides itself until a response reports its token counts. The
+		// item has to follow, or the toolbar keeps a gap for something invisible.
+		this._register(autorun(reader => {
+			container.style.display = this.widget.isVisible.read(reader) ? '' : 'none';
+		}));
 	}
 }

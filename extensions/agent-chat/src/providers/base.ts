@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { ByokStorage, ProviderId } from '../byokStorage.js';
 import { log } from '../logger.js';
+import { IReportedUsage, usageBus } from '../usageBus.js';
 
 export interface ModelSpec {
 	readonly id: string;
@@ -13,6 +14,57 @@ export interface ModelSpec {
 	readonly family: string;
 	readonly maxInputTokens: number;
 	readonly maxOutputTokens: number;
+}
+
+/** The size of a model's context window, in the two halves the chat API models. */
+export interface ITokenLimits {
+	readonly maxInputTokens: number;
+	readonly maxOutputTokens: number;
+}
+
+/**
+ * The window to use for a model an API listing just returned.
+ *
+ * A `/models` listing says which models exist, almost never how large their
+ * context is — so the numbers have to come from the catalog each provider keeps
+ * in this extension. Answering with a single hardcoded pair instead is what made
+ * a 500k Grok and a 65k DeepSeek both report the same 128k: the listing
+ * succeeding threw away the only accurate numbers we had.
+ *
+ * Matching is by id, then by id with the release suffix stripped, so
+ * `claude-sonnet-4-6-20250514` still finds `claude-sonnet-4-6`. What the catalog
+ * does not know falls back to `unknown`, which each provider states for its own
+ * lineup — undershooting only makes the trimmer start early, while overshooting
+ * gets the whole prompt rejected by the server.
+ */
+export function limitsForModel(id: string, catalog: readonly ModelSpec[], unknown: ITokenLimits): ITokenLimits {
+	const exact = catalog.find(model => model.id === id);
+	if (exact) {
+		return { maxInputTokens: exact.maxInputTokens, maxOutputTokens: exact.maxOutputTokens };
+	}
+	const base = stripReleaseSuffix(id);
+	const near = catalog.find(model => stripReleaseSuffix(model.id) === base);
+	if (near) {
+		return { maxInputTokens: near.maxInputTokens, maxOutputTokens: near.maxOutputTokens };
+	}
+	return unknown;
+}
+
+/**
+ * Drops the part of a model id that names a release rather than a model:
+ * `-latest`, a dated suffix, or a trailing build number.
+ */
+function stripReleaseSuffix(id: string): string {
+	return id
+		.replace(/-latest$/, '')
+		.replace(/-\d{4}-\d{2}-\d{2}$/, '')
+		.replace(/-\d{4,8}$/, '');
+}
+
+/** Real token usage reported by a provider's streaming API. */
+export interface IProviderUsage {
+	readonly inputTokens: number;
+	readonly outputTokens: number;
 }
 
 export abstract class BaseChatProvider implements vscode.LanguageModelChatProvider {
@@ -27,12 +79,26 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		return 'apiKey';
 	}
 
+	/**
+	 * Whether a credential must be present before the provider reports models.
+	 * Providers backed by a locally managed runtime have nothing to authenticate
+	 * against and override this to `false`.
+	 */
+	protected get requiresCredential(): boolean {
+		return true;
+	}
+
 	abstract fallbackModels(): ModelSpec[];
 
 	protected async fetchAvailableModels(_credential: string, _token: vscode.CancellationToken): Promise<ModelSpec[] | undefined> {
 		return undefined;
 	}
 
+	/**
+	 * Sends the chat request and streams parts via `progress`. Returns the real
+	 * token usage when the provider's API reports it, otherwise `void` (the base
+	 * class then falls back to an estimate).
+	 */
 	abstract sendChat(
 		credential: string,
 		model: ModelSpec,
@@ -40,7 +106,7 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		tools: readonly vscode.LanguageModelChatTool[] | undefined,
 		progress: vscode.Progress<vscode.LanguageModelResponsePart2>,
 		token: vscode.CancellationToken,
-	): Promise<void>;
+	): Promise<IProviderUsage | void>;
 
 	async provideLanguageModelChatInformation(
 		options: vscode.PrepareLanguageModelChatModelOptions,
@@ -48,11 +114,11 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 	): Promise<vscode.LanguageModelChatInformation[]> {
 		const credential = await this.resolveCredential(options);
 		log(`[${this.providerId}] provideLanguageModelChatInformation: hasCredential=${!!credential}, hasOptionsConfig=${!!options.configuration}, configKeys=${Object.keys(options.configuration ?? {}).join(',')}`);
-		if (!credential) {
+		if (!credential && this.requiresCredential) {
 			return [];
 		}
 		try {
-			const fetched = await this.fetchAvailableModels(credential, token);
+			const fetched = await this.fetchAvailableModels(credential ?? '', token);
 			if (fetched && fetched.length > 0) {
 				this.cachedModels = fetched;
 				log(`[${this.providerId}] fetched ${fetched.length} models from API`);
@@ -85,13 +151,65 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		token: vscode.CancellationToken,
 	): Promise<void> {
 		const credential = await this.resolveCredential(options);
-		if (!credential) {
+		if (!credential && this.requiresCredential) {
 			throw new Error(`Missing credential for ${this.providerId}`);
 		}
 		const spec = (this.cachedModels ?? this.fallbackModels()).find(m => m.id === model.id)
 			?? { id: model.id, name: model.name, family: model.family ?? model.id, maxInputTokens: model.maxInputTokens, maxOutputTokens: model.maxOutputTokens };
 		const tools = (options as { tools?: readonly vscode.LanguageModelChatTool[] }).tools;
-		await this.sendChat(credential, spec, messages, tools, progress, token);
+
+		// Accumulate streamed output so we can estimate output tokens when the
+		// provider's API does not report real usage.
+		let outputText = '';
+		const meteredProgress: vscode.Progress<vscode.LanguageModelResponsePart2> = {
+			report: part => {
+				if (part instanceof vscode.LanguageModelTextPart) {
+					outputText += part.value;
+				}
+				progress.report(part);
+			},
+		};
+
+		const startedAt = Date.now();
+		const usage = await this.sendChat(credential ?? '', spec, messages, tools, meteredProgress, token);
+
+		// What the provider counted, or a character-based estimate when its API
+		// says nothing. Both consumers below want the same pair of numbers.
+		const counted: IReportedUsage = usage
+			? { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, estimated: false }
+			: {
+				inputTokens: messages.reduce((sum, m) => sum + estimateTokens(messageText(m)), 0),
+				outputTokens: estimateTokens(outputText),
+				estimated: true,
+			};
+
+		// Hand the counts to whoever asked for them by tagging the request. Done
+		// before the meter so a slow command cannot delay the context bar.
+		const modelOptions = (options as { modelOptions?: { readonly [name: string]: unknown } }).modelOptions;
+		usageBus.publish(usageBus.tokenFrom(modelOptions), counted);
+
+		this.reportUsage(spec, model, counted, Date.now() - startedAt);
+	}
+
+	/** Reports token usage to the AI Usage meter (best-effort, never throws). */
+	private reportUsage(spec: ModelSpec, model: vscode.LanguageModelChatInformation, counted: IReportedUsage, durationMs: number): void {
+		try {
+			const { inputTokens, outputTokens, estimated } = counted;
+			const graphEnabled = vscode.workspace.getConfiguration('agent-chat').get<boolean>('codeGraph.enabled', false);
+			void vscode.commands.executeCommand('_vsgo.aiUsage.record', {
+				timestamp: Date.now(),
+				vendor: this.providerId,
+				modelId: spec.id,
+				modelName: model.name ?? spec.name,
+				inputTokens,
+				outputTokens,
+				durationMs,
+				estimated,
+				tags: [graphEnabled ? 'code-graph:on' : 'code-graph:off'],
+			});
+		} catch (err) {
+			log(`[${this.providerId}] reportUsage failed:`, err instanceof Error ? err.message : String(err));
+		}
 	}
 
 	async provideTokenCount(
@@ -103,21 +221,52 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 		return Math.ceil(value.length / 4);
 	}
 
-	private async resolveCredential(options: { readonly configuration?: { readonly [key: string]: any }; readonly modelConfiguration?: { readonly [key: string]: any } }): Promise<string | undefined> {
+	/**
+	 * Protected so a provider whose credential does not come from the BYOK vault
+	 * can answer for itself — the vsgo account resolves it from the signed-in
+	 * session instead.
+	 */
+	protected async resolveCredential(options: { readonly configuration?: { readonly [key: string]: any }; readonly modelConfiguration?: { readonly [key: string]: any } }): Promise<string | undefined> {
 		const fromOptions = readCredential(options.modelConfiguration, this.credentialKey)
 			?? readCredential(options.configuration, this.credentialKey);
 		if (fromOptions) {
 			// Mirror into the extension's SecretStorage so the command-based UI keeps working.
 			await this.storage.set(this.providerId, fromOptions);
-			return fromOptions;
+			return assertHeaderSafe(fromOptions, this.providerId);
 		}
-		return this.storage.get(this.providerId);
+		const stored = await this.storage.get(this.providerId);
+		return stored === undefined ? undefined : assertHeaderSafe(stored.trim(), this.providerId);
 	}
 }
 
 function readCredential(config: { readonly [key: string]: any } | undefined, key: string): string | undefined {
 	const value = config?.[key];
 	return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * Um cabeçalho HTTP só transporta bytes latin-1. Um caractere acima de 255 na
+ * credencial faz o `fetch` lançar um TypeError falando de ByteString e de um
+ * índice — nunca da chave —, e o erro aparece longe daqui: a descoberta de
+ * modelos engole a exceção e cai na lista de fallback, então o seletor mostra
+ * modelos que nunca vão responder, e só ao enviar a primeira mensagem sai um
+ * "Cannot convert argument to a ByteString".
+ *
+ * Foi o que aconteceu em 14/08 com uma chave da xAI colada de um campo
+ * mascarado, que veio com o `●` (U+25CF) que a UI desenha no lugar dos
+ * caracteres. Barrar aqui é o único ponto em que ainda dá para dizer o que
+ * está errado.
+ */
+function assertHeaderSafe(credential: string, providerId: string): string {
+	const offender = /[^\x20-\x7e]/.exec(credential);
+	if (offender) {
+		const codePoint = offender[0].codePointAt(0) ?? 0;
+		throw new Error(
+			`The ${providerId} API key contains an invalid character (U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}) at position ${offender.index + 1}. ` +
+			`Keys copied from a masked field pick up the bullet characters the field draws instead of the real ones — copy the key from where it is shown in full and enter it again.`,
+		);
+	}
+	return credential;
 }
 
 function extractText(message: vscode.LanguageModelChatRequestMessage): string {
@@ -128,6 +277,16 @@ function extractText(message: vscode.LanguageModelChatRequestMessage): string {
 		}
 	}
 	return out;
+}
+
+/** Alias for readability at the usage-reporting call sites. */
+function messageText(message: vscode.LanguageModelChatRequestMessage): string {
+	return extractText(message);
+}
+
+/** Rough token estimate (~4 characters per token) used only as a fallback. */
+function estimateTokens(text: string): number {
+	return Math.ceil(text.length / 4);
 }
 
 export async function* parseSSE(response: Response, token: vscode.CancellationToken): AsyncIterable<unknown> {

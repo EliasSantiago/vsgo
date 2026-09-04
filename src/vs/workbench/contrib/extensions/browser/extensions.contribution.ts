@@ -279,7 +279,13 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			[VerifyExtensionSignatureConfigKey]: {
 				type: 'boolean',
 				description: localize('extensions.verifySignature', "When enabled, extensions are verified to be signed before getting installed."),
-				default: true,
+				// Off by default in this build. The gallery here is Open VSX, which does
+				// not publish the signature manifests this check expects, and the
+				// verifier itself (@vscode/vsce-sign) is not a dependency, so the check
+				// can never succeed — it only aborts installs. Leaving it on cost users
+				// the Portuguese language pack, which failed with "Signature
+				// verification was not executed".
+				default: false,
 				scope: ConfigurationScope.APPLICATION,
 				included: isNative
 			},

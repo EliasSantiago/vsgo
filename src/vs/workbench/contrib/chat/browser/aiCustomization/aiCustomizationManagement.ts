@@ -59,7 +59,7 @@ export const AICustomizationManagementCommands = {
 export const CONTEXT_AI_CUSTOMIZATION_MANAGEMENT_EDITOR = new RawContextKey<boolean>(
 	'aiCustomizationManagementEditorFocused',
 	false,
-	localize('aiCustomizationManagementEditorFocused', "Whether the Agent Customizations editor is focused")
+	localize('aiCustomizationManagementEditorFocused', "Se o editor de Personalizações do Agente está em foco")
 );
 
 /**
@@ -68,7 +68,7 @@ export const CONTEXT_AI_CUSTOMIZATION_MANAGEMENT_EDITOR = new RawContextKey<bool
 export const CONTEXT_AI_CUSTOMIZATION_MANAGEMENT_SECTION = new RawContextKey<string>(
 	'chatCustomizationSection',
 	AICustomizationManagementSection.Agents,
-	localize('chatCustomizationSection', "The currently selected section in the Agent Customizations editor")
+	localize('chatCustomizationSection', "A seção selecionada no editor de Personalizações do Agente")
 );
 
 /**
@@ -78,7 +78,7 @@ export const CONTEXT_AI_CUSTOMIZATION_MANAGEMENT_SECTION = new RawContextKey<str
 export const CONTEXT_AI_CUSTOMIZATION_MANAGEMENT_HARNESS = new RawContextKey<string>(
 	'chatCustomizationSessionType',
 	'',
-	localize('chatCustomizationSessionType', "The active harness (session type) in the Agent Customizations editor")
+	localize('chatCustomizationSessionType', "O harness ativo (tipo de sessão) no editor de Personalizações do Agente")
 );
 
 /**

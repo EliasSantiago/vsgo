@@ -46,43 +46,43 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 	private readonly categoryDescriptions: IPromptLaunchersCategoryDescription[] = [
 		{
 			id: AICustomizationManagementSection.Agents,
-			label: localize('agents', "Agents"),
+			label: localize('agents', "Agentes"),
 			icon: agentIcon,
-			description: localize('agentsDesc', "Define custom agents with specialized personas, tool access, and instructions for specific tasks."),
+			description: localize('agentsDesc', "Defina agentes personalizados com personas, acesso a ferramentas e instruções específicas para cada tarefa."),
 			promptType: PromptsType.agent,
 		},
 		{
 			id: AICustomizationManagementSection.Skills,
 			label: localize('skills', "Skills"),
 			icon: skillIcon,
-			description: localize('skillsDesc', "Create reusable skill files that provide domain-specific knowledge and workflows."),
+			description: localize('skillsDesc', "Crie arquivos de skill reutilizáveis com conhecimento e fluxos de trabalho de um domínio específico."),
 			promptType: PromptsType.skill,
 		},
 		{
 			id: AICustomizationManagementSection.Instructions,
-			label: localize('instructions', "Instructions"),
+			label: localize('instructions', "Instruções"),
 			icon: instructionsIcon,
-			description: localize('instructionsDesc', "Set always-on instructions that guide AI behavior across your workspace or user profile."),
+			description: localize('instructionsDesc', "Defina instruções sempre ativas que guiam o comportamento da IA no seu workspace ou perfil de usuário."),
 			promptType: PromptsType.instructions,
 		},
 		{
 			id: AICustomizationManagementSection.Hooks,
 			label: localize('hooks', "Hooks"),
 			icon: hookIcon,
-			description: localize('hooksDesc', "Configure automated actions triggered by events like saving files or running tasks."),
+			description: localize('hooksDesc', "Configure ações automáticas disparadas por eventos como salvar arquivos ou executar tarefas."),
 			promptType: PromptsType.hook,
 		},
 		{
 			id: AICustomizationManagementSection.McpServers,
-			label: localize('mcpServers', "MCP Servers"),
+			label: localize('mcpServers', "Servidores MCP"),
 			icon: Codicon.server,
-			description: localize('mcpServersDesc', "Connect external tool servers that extend AI capabilities with custom tools and data sources."),
+			description: localize('mcpServersDesc', "Conecte servidores de ferramentas externos que ampliam a IA com ferramentas e fontes de dados próprias."),
 		},
 		{
 			id: AICustomizationManagementSection.Plugins,
 			label: localize('plugins', "Plugins"),
 			icon: pluginIcon,
-			description: localize('pluginsDesc', "Install and manage agent plugins that add additional tools, skills, and integrations."),
+			description: localize('pluginsDesc', "Instale e gerencie plugins do agente que adicionam ferramentas, skills e integrações."),
 		},
 	];
 
@@ -114,10 +114,10 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 		const welcomeInner = DOM.append(this.container, $('.welcome-prompts-inner'));
 
 		const heading = DOM.append(welcomeInner, $('h2.welcome-prompts-heading'));
-		heading.textContent = localize('welcomeHeading', "Agent Customizations");
+		heading.textContent = localize('welcomeHeading', "Personalizações do Agente");
 
 		const subtitle = DOM.append(welcomeInner, $('p.welcome-prompts-subtitle'));
-		subtitle.textContent = localize('welcomeSubtitle', "Tailor how agents work in your projects. Configure workspace customizations for the entire team, or create personal ones that follow you across projects.");
+		subtitle.textContent = localize('welcomeSubtitle', "Ajuste como os agentes trabalham nos seus projetos. Configure personalizações do workspace para o time inteiro ou crie as suas, que te acompanham entre projetos.");
 
 		if (this.welcomePageFeatures?.showGettingStartedBanner !== false) {
 			const gettingStarted = DOM.append(welcomeInner, $('.welcome-prompts-primary'));
@@ -125,22 +125,22 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 			const icon = DOM.append(header, $('span.welcome-prompts-section-label-icon.codicon.codicon-sparkle'));
 			icon.setAttribute('aria-hidden', 'true');
 			const title = DOM.append(header, $('span'));
-			title.textContent = localize('gettingStartedTitle', "Customize Your Agent");
+			title.textContent = localize('gettingStartedTitle', "Personalize Seu Agente");
 
 			const description = DOM.append(gettingStarted, $('p.welcome-prompts-input-helper'));
-			description.textContent = localize('gettingStartedDesc', "Describe your preferences and conventions to draft agents, skills, and instructions.");
+			description.textContent = localize('gettingStartedDesc', "Descreva suas preferências e convenções para rascunhar agentes, skills e instruções.");
 
 			const inputRow = DOM.append(gettingStarted, $('.welcome-prompts-input-row'));
 			this.inputRow = inputRow;
 			this.inputElement = DOM.append(inputRow, $('input.welcome-prompts-input')) as HTMLInputElement;
 			this.inputElement.type = 'text';
-			this.inputElement.placeholder = localize('workflowInputPlaceholder', "Prefer concise commits, thorough reviews, and tested code...");
-			this.inputElement.setAttribute('aria-label', localize('workflowInputAriaLabel', "Describe your preferences to customize your agent"));
+			this.inputElement.placeholder = localize('workflowInputPlaceholder', "Prefiro commits concisos, revisões minuciosas e código testado...");
+			this.inputElement.setAttribute('aria-label', localize('workflowInputAriaLabel', "Descreva suas preferências para personalizar seu agente"));
 
 			const submitBtn = DOM.append(inputRow, $('button.welcome-prompts-input-submit'));
 			this.submitBtn = submitBtn;
-			submitBtn.setAttribute('aria-label', localize('workflowSubmitAriaLabel', "Customize agent"));
-			this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), submitBtn, localize('workflowSubmitTooltip', "Open in Chat")));
+			submitBtn.setAttribute('aria-label', localize('workflowSubmitAriaLabel', "Personalizar agente"));
+			this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), submitBtn, localize('workflowSubmitTooltip', "Abrir no Chat")));
 			const chevron = DOM.append(submitBtn, $('span.codicon.codicon-arrow-up'));
 			chevron.setAttribute('aria-hidden', 'true');
 
@@ -174,7 +174,7 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 					this.sentLabel.remove();
 				}
 				this.sentLabel = DOM.append(inputRow, $('span.welcome-prompts-sent-label'));
-				this.sentLabel.textContent = localize('sentToChat', "Sent to chat \u2713");
+				this.sentLabel.textContent = localize('sentToChat', "Enviado para o chat ✓");
 
 				this.callbacks.prefillChat(query, { isPartialQuery: false, newChat: true });
 			};
@@ -243,8 +243,8 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 			const footer = DOM.append(card, $('.welcome-prompts-card-footer'));
 			if (category.promptType) {
 				const generateBtn = DOM.append(footer, $('button.welcome-prompts-card-action'));
-				generateBtn.textContent = localize('new', "New...");
-				generateBtn.setAttribute('aria-label', localize('newCategoryAriaLabel', "New {0}...", category.label));
+				generateBtn.textContent = localize('new', "Novo...");
+				generateBtn.setAttribute('aria-label', localize('newCategoryAriaLabel', "Novo {0}...", category.label));
 				this.cardDisposables.add(DOM.addDisposableListener(generateBtn, 'click', e => {
 					e.stopPropagation();
 					this.callbacks.closeEditor();
@@ -257,8 +257,8 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 				}));
 			} else {
 				const browseBtn = DOM.append(footer, $('button.welcome-prompts-card-action'));
-				browseBtn.textContent = localize('browse', "Browse...");
-				browseBtn.setAttribute('aria-label', localize('browseCategoryAriaLabel', "Browse {0}...", category.label));
+				browseBtn.textContent = localize('browse', "Explorar...");
+				browseBtn.setAttribute('aria-label', localize('browseCategoryAriaLabel', "Explorar {0}...", category.label));
 				this.cardDisposables.add(DOM.addDisposableListener(browseBtn, 'click', e => {
 					e.stopPropagation();
 					this.callbacks.selectSectionWithMarketplace(category.id);

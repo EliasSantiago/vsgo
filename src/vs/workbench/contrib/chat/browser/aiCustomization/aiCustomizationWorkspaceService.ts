@@ -57,6 +57,7 @@ class AICustomizationWorkspaceService implements IAICustomizationWorkspaceServic
 		AICustomizationManagementSection.McpServers,
 		AICustomizationManagementSection.Plugins,
 		AICustomizationManagementSection.AIProviders,
+		AICustomizationManagementSection.Usage,
 	];
 
 	getStorageSourceFilter(type: PromptsType): IStorageSourceFilter {

@@ -170,6 +170,7 @@ suite('ChatModelsViewModel', () => {
 			vendor: 'copilot',
 			displayName: 'GitHub Copilot',
 			managementCommand: undefined,
+			manageModelsCommand: undefined,
 			when: undefined,
 			configuration: undefined
 		});
@@ -178,6 +179,7 @@ suite('ChatModelsViewModel', () => {
 			vendor: 'openai',
 			displayName: 'OpenAI',
 			managementCommand: undefined,
+			manageModelsCommand: undefined,
 			when: undefined,
 			configuration: undefined
 		});
@@ -534,6 +536,7 @@ suite('ChatModelsViewModel', () => {
 			vendor: 'copilot',
 			displayName: 'GitHub Copilot',
 			managementCommand: undefined,
+			manageModelsCommand: undefined,
 			when: undefined,
 			configuration: undefined
 		});
@@ -640,6 +643,7 @@ suite('ChatModelsViewModel', () => {
 			vendor: 'anthropic',
 			displayName: 'Anthropic',
 			managementCommand: undefined,
+			manageModelsCommand: undefined,
 			when: undefined,
 			configuration: undefined
 		});
@@ -669,6 +673,7 @@ suite('ChatModelsViewModel', () => {
 			vendor: 'azure',
 			displayName: 'Azure OpenAI',
 			managementCommand: undefined,
+			manageModelsCommand: undefined,
 			when: undefined,
 			configuration: undefined
 		});

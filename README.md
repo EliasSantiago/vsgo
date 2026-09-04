@@ -1,78 +1,156 @@
-# Visual Studio Code - Open Source ("Code - OSS")
-[![Feature Requests](https://img.shields.io/github/issues/microsoft/vscode/feature-request.svg)](https://github.com/microsoft/vscode/issues?q=is%3Aopen+is%3Aissue+label%3Afeature-request+sort%3Areactions-%2B1-desc)
-[![Bugs](https://img.shields.io/github/issues/microsoft/vscode/bug.svg)](https://github.com/microsoft/vscode/issues?utf8=✓&q=is%3Aissue+is%3Aopen+label%3Abug)
-[![Gitter](https://img.shields.io/badge/chat-on%20gitter-yellow.svg)](https://gitter.im/Microsoft/vscode)
+# vsgo
 
-## The Repository
+**vsgo** é uma IDE com IA construída sobre o [Code – OSS](https://github.com/microsoft/vscode),
+o núcleo open source do Visual Studio Code. O agente é embutido no editor e roda
+com **as suas próprias chaves de API** (BYOK) ou com **modelos locais** — não há
+backend proprietário, assinatura mensal nem telemetria de código para servidores
+nossos.
 
-This repository ("`Code - OSS`") is where we (Microsoft) develop the [Visual Studio Code](https://code.visualstudio.com) product together with the community. Not only do we work on code and issues here, but we also publish our [roadmap](https://github.com/microsoft/vscode/wiki/Roadmap), [monthly iteration plans](https://github.com/microsoft/vscode/wiki/Iteration-Plans), and our [endgame plans](https://github.com/microsoft/vscode/wiki/Running-the-Endgame). This source code is available to everyone under the standard [MIT license](https://github.com/microsoft/vscode/blob/main/LICENSE.txt).
+> **Projeto independente.** O vsgo não é afiliado à Microsoft, não é endossado por
+> ela e não é o Visual Studio Code. É um fork do Code – OSS, distribuído sob a
+> mesma licença MIT.
 
-## Visual Studio Code
+<details>
+<summary><b>In English</b></summary>
 
-<p align="center">
-  <img alt="VS Code in action" src="https://user-images.githubusercontent.com/35271042/118224532-3842c400-b438-11eb-923d-a5f66fa6785a.png">
-</p>
+**vsgo** is an AI-first IDE built on [Code – OSS](https://github.com/microsoft/vscode),
+the open source core of Visual Studio Code. It embeds a coding agent that runs on
+**your own API keys** (BYOK) or on **local models** — no proprietary backend, no
+subscription, and no code telemetry sent to our servers.
 
-[Visual Studio Code](https://code.visualstudio.com) is a distribution of the `Code - OSS` repository with Microsoft-specific customizations released under a traditional [Microsoft product license](https://code.visualstudio.com/License/).
+Main features: an agentic chat with file/terminal tool calling, parallel agents
+isolated in git worktrees, a background review bot, hierarchical project rules,
+persistent memory, semantic and call-graph code indexing, and MCP server support.
 
-[Visual Studio Code](https://code.visualstudio.com) combines the simplicity of a code editor with what developers need for their core edit-build-debug cycle. It provides comprehensive code editing, navigation, and understanding support along with lightweight debugging, a rich extensibility model, and lightweight integration with existing tools.
+vsgo is an independent fork of Code – OSS under the MIT license. It is not
+affiliated with, endorsed by, or a distribution of Microsoft Visual Studio Code.
 
-Visual Studio Code is updated monthly with new features and bug fixes. You can download it for Windows, macOS, and Linux on [Visual Studio Code's website](https://code.visualstudio.com/Download). To get the latest releases every day, install the [Insiders build](https://code.visualstudio.com/insiders).
+</details>
 
-## Contributing
+## O que ele faz
 
-There are many ways in which you can participate in this project, for example:
+- **Agente no editor** — chat agêntico com chamada de ferramentas: lê e escreve
+  arquivos, roda comandos no terminal e navega pelo repositório.
+- **BYOK, sem intermediário** — Anthropic, OpenAI, Google Gemini, DeepSeek, Groq,
+  Mistral, xAI, Ollama e qualquer endpoint compatível com a API da OpenAI. A chave
+  fica no cofre de segredos do sistema operacional e a chamada vai direto ao
+  provedor.
+- **Modelos locais** — detecção de hardware, download e gerenciamento do servidor
+  de inferência, para trabalhar sem conexão e sem custo por token.
+- **Agents Window** — vários agentes em paralelo, cada um numa branch isolada via
+  `git worktree`, sem disputar a sua árvore de trabalho.
+- **Bug Bot** — revisão contínua em segundo plano, com os apontamentos como
+  comentários inline no código.
+- **Regras hierárquicas** — arquivos `.agents/rules/*.md` com frontmatter, aplicados
+  por glob, definem o comportamento do agente por pasta e por tipo de arquivo.
+- **Memória persistente** — o que o agente aprendeu sobre o projeto sobrevive entre
+  sessões, com editor visual.
+- **Índice semântico e de grafo** — busca por significado e navegação por grafo de
+  chamadas, para o agente achar o código certo em repositório grande.
+- **Servidores MCP** — conecta ferramentas externas pelo Model Context Protocol.
+- **Split changes into PRs** — quebra a árvore de trabalho em pull requests
+  separados, agrupados por feature.
+- **Figma** — leitura de design direto do arquivo do Figma.
 
-* [Submit bugs and feature requests](https://github.com/microsoft/vscode/issues), and help us verify as they are checked in
-* Review [source code changes](https://github.com/microsoft/vscode/pulls)
-* Review the [documentation](https://github.com/microsoft/vscode-docs) and make pull requests for anything from typos to and new content.
+Por ser um fork do Code – OSS, todo o resto continua: extensões, temas,
+depuradores, terminal integrado, Git, remote e o mapeamento de teclado a que você
+já está acostumado. A galeria de extensões aponta para o
+[Open VSX](https://open-vsx.org).
 
-If you are interested in fixing issues and contributing directly to the code base,
-please see the document [How to Contribute](https://github.com/microsoft/vscode/wiki/How-to-Contribute), which covers the following:
+## Instalação
 
-* [How to build and run from source](https://github.com/microsoft/vscode/wiki/How-to-Contribute)
-* [The development workflow, including debugging and running tests](https://github.com/microsoft/vscode/wiki/How-to-Contribute#debugging)
-* [Coding guidelines](https://github.com/microsoft/vscode/wiki/Coding-Guidelines)
-* [Submitting pull requests](https://github.com/microsoft/vscode/wiki/How-to-Contribute#pull-requests)
-* [Finding an issue to work on](https://github.com/microsoft/vscode/wiki/How-to-Contribute#where-to-contribute)
-* [Contributing to translations](https://aka.ms/vscodeloc)
+Baixe o instalador do seu sistema na
+[página de releases](https://github.com/EliasSantiago/vsgo/releases/latest).
 
-## Feedback
+| Sistema | Arquivo |
+|---|---|
+| Windows | `vsgoUserSetup-x64-<versão>.exe` — instala sem senha de administrador |
+| Ubuntu/Debian | `vsgo_<versão>_amd64.deb` — `sudo apt install ./vsgo_<versão>_amd64.deb` |
+| Linux (qualquer distro) | `vsgo-<versão>-linux-x64.tar.gz` — extraia e execute |
 
-* Ask a question on [Stack Overflow](https://stackoverflow.com/questions/tagged/vscode)
-* [Request a new feature](CONTRIBUTING.md)
-* Upvote [popular feature requests](https://github.com/microsoft/vscode/issues?q=is%3Aopen+is%3Aissue+label%3Afeature-request+sort%3Areactions-%2B1-desc)
-* [File an issue](https://github.com/microsoft/vscode/issues)
-* Connect with the extension author community on [GitHub Discussions](https://github.com/microsoft/vscode-discussions/discussions) or [Slack](https://aka.ms/vscode-dev-community)
-* Follow [@code](https://x.com/code) and let us know what you think!
+O passo a passo detalhado, incluindo como conferir a integridade do download com
+`SHA256SUMS.txt`, está em [COMO-INSTALAR.md](scripts/dist-templates/COMO-INSTALAR.md).
+A documentação completa fica em [vsgo.orkestrai.com.br](https://vsgo.orkestrai.com.br/docs).
 
-See our [wiki](https://github.com/microsoft/vscode/wiki/Feedback-Channels) for a description of each of these channels and information on some other available community-driven channels.
+Para atualizar, instale a versão nova por cima: o instalador reconhece a
+instalação anterior.
 
-## Related Projects
+## Primeiros passos
 
-Many of the core components and extensions to VS Code live in their own repositories on GitHub. For example, the [node debug adapter](https://github.com/microsoft/vscode-node-debug) and the [mono debug adapter](https://github.com/microsoft/vscode-mono-debug) repositories are separate from each other. For a complete list, please visit the [Related Projects](https://github.com/microsoft/vscode/wiki/Related-Projects) page on our [wiki](https://github.com/microsoft/vscode/wiki).
+1. Abra a paleta de comandos (`Ctrl+Shift+P`) e rode **Agent Chat: Add API Key...**
+   para cadastrar a chave do provedor que você usa.
+2. Sem chave? Rode **Agent Chat: Gerenciar Modelos Locais** e baixe um modelo para
+   rodar na sua máquina.
+3. Descreva a tarefa no chat. O agente lê o repositório, propõe as mudanças e pede
+   confirmação antes de escrever arquivos ou rodar comandos.
 
-## Bundled Extensions
+Para ajustar o comportamento do agente no seu projeto, crie
+`.agents/rules/<nome>.md`:
 
-VS Code includes a set of built-in extensions located in the [extensions](extensions) folder, including grammars and snippets for many languages. Extensions that provide rich language support (inline suggestions, Go to Definition) for a language have the suffix `language-features`. For example, the `json` extension provides coloring for `JSON` and the `json-language-features` extension provides rich language support for `JSON`.
+```markdown
+---
+description: Idioma padrão
+alwaysApply: true
+---
+Responda em português brasileiro.
+```
 
-## Development Container
+## Compilando a partir do código-fonte
 
-This repository includes a Visual Studio Code Dev Containers / GitHub Codespaces development container.
+Requer **Node.js 22.22.1** (veja [`.nvmrc`](.nvmrc)) e as dependências nativas de
+build da sua plataforma.
 
-* For [Dev Containers](https://aka.ms/vscode-remote/download/containers), use the **Dev Containers: Clone Repository in Container Volume...** command which creates a Docker volume for better disk I/O on macOS and Windows.
-  * If you already have VS Code and Docker installed, you can also click [here](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/microsoft/vscode) to get started. This will cause VS Code to automatically install the Dev Containers extension if needed, clone the source code into a container volume, and spin up a dev container for use.
+```bash
+git clone https://github.com/EliasSantiago/vsgo.git
+cd vsgo
+npm ci
+node build/lib/builtInExtensions.ts
+```
 
-* For Codespaces, install the [GitHub Codespaces](https://marketplace.visualstudio.com/items?itemName=GitHub.codespaces) extension in VS Code, and use the **Codespaces: Create New Codespace** command.
+Para rodar em modo desenvolvimento:
 
-Docker / the Codespace should have at least **4 cores and 6 GB of RAM (8 GB recommended)** to run a full build. See the [development container README](.devcontainer/README.md) for more information.
+```bash
+bash scripts/dev.sh
+```
 
-## Code of Conduct
+Para gerar os instaladores:
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+```bash
+bash scripts/build-linux.sh --min     # .deb + .tar.gz
+bash scripts/build-win.sh --min --all # .exe (rode no Windows)
+```
 
-## License
+Cada pacote precisa ser compilado **no seu próprio sistema operacional**: os
+módulos nativos (`node-pty`, `spdlog`, `sqlite3`, `native-keymap`,
+`@parcel/watcher`) não cruzam de um SO para outro. O caminho normal de publicação
+é o GitHub Actions — veja
+[`.github/workflows/release.yml`](.github/workflows/release.yml).
 
-Copyright (c) Microsoft Corporation. All rights reserved.
+## Contribuindo
 
-Licensed under the [MIT](LICENSE.txt) license.
+Issues e pull requests são bem-vindos em
+[github.com/EliasSantiago/vsgo](https://github.com/EliasSantiago/vsgo).
+Toda contribuição externa passa por revisão de um mantenedor antes do merge.
+
+Reporte problemas em [Issues](https://github.com/EliasSantiago/vsgo/issues/new).
+Para questões de segurança, veja [SECURITY.md](SECURITY.md).
+
+## Privacidade
+
+O vsgo não coleta telemetria para servidores do projeto. O seu código só sai da
+máquina quando você usa um provedor de IA remoto — e vai direto para o provedor
+que você configurou, com a sua chave. Usando modelos locais, nada sai da máquina.
+
+Detalhes na [Política de Privacidade](https://vsgo.orkestrai.com.br/privacidade) e nos
+[Termos de Uso](https://vsgo.orkestrai.com.br/termos).
+
+## Licença
+
+[MIT](LICENSE.txt).
+
+Este projeto deriva do [Code – OSS](https://github.com/microsoft/vscode) da
+Microsoft Corporation, também sob licença MIT. O aviso de copyright original está
+preservado em [LICENSE.txt](LICENSE.txt).
+
+"Visual Studio Code" e "Microsoft" são marcas da Microsoft Corporation. O vsgo não
+usa essas marcas na sua identidade nem se apresenta como produto da Microsoft.

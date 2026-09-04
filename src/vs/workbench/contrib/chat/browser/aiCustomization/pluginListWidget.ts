@@ -163,10 +163,10 @@ class PluginInstalledItemRenderer implements IListRenderer<IPluginInstalledItemE
 			templateData.container.classList.toggle('disabled', !enabled);
 			templateData.status.className = 'mcp-server-status';
 			if (enabled) {
-				templateData.status.textContent = localize('enabled', "Enabled");
+				templateData.status.textContent = localize('enabled', "Habilitado");
 				templateData.status.classList.add('running');
 			} else {
-				templateData.status.textContent = localize('disabled', "Disabled");
+				templateData.status.textContent = localize('disabled', "Desabilitado");
 				templateData.status.classList.add('disabled');
 			}
 		}));
@@ -178,8 +178,8 @@ class PluginInstalledItemRenderer implements IListRenderer<IPluginInstalledItemE
 			const pluginUri = element.item.plugin.uri;
 			const disabled = syncProvider.isDisabled(pluginUri);
 			const title = disabled
-				? localize('enablePlugin', "Enable {0} for sync", element.item.name)
-				: localize('disablePlugin', "Disable {0} from sync", element.item.name);
+				? localize('enablePlugin', "Habilitar {0} para sincronização", element.item.name)
+				: localize('disablePlugin', "Desabilitar {0} da sincronização", element.item.name);
 			const checkbox = templateData.disposables.add(
 				new Checkbox(title, !disabled, defaultCheckboxStyles)
 			);
@@ -254,26 +254,26 @@ class PluginRemoteItemRenderer implements IListRenderer<IPluginRemoteItemEntry, 
 		templateData.container.classList.toggle('disabled', element.item.enabled === false);
 		templateData.status.className = 'mcp-server-status';
 		if (element.item.enabled === false) {
-			templateData.status.textContent = localize('remotePluginDisabled', "Disabled");
+			templateData.status.textContent = localize('remotePluginDisabled', "Desabilitado");
 			templateData.status.classList.add('disabled');
 			return;
 		}
 
 		switch (element.item.status) {
 			case 'loading':
-				templateData.status.textContent = localize('remotePluginLoading', "Loading");
+				templateData.status.textContent = localize('remotePluginLoading', "Carregando");
 				templateData.status.classList.add('running');
 				break;
 			case 'loaded':
-				templateData.status.textContent = localize('remotePluginLoaded', "Loaded");
+				templateData.status.textContent = localize('remotePluginLoaded', "Carregado");
 				templateData.status.classList.add('running');
 				break;
 			case 'degraded':
-				templateData.status.textContent = localize('remotePluginDegraded', "Warning");
+				templateData.status.textContent = localize('remotePluginDegraded', "Aviso");
 				templateData.status.classList.add('disabled');
 				break;
 			case 'error':
-				templateData.status.textContent = localize('remotePluginError', "Error");
+				templateData.status.textContent = localize('remotePluginError', "Erro");
 				templateData.status.classList.add('disabled');
 				break;
 			default:
@@ -330,7 +330,7 @@ class PluginMarketplaceItemRenderer implements IListRenderer<IPluginMarketplaceI
 		templateData.elementDisposables.clear();
 
 		templateData.name.textContent = element.item.name;
-		templateData.publisher.textContent = element.item.marketplace ? localize('byPublisher', "by {0}", element.item.marketplace) : '';
+		templateData.publisher.textContent = element.item.marketplace ? localize('byPublisher', "por {0}", element.item.marketplace) : '';
 		templateData.description.textContent = element.item.description || '';
 
 		// Check if the plugin is already installed by comparing install URIs
@@ -347,16 +347,16 @@ class PluginMarketplaceItemRenderer implements IListRenderer<IPluginMarketplaceI
 		const isAlreadyInstalled = this.agentPluginService.plugins.get().some(p => isEqual(p.uri, installUri));
 
 		if (isAlreadyInstalled) {
-			templateData.installButton.label = localize('installed', "Installed");
+			templateData.installButton.label = localize('installed', "Instalado");
 			templateData.installButton.enabled = false;
 			return;
 		}
 
-		templateData.installButton.label = localize('install', "Install");
+		templateData.installButton.label = localize('install', "Instalar");
 		templateData.installButton.enabled = true;
 
 		templateData.elementDisposables.add(templateData.installButton.onDidClick(async () => {
-			templateData.installButton.label = localize('installing', "Installing...");
+			templateData.installButton.label = localize('installing', "Instalando...");
 			templateData.installButton.enabled = false;
 			try {
 				await this.pluginInstallService.installPlugin({
@@ -370,9 +370,9 @@ class PluginMarketplaceItemRenderer implements IListRenderer<IPluginMarketplaceI
 					marketplaceType: element.item.marketplaceType,
 					readmeUri: element.item.readmeUri,
 				});
-				templateData.installButton.label = localize('installed', "Installed");
+				templateData.installButton.label = localize('installed', "Instalado");
 			} catch (_e) {
-				templateData.installButton.label = localize('install', "Install");
+				templateData.installButton.label = localize('install', "Instalar");
 				templateData.installButton.enabled = true;
 			}
 		}));
@@ -501,7 +501,7 @@ export class PluginListWidget extends Disposable {
 		// Search container
 		const searchContainer = DOM.append(this.searchAndButtonContainer, $('.list-search-container'));
 		this.searchInput = this._register(new InputBox(searchContainer, this.contextViewService, {
-			placeholder: localize('searchPluginsPlaceholder', "Type to search..."),
+			placeholder: localize('searchPluginsPlaceholder', "Digite para buscar..."),
 			inputBoxStyles: defaultInputBoxStyles,
 		}));
 
@@ -538,7 +538,7 @@ export class PluginListWidget extends Disposable {
 		this.addButton.element.classList.add('list-add-button');
 		this._register(this.addButton.onDidClick(() => this.runPrimaryAddAction()));
 
-		const createPluginLabel = localize('createPlugin', "Create Plugin");
+		const createPluginLabel = localize('createPlugin', "Criar Plugin");
 		this.createPluginButton = this._register(new Button(this.buttonContainer, { ...defaultButtonStyles, secondary: true, supportIcons: true, title: createPluginLabel, ariaLabel: createPluginLabel }));
 		this.createPluginButton.element.classList.add('list-icon-button');
 		this.createPluginButton.label = `$(${Codicon.newFile.id})`;
@@ -558,7 +558,7 @@ export class PluginListWidget extends Disposable {
 		const disabledHeader = DOM.append(this.disabledContainer, $('.empty-state-header'));
 		this.disabledIcon = DOM.append(disabledHeader, $('.empty-icon'));
 		const disabledText = DOM.append(disabledHeader, $('.empty-text'));
-		disabledText.textContent = localize('pluginsDisabledTitle', "Plugins are disabled");
+		disabledText.textContent = localize('pluginsDisabledTitle', "Os plugins estão desabilitados");
 		this.disabledMessage = DOM.append(this.disabledContainer, $('.empty-subtext'));
 
 		// List container
@@ -567,9 +567,9 @@ export class PluginListWidget extends Disposable {
 		// Section footer
 		this.sectionHeader = DOM.append(this.element, $('.section-footer'));
 		this.sectionDescription = DOM.append(this.sectionHeader, $('p.section-footer-description'));
-		this.sectionDescription.textContent = localize('pluginsDescription', "Extend your AI agent with plugins that add commands, skills, agents, hooks, and MCP servers from reusable packages.");
+		this.sectionDescription.textContent = localize('pluginsDescription', "Amplie seu agente de IA com plugins que trazem comandos, skills, agentes, hooks e servidores MCP em pacotes reutilizáveis.");
 		this.sectionLink = DOM.append(this.sectionHeader, $('a.section-footer-link')) as HTMLAnchorElement;
-		this.sectionLink.textContent = localize('learnMorePlugins', "Learn more about agent plugins");
+		this.sectionLink.textContent = localize('learnMorePlugins', "Saiba mais sobre plugins do agente");
 		this.sectionLink.href = 'https://code.visualstudio.com/docs/copilot/customization/agent-plugins';
 		this._register(DOM.addDisposableListener(this.sectionLink, 'click', (e) => {
 			e.preventDefault();
@@ -599,7 +599,7 @@ export class PluginListWidget extends Disposable {
 				accessibilityProvider: {
 					getAriaLabel(element: IPluginListEntry) {
 						if (element.type === 'group-header') {
-							return localize('pluginGroupAriaLabel', "{0}, {1} items, {2}", element.label, element.count, element.collapsed ? localize('collapsed', "collapsed") : localize('expanded', "expanded"));
+							return localize('pluginGroupAriaLabel', "{0}, {1} itens, {2}", element.label, element.count, element.collapsed ? localize('collapsed', "recolhido") : localize('expanded', "expandido"));
 						}
 						const name = formatDisplayName(element.item.name);
 						const description = element.item.description ? truncateToFirstLine(element.item.description) : undefined;
@@ -717,11 +717,11 @@ export class PluginListWidget extends Disposable {
 			DOM.clearNode(this.disabledMessage);
 			this.disabledLinkListener.clear();
 			if (policyLocked) {
-				this.disabledMessage.textContent = localize('pluginsDisabledByPolicy', "Plugin integration in chat is disabled by your organization. Contact your organization administrator for more information.");
+				this.disabledMessage.textContent = localize('pluginsDisabledByPolicy', "A integração de plugins no chat foi desabilitada pela sua organização. Fale com o administrador da organização para mais informações.");
 			} else {
-				this.disabledMessage.appendChild(document.createTextNode(localize('pluginsDisabledBySettingPrefix', "Plugins are disabled in settings. ")));
+				this.disabledMessage.appendChild(document.createTextNode(localize('pluginsDisabledBySettingPrefix', "Os plugins estão desabilitados nas configurações. ")));
 				const link = DOM.append(this.disabledMessage, $('a.mcp-disabled-settings-link')) as HTMLAnchorElement;
-				link.textContent = localize('pluginsDisabledSettingLink', "Configure in settings.");
+				link.textContent = localize('pluginsDisabledSettingLink', "Configurar nas configurações.");
 				link.href = '#';
 				link.setAttribute('role', 'button');
 				this.disabledLinkListener.value = DOM.addDisposableListener(link, 'click', (e) => {
@@ -753,11 +753,11 @@ export class PluginListWidget extends Disposable {
 		}
 
 		this.browseButton.element.parentElement!.style.display = this.browseMode ? 'none' : '';
-		this.browseButton.label = `$(${Codicon.library.id}) ${localize('browseMarketplace', "Browse Marketplace")}`;
+		this.browseButton.label = `$(${Codicon.library.id}) ${localize('browseMarketplace', "Explorar Marketplace")}`;
 		this.browseButton.enabled = browseMarketplaceAvailable;
 		this.browseButton.setTitle(browseMarketplaceAvailable
-			? localize('browseMarketplace', "Browse Marketplace")
-			: localize('browseMarketplaceUnsupportedWeb', "Browse Marketplace is not available in VS Code for the Web."));
+			? localize('browseMarketplace', "Explorar Marketplace")
+			: localize('browseMarketplaceUnsupportedWeb', "Explorar o marketplace não está disponível no VS Code para a Web."));
 
 		this.updateAddButton();
 		this.createPluginButton.enabled = true;
@@ -785,7 +785,7 @@ export class PluginListWidget extends Disposable {
 			this.addButton.label = this.formatActionLabel(primary);
 			this.addButton.enabled = primary.enabled !== false;
 			this.addButton.primaryButton.setTitle(primary.tooltip ?? primary.label);
-			this.addButton.dropdownButton.setTitle(localize('morePluginAddActions', "More Plugin Add Actions..."));
+			this.addButton.dropdownButton.setTitle(localize('morePluginAddActions', "Mais Formas de Adicionar Plugins..."));
 		} else {
 			this.addButtonSimple.label = this.formatActionLabel(primary);
 			this.addButtonSimple.enabled = primary.enabled !== false;
@@ -798,8 +798,8 @@ export class PluginListWidget extends Disposable {
 			...this.pluginActions,
 			{
 				id: 'plugin.installFromSource',
-				label: localize('installFromSource', "Install Plugin from Source"),
-				tooltip: localize('installFromSource', "Install Plugin from Source"),
+				label: localize('installFromSource', "Instalar Plugin a Partir do Código"),
+				tooltip: localize('installFromSource', "Instalar Plugin a Partir do Código"),
 				icon: Codicon.add,
 				run: () => this.commandService.executeCommand('workbench.action.chat.installPluginFromSource'),
 			},
@@ -853,8 +853,8 @@ export class PluginListWidget extends Disposable {
 		this.browseButton.element.parentElement!.style.display = browse ? 'none' : '';
 
 		this.searchInput.setPlaceHolder(browse
-			? localize('searchMarketplacePlaceholder', "Search plugin marketplace...")
-			: localize('searchPluginsPlaceholder', "Type to search...")
+			? localize('searchMarketplacePlaceholder', "Buscar no marketplace de plugins...")
+			: localize('searchPluginsPlaceholder', "Digite para buscar...")
 		);
 
 		if (browse) {
@@ -878,7 +878,7 @@ export class PluginListWidget extends Disposable {
 		// Show loading state
 		this.emptyContainer.style.display = 'flex';
 		this.listContainer.style.display = 'none';
-		this.emptyText.textContent = localize('loadingMarketplace', "Loading marketplace...");
+		this.emptyText.textContent = localize('loadingMarketplace', "Carregando o marketplace...");
 		this.emptySubtext.textContent = '';
 
 		try {
@@ -908,8 +908,8 @@ export class PluginListWidget extends Disposable {
 				this.marketplaceItems = [];
 				this.emptyContainer.style.display = 'flex';
 				this.listContainer.style.display = 'none';
-				this.emptyText.textContent = localize('marketplaceError', "Unable to load marketplace");
-				this.emptySubtext.textContent = localize('tryAgainLater', "Check your connection and try again");
+				this.emptyText.textContent = localize('marketplaceError', "Não foi possível carregar o marketplace");
+				this.emptySubtext.textContent = localize('tryAgainLater', "Verifique sua conexão e tente de novo");
 			}
 		}
 	}
@@ -919,10 +919,10 @@ export class PluginListWidget extends Disposable {
 			this.emptyContainer.style.display = 'flex';
 			this.listContainer.style.display = 'none';
 			if (this.searchQuery.trim()) {
-				this.emptyText.textContent = localize('noMarketplaceResults', "No plugins match '{0}'", this.searchQuery);
-				this.emptySubtext.textContent = localize('tryDifferentSearch', "Try a different search term");
+				this.emptyText.textContent = localize('noMarketplaceResults', "Nenhum plugin corresponde a '{0}'", this.searchQuery);
+				this.emptySubtext.textContent = localize('tryDifferentSearch', "Tente outro termo de busca");
 			} else {
-				this.emptyText.textContent = localize('emptyMarketplace', "No plugins available");
+				this.emptyText.textContent = localize('emptyMarketplace', "Nenhum plugin disponível");
 				this.emptySubtext.textContent = '';
 			}
 		} else {
@@ -957,8 +957,8 @@ export class PluginListWidget extends Disposable {
 	private getRemoteGroupMetadata(groupKey: string | undefined): { group: string; label: string; description: string } {
 		return {
 			group: groupKey ?? 'remote-host',
-			label: localize('remoteHostGroup', "Remote"),
-			description: localize('remoteHostGroupDescription', "Plugins configured directly on the remote agent host and available without local sync."),
+			label: localize('remoteHostGroup', "Remoto"),
+			description: localize('remoteHostGroupDescription', "Plugins configurados direto no host remoto do agente, disponíveis sem sincronização local."),
 		};
 	}
 
@@ -1002,14 +1002,14 @@ export class PluginListWidget extends Disposable {
 			this.listContainer.style.display = 'none';
 
 			if (this.searchQuery.trim()) {
-				this.emptyText.textContent = localize('noMatchingPlugins', "No plugins match '{0}'", this.searchQuery);
-				this.emptySubtext.textContent = localize('tryDifferentSearch', "Try a different search term");
+				this.emptyText.textContent = localize('noMatchingPlugins', "Nenhum plugin corresponde a '{0}'", this.searchQuery);
+				this.emptySubtext.textContent = localize('tryDifferentSearch', "Tente outro termo de busca");
 			} else if (this.harnessService.getActiveDescriptor().itemProvider) {
-				this.emptyText.textContent = localize('noRemotePlugins', "No plugins configured");
-				this.emptySubtext.textContent = localize('addRemotePlugins', "Use the toolbar to add remote plugins or install plugins from a source.");
+				this.emptyText.textContent = localize('noRemotePlugins', "Nenhum plugin configurado");
+				this.emptySubtext.textContent = localize('addRemotePlugins', "Use a barra de ferramentas para adicionar plugins remotos ou instalar plugins a partir do código.");
 			} else {
-				this.emptyText.textContent = localize('noPlugins', "No plugins installed");
-				this.emptySubtext.textContent = localize('browseToAdd', "Browse the marketplace to discover and install plugins");
+				this.emptyText.textContent = localize('noPlugins', "Nenhum plugin instalado");
+				this.emptySubtext.textContent = localize('browseToAdd', "Explore o marketplace para descobrir e instalar plugins");
 			}
 		} else {
 			this.emptyContainer.style.display = 'none';
@@ -1049,8 +1049,8 @@ export class PluginListWidget extends Disposable {
 				entries,
 				{
 					group: 'enabled',
-					label: localize('enabledGroup', "Enabled Locally"),
-					description: localize('enabledGroupDescription', "Plugins installed in this client and available for syncing to the remote session."),
+					label: localize('enabledGroup', "Habilitados Localmente"),
+					description: localize('enabledGroupDescription', "Plugins instalados neste cliente e disponíveis para sincronizar com a sessão remota."),
 				},
 				enabledPlugins.map(item => ({ type: 'plugin-item' as const, item })),
 				isFirst,
@@ -1062,8 +1062,8 @@ export class PluginListWidget extends Disposable {
 				entries,
 				{
 					group: 'disabled',
-					label: localize('disabledGroup', "Disabled Locally"),
-					description: localize('disabledGroupDescription', "Plugins installed in this client but currently disabled."),
+					label: localize('disabledGroup', "Desabilitados Localmente"),
+					description: localize('disabledGroupDescription', "Plugins instalados neste cliente, mas desabilitados no momento."),
 				},
 				disabledPlugins.map(item => ({ type: 'plugin-item' as const, item })),
 				isFirst,

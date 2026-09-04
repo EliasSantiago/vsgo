@@ -56,10 +56,10 @@ export class ExtensionsInstallConfirmationWidgetSubPart extends BaseChatToolInvo
 
 		const state = toolInvocation.state.get();
 		if (state.type === IChatToolInvocation.StateKind.WaitingForConfirmation) {
-			const allowLabel = localize('allow', "Allow");
+			const allowLabel = localize('allow', "Permitir");
 			const allowTooltip = keybindingService.appendKeybinding(allowLabel, AcceptToolConfirmationActionId);
 
-			const cancelLabel = localize('cancel', "Cancel");
+			const cancelLabel = localize('cancel', "Cancelar");
 			const cancelTooltip = keybindingService.appendKeybinding(cancelLabel, CancelChatActionId);
 			const enableAllowButtonEvent = this._register(new Emitter<boolean>());
 

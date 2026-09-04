@@ -173,7 +173,7 @@ export class ToolTerminalCreator {
 
 		const config: IShellLaunchConfig = {
 			icon: ThemeIcon.fromId(Codicon.chatSparkle.id),
-			hideFromUser: true,
+			hideFromUser: false,
 			forcePersist: true,
 			env,
 		};

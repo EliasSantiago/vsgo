@@ -5,20 +5,32 @@
 
 import * as vscode from 'vscode';
 
-export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'ollama';
+export type ProviderId = 'vsgo' | 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'local' | 'mistral' | 'groq' | 'deepseek' | 'xai';
 
 export const PROVIDER_LABELS: Record<ProviderId, string> = {
+	vsgo: 'Conta vsgo',
 	anthropic: 'Anthropic',
 	openai: 'OpenAI',
 	gemini: 'Google Gemini',
 	ollama: 'Ollama (local)',
+	local: 'Local Models (llama.cpp)',
+	mistral: 'Mistral AI',
+	groq: 'Groq',
+	deepseek: 'DeepSeek',
+	xai: 'xAI (Grok)',
 };
 
 export const PROVIDER_KEY_HINTS: Record<ProviderId, string> = {
+	vsgo: 'Entre pelo navegador — nenhuma chave para colar',
 	anthropic: 'sk-ant-...',
 	openai: 'sk-...',
 	gemini: 'AIza...',
 	ollama: 'http://localhost:11434 (URL, not a key)',
+	local: 'No key needed — models run on this machine',
+	mistral: 'API key from console.mistral.ai',
+	groq: 'API key from console.groq.com',
+	deepseek: 'API key from platform.deepseek.com',
+	xai: 'API key from console.x.ai',
 };
 
 const STORAGE_PREFIX = 'agent-chat.apikey.';
@@ -43,8 +55,16 @@ export class ByokStorage {
 		this._onChange.fire(provider);
 	}
 
+	/**
+	 * Provedores com credencial guardada aqui.
+	 *
+	 * `vsgo` ficou de fora: a conta não é uma chave colada, é uma sessão aberta
+	 * pelo navegador e guardada por `account/vsgoAuth.ts`. Listá-la aqui
+	 * ofereceria "remover a chave da vsgo" para algo que se desfaz saindo da
+	 * conta.
+	 */
 	async list(): Promise<ProviderId[]> {
-		const all: ProviderId[] = ['anthropic', 'openai', 'gemini', 'ollama'];
+		const all: ProviderId[] = ['anthropic', 'openai', 'gemini', 'ollama', 'local', 'mistral', 'groq', 'deepseek', 'xai'];
 		const found: ProviderId[] = [];
 		for (const p of all) {
 			const value = await this.get(p);

@@ -116,7 +116,7 @@ export class ChatTerminalToolConfirmationSubPart extends BaseChatToolInvocationS
 			moreActions = [];
 			if (!autoApproveWarningAccepted) {
 				moreActions.push({
-					label: localize('autoApprove.enable', 'Enable Auto Approve...'),
+					label: localize('autoApprove.enable', 'Habilitar Aprovação Automática...'),
 					data: {
 						type: 'enable'
 					}
@@ -377,7 +377,7 @@ export class ChatTerminalToolConfirmationSubPart extends BaseChatToolInvocationS
 								enabledCommands: [TerminalContribCommandId.DisableSessionAutoApproval]
 							}
 						};
-						terminalData.autoApproveInfo = new MarkdownString(`${localize('sessionApproval', 'All commands will be auto approved for this session')} ([${localize('sessionApproval.disable', 'Disable')}](${disableUri.toString()}))`, mdTrustSettings);
+						terminalData.autoApproveInfo = new MarkdownString(`${localize('sessionApproval', 'Todos os comandos serão aprovados automaticamente nesta sessão')} ([${localize('sessionApproval.disable', 'Desabilitar')}](${disableUri.toString()}))`, mdTrustSettings);
 						toolConfirmKind = ToolConfirmKind.UserAction;
 						break;
 					}
@@ -403,12 +403,12 @@ export class ChatTerminalToolConfirmationSubPart extends BaseChatToolInvocationS
 
 		return [
 			{
-				...getLabelAndTooltip(localize('tool.allow', "Allow"), AcceptToolConfirmationActionId),
+				...getLabelAndTooltip(localize('tool.allow', "Permitir"), AcceptToolConfirmationActionId),
 				data: true,
 				moreActions,
 			},
 			{
-				...getLabelAndTooltip(localize('tool.skip', "Skip"), SkipToolConfirmationActionId, localize('skip.detail', 'Proceed without executing this command')),
+				...getLabelAndTooltip(localize('tool.skip', "Pular"), SkipToolConfirmationActionId, localize('skip.detail', 'Prosseguir sem executar este comando')),
 				data: { type: 'skip' },
 				isSecondary: true,
 			},
@@ -418,18 +418,18 @@ export class ChatTerminalToolConfirmationSubPart extends BaseChatToolInvocationS
 	private async _showAutoApproveWarning(): Promise<boolean> {
 		const promptResult = await this.dialogService.prompt({
 			type: Severity.Info,
-			message: localize('autoApprove.title', 'Enable terminal auto approve?'),
+			message: localize('autoApprove.title', 'Habilitar aprovação automática no terminal?'),
 			buttons: [{
-				label: localize('autoApprove.button.enable', 'Enable'),
+				label: localize('autoApprove.button.enable', 'Habilitar'),
 				run: () => true
 			}],
 			cancelButton: true,
 			custom: {
 				icon: Codicon.shield,
 				markdownDetails: [{
-					markdown: new MarkdownString(localize('autoApprove.markdown', 'This will enable a configurable subset of commands to run in the terminal autonomously. It provides *best effort protections* and assumes the agent is not acting maliciously.')),
+					markdown: new MarkdownString(localize('autoApprove.markdown', 'Isso habilitará um subconjunto configurável de comandos para serem executados no terminal de forma autônoma. Fornece *proteções de melhor esforço* e assume que o agente não está agindo de forma maliciosa.')),
 				}, {
-					markdown: new MarkdownString(`[${localize('autoApprove.markdown2', 'Learn more about the potential risks and how to avoid them.')}](https://code.visualstudio.com/docs/copilot/security#_security-considerations)`)
+					markdown: new MarkdownString(`[${localize('autoApprove.markdown2', 'Saiba mais sobre os riscos potenciais e como evitá-los.')}](https://code.visualstudio.com/docs/copilot/security#_security-considerations)`)
 				}],
 			}
 		});

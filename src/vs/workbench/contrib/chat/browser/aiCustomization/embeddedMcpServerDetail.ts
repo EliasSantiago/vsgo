@@ -49,7 +49,7 @@ export class EmbeddedMcpServerDetail extends Disposable {
 		this.descriptionEl = DOM.append(this.root, $('.embedded-detail-description'));
 
 		this.emptyEl = DOM.append(this.root, $('.embedded-detail-empty'));
-		this.emptyEl.textContent = localize('mcpDetailEmpty', "No MCP server selected.");
+		this.emptyEl.textContent = localize('mcpDetailEmpty', "Nenhum servidor MCP selecionado.");
 
 		// Refresh when the underlying server changes (install state, enablement, etc.).
 		this._register(this.mcpWorkbenchService.onChange(server => {
@@ -120,7 +120,7 @@ function describeMcpScope(scope: LocalMcpServerScope | undefined): { label: stri
 			return { label: localize('mcpScopeWorkspace', "Workspace"), icon: workspaceIcon };
 		case LocalMcpServerScope.User:
 		case LocalMcpServerScope.RemoteUser:
-			return { label: localize('mcpScopeUser', "User"), icon: userIcon };
+			return { label: localize('mcpScopeUser', "Usuário"), icon: userIcon };
 		default:
 			return undefined;
 	}

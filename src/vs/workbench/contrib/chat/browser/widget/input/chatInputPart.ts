@@ -84,7 +84,7 @@ import { ChatRequestVariableSet, getImageAttachmentLimit, IChatRequestVariableEn
 import { ChatMode, getModeNameForTelemetry, IChatMode, IChatModes, IChatModeService } from '../../../common/chatModes.js';
 import { IChatFollowup, IChatPlanReview, IChatQuestionCarousel, IChatToolInvocation } from '../../../common/chatService/chatService.js';
 import { IChatSessionProviderOptionGroup, IChatSessionProviderOptionItem, IChatSessionsService, isIChatSessionFileChange2, localChatSessionType } from '../../../common/chatSessionsService.js';
-import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, isChatPermissionLevel } from '../../../common/constants.js';
+import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, isChatPermissionLevel, isAutoApproveLevel } from '../../../common/constants.js';
 import { IChatEditingSession, IModifiedFileEntry, ModifiedFileEntryState } from '../../../common/editing/chatEditingService.js';
 import { ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService } from '../../../common/languageModels.js';
 import { IChatModelInputState, IChatRequestModeInfo, IInputModel } from '../../../common/model/chatModel.js';
@@ -94,7 +94,7 @@ import { IChatResponseViewModel, isResponseVM } from '../../../common/model/chat
 import { IChatAgentService } from '../../../common/participants/chatAgents.js';
 import { ILanguageModelToolsService } from '../../../common/tools/languageModelToolsService.js';
 import { ChatHistoryNavigator } from '../../../common/widget/chatWidgetHistoryService.js';
-import { ChatSessionPrimaryPickerAction, ChatSubmitAction, IChatExecuteActionContext, OpenDelegationPickerAction, OpenModelPickerAction, OpenModePickerAction, OpenPermissionPickerAction, OpenSessionTargetPickerAction, OpenWorkspacePickerAction } from '../../actions/chatExecuteActions.js';
+import { ChatSessionPrimaryPickerAction, ChatSubmitAction, IChatExecuteActionContext, OpenDelegationPickerAction, OpenModelPickerAction, OpenModePickerAction, OpenPermissionPickerAction, OpenSessionTargetPickerAction, OpenWorkspacePickerAction, ToggleChatAutoModeAction } from '../../actions/chatExecuteActions.js';
 import { AgentSessionProviders, getAgentSessionProvider } from '../../agentSessions/agentSessions.js';
 import { IAgentSessionsService } from '../../agentSessions/agentSessionsService.js';
 import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
@@ -124,14 +124,14 @@ import { IChatInputPickerOptions } from './chatInputPickerActionItem.js';
 import { ChatSelectedTools } from './chatSelectedTools.js';
 import { DelegationSessionPickerActionItem } from './delegationSessionPickerActionItem.js';
 import { ModelPickerActionItem, IModelPickerDelegate } from './modelPickerActionItem.js';
+import { AutoModeToggleActionItem, IAutoModeDelegate } from './autoModeToggleActionItem.js';
 import { IModePickerDelegate, ModePickerActionItem } from './modePickerActionItem.js';
 import { IPermissionPickerDelegate, PermissionPickerActionItem } from './permissionPickerActionItem.js';
 import { SessionTypePickerActionItem } from './sessionTargetPickerActionItem.js';
 import { WorkspacePickerActionItem } from './workspacePickerActionItem.js';
-import { ChatContextUsageWidget } from '../../widgetHosts/viewPane/chatContextUsageWidget.js';
+import { ChatContextUsageActionItem, ChatContextUsageWidget, ShowContextUsageActionId } from '../../widgetHosts/viewPane/chatContextUsageWidget.js';
 import { Target } from '../../../common/promptSyntax/promptTypes.js';
 import { findLast } from '../../../../../../base/common/arraysFind.js';
-import { ConfigureToolsAction } from '../../actions/chatToolActions.js';
 
 const $ = dom.$;
 
@@ -329,7 +329,6 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 	private readonly _notificationWidget = this._register(new MutableDisposable<ChatInputNotificationWidget>());
 
 	private contextUsageWidget?: ChatContextUsageWidget;
-	private contextUsageWidgetContainer!: HTMLElement;
 	private readonly _contextUsageDisposables = this._register(new MutableDisposable<DisposableStore>());
 
 	get inputContainerElement(): HTMLElement | undefined {
@@ -1377,14 +1376,14 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		} else {
 			switch (this.currentModeKind) {
 				case ChatModeKind.Agent:
-					modeLabel = localize('chatInput.mode.agent', "(Agent), edit files in your workspace.");
+					modeLabel = localize('chatInput.mode.agent', "(Agente), edita arquivos no seu workspace.");
 					break;
 				case ChatModeKind.Edit:
-					modeLabel = localize('chatInput.mode.edit', "(Edit), edit files in your workspace.");
+					modeLabel = localize('chatInput.mode.edit', "(Editar), edita arquivos no seu workspace.");
 					break;
 				case ChatModeKind.Ask:
 				default:
-					modeLabel = localize('chatInput.mode.ask', "(Ask), ask questions or type / for topics.");
+					modeLabel = localize('chatInput.mode.ask', "(Perguntar), faça perguntas ou digite / para tópicos.");
 					break;
 			}
 		}
@@ -2092,9 +2091,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 							dom.h('.chat-input-toolbars@inputToolbars'),
 						]),
 					]),
-					dom.h('.chat-secondary-toolbar@secondaryToolbar', [
-						dom.h('.chat-context-usage-container@contextUsageWidgetContainer'),
-					]),
+					dom.h('.chat-secondary-toolbar@secondaryToolbar'),
 					dom.h('.chat-attachments-container@attachmentsContainer', [
 						dom.h('.chat-attached-context@attachedContextContainer'),
 					]),
@@ -2121,9 +2118,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 						dom.h('.chat-input-toolbars@inputToolbars'),
 					]),
 				]),
-				dom.h('.chat-secondary-toolbar@secondaryToolbar', [
-					dom.h('.chat-context-usage-container@contextUsageWidgetContainer'),
-				]),
+				dom.h('.chat-secondary-toolbar@secondaryToolbar'),
 			]);
 		}
 		this.container = elements.root;
@@ -2158,15 +2153,9 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		this.chatToolConfirmationCarouselContainer = elements.chatToolConfirmationCarouselContainer;
 		dom.hide(this.chatToolConfirmationCarouselContainer);
 		this.chatInputNotificationContainer = elements.chatInputNotificationContainer;
-		this.contextUsageWidgetContainer = elements.contextUsageWidgetContainer;
-
-		if (this.options.isSessionsWindow || this.options.renderStyle === 'compact') {
-			toolbarsContainer.prepend(this.contextUsageWidgetContainer);
-		}
-
-		// Context usage widget — will be positioned in the toolbar after toolbars are created
+		// Context usage ring — rendered by `ChatContextUsageActionItem` as the last
+		// item of the input toolbar, right after the model picker.
 		this.contextUsageWidget = this._register(this.instantiationService.createInstance(ChatContextUsageWidget));
-		this.contextUsageWidgetContainer.appendChild(this.contextUsageWidget.domNode);
 
 		if (this.options.enableImplicitContext && !this._implicitContext) {
 			this._implicitContext = this._register(
@@ -2325,7 +2314,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		this._register(dom.addStandardDisposableListener(this.attachmentsContainer, dom.EventType.CLICK, e => this.inputEditor.focus()));
 		const shorterChatInputActionIds = new Set<string>([
 			OpenModePickerAction.ID,
-			ConfigureToolsAction.ID,
+			ShowContextUsageActionId,
 		]);
 		this.inputActionsToolbar = this._register(this.instantiationService.createInstance(MenuWorkbenchToolBar, this.options.renderInputToolbarBelowInput ? this.attachmentsContainer : toolbarsContainer, MenuId.ChatInput, {
 			telemetrySource: this.options.menus.telemetrySource,
@@ -2382,6 +2371,20 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 						},
 					};
 					return this.modeWidget = this.instantiationService.createInstance(ModePickerActionItem, action, delegate, pickerOptions);
+				} else if (action.id === ShowContextUsageActionId && action instanceof MenuItemAction) {
+					return this.contextUsageWidget
+						? new ChatContextUsageActionItem(action, this.contextUsageWidget)
+						: new HiddenActionViewItem(action);
+				} else if (action.id === ToggleChatAutoModeAction.ID && action instanceof MenuItemAction) {
+					const autoModeDelegate: IAutoModeDelegate = {
+						currentPermissionLevel: this._currentPermissionLevel,
+						toggle: () => {
+							const current = this._currentPermissionLevel.get();
+							const next = isAutoApproveLevel(current) ? ChatPermissionLevel.Default : ChatPermissionLevel.AutoApprove;
+							this.setPermissionLevel(next);
+						},
+					};
+					return new AutoModeToggleActionItem(undefined, action, autoModeDelegate);
 				} else if ((action.id === OpenSessionTargetPickerAction.ID || action.id === OpenDelegationPickerAction.ID) && action instanceof MenuItemAction) {
 					// Use provided delegate if available, otherwise create default delegate
 					const getActiveSessionType = () => {
@@ -3378,8 +3381,8 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			const { files, added, removed, shouldShowEditingSession } = topLevelStats.read(reader);
 
 			const buttonLabel = files === 1
-				? localize('chatEditingSession.oneFile', '1 file changed')
-				: localize('chatEditingSession.manyFiles', '{0} files changed', files);
+				? localize('chatEditingSession.oneFile', '1 arquivo alterado')
+				: localize('chatEditingSession.manyFiles', '{0} arquivos alterados', files);
 
 			button.label = buttonLabel;
 			button.element.setAttribute('aria-label', localize('chatEditingSession.ariaLabelWithCounts', '{0}, {1} lines added, {2} lines removed', buttonLabel, added, removed));
@@ -3644,9 +3647,8 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			const inputToolbarWidth = this.cachedInputToolbarWidth = this.inputActionsToolbar.getItemsWidth();
 			const executeToolbarPadding = (this.executeToolbar.getItemsLength() - 1) * toolbarItemGap;
 			const inputToolbarPadding = this.inputActionsToolbar.getItemsLength() ? (this.inputActionsToolbar.getItemsLength() - 1) * toolbarItemGap : 0;
-			const contextUsageWidth = dom.getTotalWidth(this.contextUsageWidgetContainer);
-			const inputToolbarsPadding = 12; // pdading between input toolbar/execute toolbar/contextUsage.
-			return executeToolbarWidth + executeToolbarPadding + contextUsageWidth + (this.options.renderInputToolbarBelowInput ? 0 : inputToolbarWidth + inputToolbarPadding + inputToolbarsPadding);
+			const inputToolbarsPadding = 12; // padding between input toolbar and execute toolbar.
+			return executeToolbarWidth + executeToolbarPadding + (this.options.renderInputToolbarBelowInput ? 0 : inputToolbarWidth + inputToolbarPadding + inputToolbarsPadding);
 		};
 
 		return {

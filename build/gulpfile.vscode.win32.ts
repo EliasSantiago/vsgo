@@ -21,7 +21,7 @@ const require = createRequire(import.meta.url);
 
 const repoPath = path.dirname(import.meta.dirname);
 const commit = getVersion(repoPath);
-const buildPath = (arch: string) => path.join(path.dirname(repoPath), `VSCode-win32-${arch}`);
+const buildPath = (arch: string) => path.join(path.dirname(repoPath), `vsgo-win32-${arch}`); // must match destinationFolderName in gulpfile.vscode.ts
 const setupDir = (arch: string, target: string) => path.join(repoPath, '.build', `win32-${arch}`, `${target}-setup`);
 const innoSetupPath = path.join(path.dirname(path.dirname(require.resolve('innosetup'))), 'bin', 'ISCC.exe');
 const signWin32Path = path.join(repoPath, 'build', 'azure-pipelines', 'common', 'sign-win32.ts');
@@ -48,7 +48,17 @@ function packageInnoSetup(iss: string, options: { definitions?: Record<string, u
 		`/sesrp=node ${signWin32Path} $f`
 	];
 
-	cp.spawn(innoSetupPath, args, { stdio: ['ignore', 'inherit', 'inherit'] })
+	// On non-Windows hosts, Inno Setup's ISCC.exe is run through Wine (same
+	// approach used by rcedit). Set WINE to override the wine binary if needed.
+	let command = innoSetupPath;
+	const spawnOptions: cp.SpawnOptions = { stdio: ['ignore', 'inherit', 'inherit'] };
+	if (process.platform !== 'win32') {
+		args.unshift(innoSetupPath);
+		command = process.env['WINE'] || 'wine';
+		spawnOptions.env = { ...process.env, WINEDEBUG: process.env['WINEDEBUG'] ?? '-all' };
+	}
+
+	cp.spawn(command, args, spawnOptions)
 		.on('error', cb)
 		.on('exit', code => {
 			if (code === 0) {
@@ -131,7 +141,10 @@ function buildWin32Setup(arch: string, target: string): task.CallbackTask {
 			definitions['ProxyMutex'] = embedded.win32MutexName;
 		}
 
-		if (quality === 'stable' || quality === 'insider') {
+		// See gulpfile.vscode.ts: this fork packages no context-menu appx, so the
+		// installer must not reference one either.
+		const shipsAppx = !!(product as { win32ContextMenu?: Record<string, { clsid: string }> }).win32ContextMenu;
+		if ((quality === 'stable' || quality === 'insider') && shipsAppx) {
 			definitions['AppxPackage'] = `${quality === 'stable' ? 'code' : 'code_insider'}_${arch}.appx`;
 			definitions['AppxPackageDll'] = `${quality === 'stable' ? 'code' : 'code_insider'}_explorer_command_${arch}.dll`;
 			definitions['AppxPackageName'] = `${product.win32AppUserModelId}`;
@@ -139,7 +152,20 @@ function buildWin32Setup(arch: string, target: string): task.CallbackTask {
 
 		fs.writeFileSync(productJsonPath, JSON.stringify(productJson, undefined, '\t'));
 
-		packageInnoSetup(issPath, { definitions }, cb as (err?: Error | null) => void);
+		// When compiling through Wine, ISCC.exe is a Windows program: absolute
+		// Linux paths (starting with '/') are misread as command-line switches
+		// and its file operations expect Windows paths. Wine maps the Linux root
+		// to drive Z:, so rewrite the path-valued arguments accordingly.
+		let issArg = issPath;
+		if (process.platform !== 'win32') {
+			const toWinePath = (p: string) => 'Z:' + p.replace(/\//g, '\\');
+			issArg = toWinePath(issPath);
+			for (const key of ['SourceDir', 'RepoDir', 'OutputDir', 'ProductJsonPath']) {
+				definitions[key] = toWinePath(definitions[key] as string);
+			}
+		}
+
+		packageInnoSetup(issArg, { definitions }, cb as (err?: Error | null) => void);
 	};
 }
 

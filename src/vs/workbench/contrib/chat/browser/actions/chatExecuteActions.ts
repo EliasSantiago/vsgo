@@ -28,7 +28,7 @@ import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { getModeNameForTelemetry, buildCustomAgentHandoffsInfo, getHandoffId, IChatMode, IChatModeService, IChatModes } from '../../common/chatModes.js';
 import { chatVariableLeader } from '../../common/requestParser/chatParserTypes.js';
 import { ChatStopCancellationNoopClassification, ChatStopCancellationNoopEvent, ChatStopCancellationNoopEventName, IChatService } from '../../common/chatService/chatService.js';
-import { ChatAgentLocation, ChatConfiguration, ChatModeKind } from '../../common/constants.js';
+import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, isAutoApproveLevel } from '../../common/constants.js';
 import { ILanguageModelChatMetadata } from '../../common/languageModels.js';
 import { ILanguageModelToolsService } from '../../common/tools/languageModelToolsService.js';
 import { isInClaudeAgentsFolder } from '../../common/promptSyntax/config/promptFileLocations.js';
@@ -197,7 +197,7 @@ export class ChatSubmitAction extends SubmitAction {
 
 		super({
 			id: ChatSubmitAction.ID,
-			title: localize2('interactive.submit.label', "Send"),
+			title: localize2('interactive.submit.label', "Enviar"),
 			f1: false,
 			category: CHAT_CATEGORY,
 			icon: Codicon.arrowUp,
@@ -205,7 +205,7 @@ export class ChatSubmitAction extends SubmitAction {
 			toggled: {
 				condition: ChatContextKeys.lockedToCodingAgent,
 				icon: Codicon.arrowUp,
-				tooltip: localize('sendToAgent', "Send to Agent"),
+				tooltip: localize('sendToAgent', "Enviar para o Agente"),
 			},
 			keybinding: {
 				when: ContextKeyExpr.and(
@@ -227,7 +227,7 @@ export class ChatSubmitAction extends SubmitAction {
 					group: 'navigation',
 					alt: {
 						id: 'workbench.action.chat.sendToNewChat',
-						title: localize2('chat.newChat.label', "Send to New Chat"),
+						title: localize2('chat.newChat.label', "Enviar para Novo Chat"),
 						icon: Codicon.plus
 					}
 				}, {
@@ -456,8 +456,8 @@ export class OpenPermissionPickerAction extends Action2 {
 						ChatContextKeys.location.isEqualTo(ChatAgentLocation.Chat),
 						ChatContextKeys.chatModeKind.notEqualsTo(ChatModeKind.Ask),
 						ChatContextKeys.inQuickChat.negate(),
+						ChatContextKeys.lockedToCodingAgent,
 						ContextKeyExpr.or(
-							ChatContextKeys.lockedToCodingAgent.negate(),
 							ChatContextKeys.lockedCodingAgentId.isEqualTo(AgentSessionProviders.Background),
 							ChatContextKeys.lockedCodingAgentId.isEqualTo(AgentSessionProviders.Claude),
 						),
@@ -481,8 +481,8 @@ export class OpenModePickerAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenModePickerAction.ID,
-			title: localize2('interactive.openModePicker.label', "Open Agent Picker"),
-			tooltip: localize('setChatMode', "Set Agent"),
+			title: localize2('interactive.openModePicker.label', "Abrir Seletor de Modo"),
+			tooltip: localize('setChatMode', "Definir Modo"),
 			category: CHAT_CATEGORY,
 			f1: false,
 			precondition: ChatContextKeys.enabled,
@@ -764,7 +764,7 @@ export class ChatEditingSessionSubmitAction extends SubmitAction {
 					group: 'navigation',
 					alt: {
 						id: 'workbench.action.chat.sendToNewChat',
-						title: localize2('chat.newChat.label', "Send to New Chat"),
+						title: localize2('chat.newChat.label', "Enviar para Novo Chat"),
 						icon: Codicon.plus
 					}
 				}]
@@ -859,7 +859,7 @@ class SendToNewChatAction extends Action2 {
 
 		super({
 			id: 'workbench.action.chat.sendToNewChat',
-			title: localize2('chat.newChat.label', "Send to New Chat"),
+			title: localize2('chat.newChat.label', "Enviar para Novo Chat"),
 			precondition,
 			category: CHAT_CATEGORY,
 			f1: false,
@@ -911,7 +911,7 @@ export class CancelAction extends Action2 {
 	constructor() {
 		super({
 			id: CancelAction.ID,
-			title: localize2('interactive.cancel.label', "Cancel"),
+			title: localize2('interactive.cancel.label', "Cancelar"),
 			f1: false,
 			category: CHAT_CATEGORY,
 			icon: Codicon.stopCircle,
@@ -975,6 +975,40 @@ export class CancelAction extends Action2 {
 			});
 			logService.info('ChatCancelAction#run: Canceled chat widget has no view model');
 		}
+	}
+}
+
+export const ToggleChatAutoModeActionId = 'workbench.action.chat.toggleAutoMode';
+export class ToggleChatAutoModeAction extends Action2 {
+	static readonly ID = ToggleChatAutoModeActionId;
+
+	constructor() {
+		super({
+			id: ToggleChatAutoModeAction.ID,
+			title: localize2('chat.toggleAutoMode.label', "Alternar Modo Automático"),
+			f1: false,
+			category: CHAT_CATEGORY,
+			precondition: ChatContextKeys.enabled,
+			menu: [{
+				id: MenuId.ChatInput,
+				order: 2,
+				when: ContextKeyExpr.and(
+					ChatContextKeys.chatModeKind.notEqualsTo(ChatModeKind.Ask),
+					ChatContextKeys.location.isEqualTo(ChatAgentLocation.Chat),
+					ChatContextKeys.inQuickChat.negate(),
+				),
+				group: 'navigation',
+			}],
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const widgetService = accessor.get(IChatWidgetService);
+		const widget = widgetService.lastFocusedWidget;
+		if (!widget) { return; }
+		const current = widget.input.currentPermissionLevelObs.get();
+		const next = isAutoApproveLevel(current) ? ChatPermissionLevel.Default : ChatPermissionLevel.AutoApprove;
+		widget.input.setPermissionLevel(next);
 	}
 }
 
@@ -1198,6 +1232,7 @@ export function registerChatExecuteActions(): DisposableStore {
 	store.add(registerAction2(ChatSessionPrimaryPickerAction));
 	store.add(registerAction2(ChangeChatModelAction));
 	store.add(registerAction2(CancelEdit));
+	store.add(registerAction2(ToggleChatAutoModeAction));
 	store.add(registerAction2(GetHandoffsAction));
 	store.add(registerAction2(ExecuteHandoffAction));
 	return store;

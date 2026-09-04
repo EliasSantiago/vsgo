@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 .chat-diff-change-content-widget {
-	opacity: 0;
-	transition: opacity 0.2s ease-in-out;
+	opacity: 0.65;
+	transition: opacity 0.15s ease-in-out;
 	display: flex;
 	box-shadow: var(--vscode-shadow-md);
 	border-radius: 6px;
@@ -14,6 +14,16 @@
 
 .chat-diff-change-content-widget.hover {
 	opacity: 1;
+}
+
+.chat-editing-glyph-accept {
+	color: var(--vscode-charts-green) !important;
+	cursor: pointer;
+}
+
+.chat-editing-glyph-reject {
+	color: var(--vscode-inputValidation-errorBorder) !important;
+	cursor: pointer;
 }
 
 .chat-diff-change-content-widget .monaco-action-bar {

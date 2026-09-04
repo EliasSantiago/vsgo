@@ -1,0 +1,136 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.chat-session-tabs {
+	display: flex;
+	align-items: stretch;
+	height: 35px;
+	box-sizing: border-box;
+	border-bottom: 1px solid var(--vscode-editorGroupHeader-tabsBorder, transparent);
+	background-color: var(--vscode-editorGroupHeader-tabsBackground, transparent);
+	overflow: hidden;
+}
+
+.chat-session-tabs.empty {
+	display: none;
+}
+
+.chat-session-tabs > .monaco-scrollable-element {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 100%;
+}
+
+.chat-session-tabs .chat-session-tabs-list {
+	display: flex;
+	align-items: center;
+	height: 100%;
+	/* The list is the scroll viewport (constrained to the available width); its tabs do not shrink and overflow horizontally to drive the scrollbar. */
+	width: 100%;
+	overflow: hidden;
+}
+
+.chat-session-tabs .chat-session-tab {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex: 0 0 auto;
+	max-width: 160px;
+	height: 100%;
+	padding: 0 6px 0 10px;
+	box-sizing: border-box;
+	cursor: pointer;
+	user-select: none;
+	border-right: 1px solid var(--vscode-tab-border, transparent);
+	background-color: var(--vscode-tab-inactiveBackground, transparent);
+	color: var(--vscode-tab-inactiveForeground);
+	font-size: 12px;
+}
+
+.chat-session-tabs .chat-session-tab:hover {
+	background-color: var(--vscode-tab-hoverBackground);
+}
+
+.chat-session-tabs .chat-session-tab.active {
+	background-color: var(--vscode-tab-activeBackground);
+	color: var(--vscode-tab-activeForeground);
+	box-shadow: var(--vscode-tab-activeBorderTop, transparent) 0 1px 0 inset;
+	border-bottom: 1px solid var(--vscode-tab-activeBorder, transparent);
+}
+
+.chat-session-tabs .chat-session-tab .chat-session-tab-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.chat-session-tabs .chat-session-tab .chat-session-tab-close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 4px;
+	flex: 0 0 auto;
+	opacity: 0;
+	cursor: pointer;
+}
+
+.chat-session-tabs .chat-session-tab:hover .chat-session-tab-close,
+.chat-session-tabs .chat-session-tab.active .chat-session-tab-close {
+	opacity: 1;
+}
+
+.chat-session-tabs .chat-session-tab .chat-session-tab-close:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.chat-session-tabs .chat-session-tab .chat-session-tab-close .codicon {
+	font-size: 14px;
+}
+
+/* Leading history button and trailing new-chat button */
+.chat-session-tabs .chat-session-tabs-history-button,
+.chat-session-tabs .chat-session-tabs-new-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 28px;
+	height: 100%;
+	cursor: pointer;
+	color: var(--vscode-icon-foreground);
+}
+
+.chat-session-tabs .chat-session-tabs-history-button {
+	border-right: 1px solid var(--vscode-tab-border, transparent);
+}
+
+.chat-session-tabs .chat-session-tabs-new-button {
+	border-left: 1px solid var(--vscode-tab-border, transparent);
+}
+
+.chat-session-tabs .chat-session-tabs-history-button:hover,
+.chat-session-tabs .chat-session-tabs-new-button:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+/* Always-visible horizontal scrollbar for the tab strip */
+.chat-session-tabs .monaco-scrollable-element > .scrollbar.horizontal {
+	cursor: pointer;
+}
+
+.chat-session-tabs .monaco-scrollable-element > .scrollbar > .slider {
+	background: var(--vscode-scrollbarSlider-background);
+	border-radius: 4px;
+}
+
+.chat-session-tabs .monaco-scrollable-element > .scrollbar > .slider:hover {
+	background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+.chat-session-tabs .monaco-scrollable-element > .scrollbar > .slider.active {
+	background: var(--vscode-scrollbarSlider-activeBackground);
+}
