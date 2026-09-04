@@ -17,6 +17,7 @@ import { assertType } from '../../../base/common/types.js';
 import { URI, UriComponents } from '../../../base/common/uri.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { Location } from '../../../editor/common/languages.js';
+import { localize } from '../../../nls.js';
 import { ExtensionIdentifier, IExtensionDescription, IRelaxedExtensionDescription } from '../../../platform/extensions/common/extensions.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 import { packErrorForTelemetry } from '../../../platform/telemetry/common/errorTelemetry.js';
@@ -908,7 +909,7 @@ export class ExtHostChatAgents2 extends Disposable implements ExtHostChatAgentsS
 		if (!model) {
 			model = await this._languageModels.getDefaultLanguageModel(extension);
 			if (!model) {
-				throw new Error('No AI model is available. Configure an API key for Anthropic, OpenAI, Gemini or Ollama in the "AI Providers" section, or run "Agent Chat: Add API Key..." from the Command Palette.');
+				throw new Error(localize('chatAgents.noModelAvailable', "Nenhum modelo de IA está disponível. Configure uma chave de API para Anthropic, OpenAI, Gemini ou Ollama na seção \"AI Providers\", ou execute \"Agent Chat: Add API Key...\" na Paleta de Comandos."));
 			}
 		}
 

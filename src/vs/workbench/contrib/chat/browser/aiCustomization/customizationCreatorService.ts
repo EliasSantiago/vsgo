@@ -41,11 +41,11 @@ export class CustomizationCreatorService {
 		// Ask for the name before entering chat
 		const typeLabel = getTypeLabel(type);
 		const name = await this.quickInputService.input({
-			prompt: localize('generateName', "Name for the new {0}", typeLabel),
-			placeHolder: localize('generateNamePlaceholder', "e.g., my-{0}", typeLabel),
+			prompt: localize('generateName', "Nome do novo {0}", typeLabel),
+			placeHolder: localize('generateNamePlaceholder', "ex.: meu-{0}", typeLabel),
 			validateInput: async (value) => {
 				if (!value || !value.trim()) {
-					return localize('nameRequired', "Name is required");
+					return localize('nameRequired', "O nome é obrigatório");
 				}
 				return undefined;
 			}
@@ -154,7 +154,7 @@ export class CustomizationCreatorService {
 		}));
 
 		const picked = await this.quickInputService.pick(items, {
-			placeHolder: localize('selectTargetDirectory', "Select a directory for the new customization file"),
+			placeHolder: localize('selectTargetDirectory', "Selecione um diretório para o novo arquivo de personalização"),
 		});
 
 		return picked?.uri ?? null;

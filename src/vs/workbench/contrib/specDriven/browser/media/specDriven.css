@@ -1,0 +1,314 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.spec-driven-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow-y: auto;
+	overflow-x: hidden;
+	font-size: 13px;
+}
+
+/* ─── How to use card ────────────────────────────────────────────────────── */
+
+.spec-driven-howto {
+	padding: 12px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+	background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.spec-driven-howto-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+	font-size: 12px;
+	color: var(--vscode-foreground);
+}
+
+.spec-driven-howto-desc {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	line-height: 1.5;
+	margin: 0;
+}
+
+.spec-driven-howto-steps {
+	margin: 0;
+	padding-left: 18px;
+	font-size: 12px;
+	color: var(--vscode-foreground);
+	line-height: 1.6;
+}
+
+.spec-driven-howto-btns {
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.spec-driven-agent-badge {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.spec-driven-agent-badge code {
+	font-family: var(--monaco-monospace-font, monospace);
+	font-size: 11px;
+	background-color: var(--vscode-textCodeBlock-background, rgba(0,0,0,0.08));
+	padding: 1px 5px;
+	border-radius: 3px;
+	color: var(--vscode-foreground);
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
+
+.spec-driven-btn-row {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.spec-driven-btn {
+	padding: 5px 14px;
+	font-size: 12px;
+	font-family: inherit;
+	cursor: pointer;
+	border: 1px solid transparent;
+	border-radius: 2px;
+}
+
+.spec-driven-btn-primary {
+	background-color: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+.spec-driven-btn-primary:hover:not(:disabled) {
+	background-color: var(--vscode-button-hoverBackground);
+}
+
+.spec-driven-btn-primary:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.spec-driven-btn-secondary {
+	background-color: var(--vscode-button-secondaryBackground, transparent);
+	color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+	border-color: var(--vscode-button-border, var(--vscode-contrastBorder, transparent));
+}
+
+.spec-driven-btn-secondary:hover:not(:disabled) {
+	background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
+}
+
+.spec-driven-btn-cancel {
+	background-color: var(--vscode-button-secondaryBackground, transparent);
+	color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+	border-color: var(--vscode-button-border, var(--vscode-contrastBorder, transparent));
+	font-size: 11px;
+	padding: 3px 10px;
+}
+
+.spec-driven-btn-cancel:hover {
+	background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
+}
+
+/* ─── Current run panel ──────────────────────────────────────────────────── */
+
+.spec-driven-current {
+	padding: 0 12px;
+}
+
+.spec-driven-running {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px 0;
+	border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.spec-driven-running-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.spec-driven-running-title {
+	font-weight: 600;
+	font-size: 12px;
+	color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
+}
+
+.spec-driven-running-desc {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	word-break: break-word;
+}
+
+.spec-driven-running-phase {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.spec-driven-progress-bar {
+	height: 3px;
+	background-color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
+	opacity: 0.25;
+	border-radius: 2px;
+	overflow: hidden;
+}
+
+.spec-driven-progress-fill {
+	height: 100%;
+	background-color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
+	opacity: 1;
+	border-radius: 2px;
+	transition: width 0.3s ease;
+}
+
+/* ─── Section title ──────────────────────────────────────────────────────── */
+
+.spec-driven-section-title {
+	padding: 8px 12px 4px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-descriptionForeground));
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+}
+
+/* ─── Runs list ──────────────────────────────────────────────────────────── */
+
+.spec-driven-runs-list {
+	flex: 1;
+}
+
+.spec-driven-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 24px 16px;
+	gap: 8px;
+	text-align: center;
+}
+
+.spec-driven-empty .codicon {
+	font-size: 28px;
+	color: var(--vscode-descriptionForeground);
+	opacity: 0.5;
+}
+
+.spec-driven-empty p {
+	margin: 0;
+	font-size: 12px;
+	color: var(--vscode-foreground);
+}
+
+.spec-driven-empty-hint {
+	font-size: 11px !important;
+	color: var(--vscode-descriptionForeground) !important;
+}
+
+/* ─── Run row ────────────────────────────────────────────────────────────── */
+
+.spec-driven-run-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--vscode-list-inactiveSelectionBackground, rgba(0,0,0,0.04));
+}
+
+.spec-driven-run-row:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.spec-driven-run-badge {
+	flex-shrink: 0;
+	font-size: 9px;
+	font-weight: 700;
+	padding: 2px 5px;
+	border-radius: 3px;
+	letter-spacing: 0.04em;
+	margin-top: 1px;
+}
+
+.spec-driven-run-row.status-done .spec-driven-run-badge {
+	background-color: var(--vscode-testing-iconPassed, #73c991);
+	color: #000;
+}
+
+.spec-driven-run-row.status-error .spec-driven-run-badge {
+	background-color: var(--vscode-testing-iconFailed, #f14c4c);
+	color: #fff;
+}
+
+.spec-driven-run-row.status-cancelled .spec-driven-run-badge {
+	background-color: var(--vscode-descriptionForeground);
+	color: var(--vscode-editor-background, #fff);
+	opacity: 0.65;
+}
+
+.spec-driven-run-body {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.spec-driven-run-desc {
+	font-size: 12px;
+	color: var(--vscode-foreground);
+	word-break: break-word;
+}
+
+.spec-driven-run-meta {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.spec-driven-run-error {
+	font-size: 11px;
+	color: var(--vscode-errorForeground, #f14c4c);
+	word-break: break-word;
+}
+
+.spec-driven-run-files {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 4px;
+}
+
+.spec-driven-file-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 11px;
+	color: var(--vscode-textLink-foreground, var(--vscode-focusBorder));
+	cursor: pointer;
+	padding: 2px 6px;
+	border-radius: 3px;
+	background-color: var(--vscode-badge-background, rgba(0,0,0,0.08));
+}
+
+.spec-driven-file-link:hover {
+	background-color: var(--vscode-list-hoverBackground);
+	text-decoration: underline;
+}
+
+.spec-driven-file-link .codicon {
+	font-size: 11px;
+}

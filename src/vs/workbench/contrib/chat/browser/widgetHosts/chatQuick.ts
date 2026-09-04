@@ -7,22 +7,16 @@ import * as dom from '../../../../../base/browser/dom.js';
 import { Orientation, Sash } from '../../../../../base/browser/ui/sash/sash.js';
 import { disposableTimeout } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, IDisposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
-import { autorun } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
-import { localize } from '../../../../../nls.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import { IMarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
-import product from '../../../../../platform/product/common/product.js';
 import { IQuickInputService, IQuickWidget } from '../../../../../platform/quickinput/common/quickInput.js';
 import { editorBackground, inputBackground, quickInputBackground, quickInputForeground } from '../../../../../platform/theme/common/colorRegistry.js';
 import { EDITOR_DRAG_AND_DROP_BACKGROUND } from '../../../../common/theme.js';
-import { IChatEntitlementService } from '../../../../services/chat/common/chatEntitlementService.js';
 import { IWorkbenchLayoutService } from '../../../../services/layout/browser/layoutService.js';
 import { isCellTextEditOperationArray } from '../../common/model/chatModel.js';
 import { ChatMode } from '../../common/chatModes.js';
@@ -168,8 +162,6 @@ class QuickChat extends Disposable {
 		@IChatService private readonly chatService: IChatService,
 		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
 		@IChatWidgetService private readonly chatWidgetService: IChatWidgetService,
-		@IChatEntitlementService private readonly chatEntitlementService: IChatEntitlementService,
-		@IMarkdownRendererService private readonly markdownRendererService: IMarkdownRendererService,
 	) {
 		super();
 	}
@@ -258,30 +250,7 @@ class QuickChat extends Disposable {
 		this.widget.setDynamicChatTreeItemLayout(2, this.maxHeight);
 		this.updateModel();
 		this.sash = this._register(new Sash(parent, { getHorizontalSashTop: () => parent.offsetHeight }, { orientation: Orientation.HORIZONTAL }));
-		this.setupDisclaimer(parent);
 		this.registerListeners(parent);
-	}
-
-	private setupDisclaimer(parent: HTMLElement): void {
-		const disclaimerElement = dom.append(parent, dom.$('.disclaimer.hidden'));
-		const disposables = this._store.add(new DisposableStore());
-
-		this._register(autorun(reader => {
-			disposables.clear();
-			dom.reset(disclaimerElement);
-
-			const sentiment = this.chatEntitlementService.sentimentObs.read(reader);
-			const anonymous = this.chatEntitlementService.anonymousObs.read(reader);
-			const requestInProgress = this.chatService.requestInProgressObs.read(reader);
-
-			const showDisclaimer = !sentiment.completed && anonymous && !requestInProgress;
-			disclaimerElement.classList.toggle('hidden', !showDisclaimer);
-
-			if (showDisclaimer) {
-				const renderedMarkdown = disposables.add(this.markdownRendererService.render(new MarkdownString(localize({ key: 'termsDisclaimer', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0} Copilot, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3})", product.defaultChatAgent?.provider?.default?.name ?? '', product.defaultChatAgent?.provider?.default?.name ?? '', product.defaultChatAgent?.termsStatementUrl ?? '', product.defaultChatAgent?.privacyStatementUrl ?? ''), { isTrusted: true })));
-				disclaimerElement.appendChild(renderedMarkdown.element);
-			}
-		}));
 	}
 
 	private get maxHeight(): number {

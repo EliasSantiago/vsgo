@@ -224,7 +224,12 @@ export interface MainThreadAuthenticationShape extends IDisposable {
 	$waitForUriHandler(expectedUri: UriComponents): Promise<UriComponents>;
 	$showContinueNotification(message: string): Promise<boolean>;
 	$showDeviceCodeModal(userCode: string, verificationUri: string): Promise<boolean>;
-	$promptForClientRegistration(authorizationServerUrl: string): Promise<{ clientId: string; clientSecret?: string } | undefined>;
+	/**
+	 * @param registrationFailure Why automatic registration did not yield a client
+	 * id, when it was attempted and failed. Undefined when the server advertises no
+	 * registration endpoint at all.
+	 */
+	$promptForClientRegistration(authorizationServerUrl: string, registrationFailure?: string): Promise<{ clientId: string; clientSecret?: string } | undefined>;
 	$registerDynamicAuthenticationProvider(details: IRegisterDynamicAuthenticationProviderDetails): Promise<void>;
 	$setSessionsForDynamicAuthProvider(authProviderId: string, clientId: string, sessions: (IAuthorizationTokenResponse & { created_at: number })[]): Promise<void>;
 	$sendDidChangeDynamicProviderInfo({ providerId, clientId, authorizationServer, label, clientSecret }: { providerId: string; clientId?: string; authorizationServer?: UriComponents; label?: string; clientSecret?: string }): Promise<void>;
@@ -2454,7 +2459,12 @@ export interface ExtHostAuthenticationShape {
 	$removeSession(id: string, sessionId: string): Promise<void>;
 	$onDidChangeAuthenticationSessions(id: string, label: string, extensionIdFilter?: string[]): Promise<void>;
 	$onDidUnregisterAuthenticationProvider(id: string): Promise<void>;
-	$registerDynamicAuthProvider(authorizationServer: UriComponents, serverMetadata: IAuthorizationServerMetadata, resource?: IAuthorizationProtectedResourceMetadata, clientId?: string, clientSecret?: string, initialTokens?: (IAuthorizationTokenResponse & { created_at: number })[]): Promise<string>;
+	/**
+	 * @param errorOnUserInteraction Reject rather than prompting for a client id
+	 * when automatic registration does not produce one. Set by callers that start
+	 * servers in the background, where a modal would interrupt unrelated work.
+	 */
+	$registerDynamicAuthProvider(authorizationServer: UriComponents, serverMetadata: IAuthorizationServerMetadata, resource?: IAuthorizationProtectedResourceMetadata, clientId?: string, clientSecret?: string, initialTokens?: (IAuthorizationTokenResponse & { created_at: number })[], errorOnUserInteraction?: boolean): Promise<string>;
 	$onDidChangeDynamicAuthProviderTokens(authProviderId: string, clientId: string, tokens?: (IAuthorizationTokenResponse & { created_at: number })[]): Promise<void>;
 }
 

@@ -111,13 +111,29 @@
 
 .monaco-workbench .part.editor > .content .editor-group-container > .editor-group-watermark .letterpress {
 	width: 260px;
-	height: 82px;
-	background-image: url('./editor-empty-logo.png');
-	background-repeat: no-repeat;
-	background-position: center;
-	background-size: contain;
-	opacity: 0.9;
+	height: auto;
+	min-height: 64px;
+	background-image: none;
 	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: visible;
+}
+
+.monaco-workbench .part.editor > .content .editor-group-container > .editor-group-watermark .letterpress::before {
+	content: 'VSGO';
+	font-size: 52px;
+	font-weight: 800;
+	line-height: 1;
+	letter-spacing: 0.08em;
+	display: block;
+	background: linear-gradient(160deg, #4a4a4a 0%, #1a1a1a 100%);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
+	opacity: 0.85;
+	font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
 .monaco-workbench .part.editor > .content:not(.empty) .editor-group-container.empty > .editor-group-watermark .letterpress,

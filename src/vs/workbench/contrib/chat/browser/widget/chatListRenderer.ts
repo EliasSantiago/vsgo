@@ -767,10 +767,14 @@ export class ChatListItemRenderer extends Disposable implements ITreeRenderer<Ch
 		}
 
 		const isSystemInitiatedRequest = isRequestVM(element) && !!element.isSystemInitiated;
+		const hideParticipantHeader = element.username === COPILOT_USERNAME
+			|| this.environmentService.isSessionsWindow
+			|| isSystemInitiatedRequest
+			|| (isResponseVM(element) && !!element.agent?.isDefault);
 
 		templateData.username.textContent = element.username;
-		templateData.username.classList.toggle('hidden', element.username === COPILOT_USERNAME || this.environmentService.isSessionsWindow || isSystemInitiatedRequest);
-		templateData.avatarContainer.classList.toggle('hidden', element.username === COPILOT_USERNAME || this.environmentService.isSessionsWindow || isSystemInitiatedRequest);
+		templateData.username.classList.toggle('hidden', hideParticipantHeader);
+		templateData.avatarContainer.classList.toggle('hidden', hideParticipantHeader);
 
 		this.hoverHidden(templateData.requestHover);
 		dom.clearNode(templateData.detail);

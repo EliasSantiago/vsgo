@@ -150,7 +150,7 @@ class McpServerItemRenderer implements IListRenderer<IMcpServerItemEntry | IMcpB
 		const name = DOM.append(nameRow, $('.mcp-server-name'));
 
 		const bridgedBadge = DOM.append(nameRow, $('.inline-badge.mcp-bridged-badge'));
-		bridgedBadge.textContent = localize('bridged', "Bridged");
+		bridgedBadge.textContent = localize('bridged', "Compartilhado");
 
 		const description = DOM.append(details, $('.mcp-server-description'));
 
@@ -170,7 +170,7 @@ class McpServerItemRenderer implements IListRenderer<IMcpServerItemEntry | IMcpB
 		templateData.disposables.add(this.hoverService.setupManagedHover(
 			getDefaultHoverDelegate('mouse'),
 			templateData.bridgedBadge,
-			localize('bridgedHover', "This server is managed by VS Code and forwarded to all compatible agent sessions."),
+			localize('bridgedHover', "Este servidor é gerenciado pelo VS Code e repassado a todas as sessões de agente compatíveis."),
 		));
 
 		if (element.type === 'builtin-item') {
@@ -231,26 +231,26 @@ class McpServerItemRenderer implements IListRenderer<IMcpServerItemEntry | IMcpB
 
 		statusElement.style.display = '';
 		if (state === 'disabled') {
-			statusElement.textContent = localize('disabled', "Disabled");
+			statusElement.textContent = localize('disabled', "Desabilitado");
 			statusElement.classList.add('disabled');
 			return;
 		}
 		switch (state) {
 			case McpConnectionState.Kind.Running:
-				statusElement.textContent = localize('running', "Running");
+				statusElement.textContent = localize('running', "Rodando");
 				statusElement.classList.add('running');
 				break;
 			case McpConnectionState.Kind.Starting:
-				statusElement.textContent = localize('starting', "Starting");
+				statusElement.textContent = localize('starting', "Iniciando");
 				statusElement.classList.add('starting');
 				break;
 			case McpConnectionState.Kind.Error:
-				statusElement.textContent = localize('error', "Error");
+				statusElement.textContent = localize('error', "Erro");
 				statusElement.classList.add('error');
 				break;
 			case McpConnectionState.Kind.Stopped:
 			default:
-				statusElement.textContent = localize('stopped', "Stopped");
+				statusElement.textContent = localize('stopped', "Parado");
 				statusElement.classList.add('stopped');
 				break;
 		}
@@ -312,7 +312,7 @@ class McpGalleryItemRenderer implements IListRenderer<IMcpServerItemEntry, IMcpG
 		templateData.elementDisposables.add(templateData.installButton.onDidClick(async () => {
 			const canInstall = this.mcpWorkbenchService.canInstall(element.server);
 			if (canInstall === true) {
-				templateData.installButton.label = localize('installing', "Installing...");
+				templateData.installButton.label = localize('installing', "Instalando...");
 				templateData.installButton.enabled = false;
 				await this.mcpWorkbenchService.install(element.server);
 			}
@@ -328,15 +328,15 @@ class McpGalleryItemRenderer implements IListRenderer<IMcpServerItemEntry, IMcpG
 	private updateInstallButton(button: Button, server: IWorkbenchMcpServer): void {
 		switch (server.installState) {
 			case McpServerInstallState.Installed:
-				button.label = localize('installed', "Installed");
+				button.label = localize('installed', "Instalado");
 				button.enabled = false;
 				break;
 			case McpServerInstallState.Installing:
-				button.label = localize('installing', "Installing...");
+				button.label = localize('installing', "Instalando...");
 				button.enabled = false;
 				break;
 			default:
-				button.label = localize('install', "Install");
+				button.label = localize('install', "Instalar");
 				button.enabled = true;
 				break;
 		}
@@ -433,7 +433,7 @@ export class McpListWidget extends Disposable {
 		// Search container
 		const searchContainer = DOM.append(this.searchAndButtonContainer, $('.list-search-container'));
 		this.searchInput = this._register(new InputBox(searchContainer, this.contextViewService, {
-			placeholder: localize('searchMcpPlaceholder', "Type to search..."),
+			placeholder: localize('searchMcpPlaceholder', "Digite para buscar..."),
 			inputBoxStyles: defaultInputBoxStyles,
 		}));
 
@@ -452,7 +452,7 @@ export class McpListWidget extends Disposable {
 		// Browse Marketplace button
 		const browseButtonContainer = DOM.append(buttonContainer, $('.list-add-button-container'));
 		this.browseButton = this._register(new Button(browseButtonContainer, { ...defaultButtonStyles, secondary: true, supportIcons: true }));
-		this.browseButton.label = `$(${Codicon.library.id}) ${localize('browseMarketplace', "Browse Marketplace")}`;
+		this.browseButton.label = `$(${Codicon.library.id}) ${localize('browseMarketplace', "Explorar Marketplace")}`;
 		this.browseButton.element.classList.add('list-add-button');
 		this._register(this.browseButton.onDidClick(() => {
 			this.toggleBrowseMode(!this.browseMode);
@@ -462,12 +462,12 @@ export class McpListWidget extends Disposable {
 			...defaultButtonStyles,
 			secondary: true,
 			supportIcons: true,
-			title: localize('addServer', "Add Server"),
-			ariaLabel: localize('addServer', "Add Server")
+			title: localize('addServer', "Adicionar Servidor"),
+			ariaLabel: localize('addServer', "Adicionar Servidor")
 		}));
 		this.addButton.label = `$(${Codicon.add.id})`;
 		this.addButton.element.classList.add('list-icon-button');
-		this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), this.addButton.element, localize('addServerTooltip', "Add Server")));
+		this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), this.addButton.element, localize('addServerTooltip', "Adicionar Servidor")));
 		this._register(this.addButton.onDidClick(() => {
 			this.commandService.executeCommand(McpCommandIds.AddConfiguration);
 		}));
@@ -486,7 +486,7 @@ export class McpListWidget extends Disposable {
 		const disabledHeader = DOM.append(this.disabledContainer, $('.empty-state-header'));
 		this.disabledIcon = DOM.append(disabledHeader, $('.empty-icon'));
 		const disabledText = DOM.append(disabledHeader, $('.empty-text'));
-		disabledText.textContent = localize('mcpAccessDisabledTitle', "MCP servers are disabled");
+		disabledText.textContent = localize('mcpAccessDisabledTitle', "Os servidores MCP estão desabilitados");
 		this.disabledMessage = DOM.append(this.disabledContainer, $('.empty-subtext'));
 
 		// List container
@@ -495,9 +495,9 @@ export class McpListWidget extends Disposable {
 		// Section footer at bottom with description and link
 		this.sectionHeader = DOM.append(this.element, $('.section-footer'));
 		this.sectionDescription = DOM.append(this.sectionHeader, $('p.section-footer-description'));
-		this.sectionDescription.textContent = localize('mcpServersDescription', "An open standard that lets AI use external tools and services. MCP servers provide tools for file operations, databases, APIs, and more.");
+		this.sectionDescription.textContent = localize('mcpServersDescription', "Um padrão aberto que permite à IA usar ferramentas e serviços externos. Servidores MCP fornecem ferramentas para operações de arquivo, bancos de dados, APIs e mais.");
 		this.sectionLink = DOM.append(this.sectionHeader, $('a.section-footer-link')) as HTMLAnchorElement;
-		this.sectionLink.textContent = localize('learnMoreMcp', "Learn more about MCP servers");
+		this.sectionLink.textContent = localize('learnMoreMcp', "Saiba mais sobre servidores MCP");
 		this.sectionLink.href = 'https://code.visualstudio.com/docs/copilot/chat/mcp-servers';
 		this._register(DOM.addDisposableListener(this.sectionLink, 'click', (e) => {
 			e.preventDefault();
@@ -526,16 +526,16 @@ export class McpListWidget extends Disposable {
 				accessibilityProvider: {
 					getAriaLabel: (element: IMcpListEntry) => {
 						if (element.type === 'group-header') {
-							return localize('mcpGroupAriaLabel', "{0}, {1} items, {2}", element.label, element.count, element.collapsed ? localize('collapsed', "collapsed") : localize('expanded', "expanded"));
+							return localize('mcpGroupAriaLabel', "{0}, {1} itens, {2}", element.label, element.count, element.collapsed ? localize('collapsed', "recolhido") : localize('expanded', "expandido"));
 						}
 						const label = element.type === 'builtin-item' ? element.label : element.server.label;
 						return derived(reader => {
 							const isBridged = this.harnessService.activeHarness.read(reader) !== SessionType.Local;
-							return isBridged ? localize('mcpServerBridgedAriaLabel', "{0}. {1}", label, localize('bridged', "Bridged")) : label;
+							return isBridged ? localize('mcpServerBridgedAriaLabel', "{0}. {1}", label, localize('bridged', "Compartilhado")) : label;
 						});
 					},
 					getWidgetAriaLabel() {
-						return localize('mcpServersListAriaLabel', "MCP Servers");
+						return localize('mcpServersListAriaLabel', "Servidores MCP");
 					}
 				},
 				openOnSingleClick: true,
@@ -607,11 +607,11 @@ export class McpListWidget extends Disposable {
 			DOM.clearNode(this.disabledMessage);
 			this.disabledLinkListener.clear();
 			if (policyLocked) {
-				this.disabledMessage.textContent = localize('mcpAccessDisabledByPolicy', "Access to MCP servers is disabled by your organization. Contact your organization administrator for more information.");
+				this.disabledMessage.textContent = localize('mcpAccessDisabledByPolicy', "O acesso a servidores MCP foi desabilitado pela sua organização. Fale com o administrador da organização para mais informações.");
 			} else {
-				this.disabledMessage.appendChild(document.createTextNode(localize('mcpAccessDisabledBySettingPrefix', "MCP servers are disabled in settings. ")));
+				this.disabledMessage.appendChild(document.createTextNode(localize('mcpAccessDisabledBySettingPrefix', "Os servidores MCP estão desabilitados nas configurações. ")));
 				const link = DOM.append(this.disabledMessage, $('a.mcp-disabled-settings-link')) as HTMLAnchorElement;
-				link.textContent = localize('mcpAccessDisabledSettingLink', "Configure in settings.");
+				link.textContent = localize('mcpAccessDisabledSettingLink', "Configurar nas configurações.");
 				link.href = '#';
 				link.setAttribute('role', 'button');
 				this.disabledLinkListener.value = DOM.addDisposableListener(link, 'click', (e) => {
@@ -638,8 +638,8 @@ export class McpListWidget extends Disposable {
 		this.browseButton.element.parentElement!.style.display = browse ? 'none' : '';
 
 		this.searchInput.setPlaceHolder(browse
-			? localize('searchGalleryPlaceholder', "Search MCP marketplace...")
-			: localize('searchMcpPlaceholder', "Type to search...")
+			? localize('searchGalleryPlaceholder', "Buscar no marketplace MCP...")
+			: localize('searchMcpPlaceholder', "Digite para buscar...")
 		);
 
 		if (browse) {
@@ -663,7 +663,7 @@ export class McpListWidget extends Disposable {
 		// Show loading state
 		this.emptyContainer.style.display = 'flex';
 		this.listContainer.style.display = 'none';
-		this.emptyText.textContent = localize('loadingGallery', "Loading marketplace...");
+		this.emptyText.textContent = localize('loadingGallery', "Carregando o marketplace...");
 		this.emptySubtext.textContent = '';
 
 		try {
@@ -683,8 +683,8 @@ export class McpListWidget extends Disposable {
 				this.galleryServers = [];
 				this.emptyContainer.style.display = 'flex';
 				this.listContainer.style.display = 'none';
-				this.emptyText.textContent = localize('galleryError', "Unable to load marketplace");
-				this.emptySubtext.textContent = localize('tryAgainLater', "Check your connection and try again");
+				this.emptyText.textContent = localize('galleryError', "Não foi possível carregar o marketplace");
+				this.emptySubtext.textContent = localize('tryAgainLater', "Verifique sua conexão e tente de novo");
 			}
 		}
 	}
@@ -694,10 +694,10 @@ export class McpListWidget extends Disposable {
 			this.emptyContainer.style.display = 'flex';
 			this.listContainer.style.display = 'none';
 			if (this.searchQuery.trim()) {
-				this.emptyText.textContent = localize('noGalleryResults', "No servers match '{0}'", this.searchQuery);
-				this.emptySubtext.textContent = localize('tryDifferentSearch', "Try a different search term");
+				this.emptyText.textContent = localize('noGalleryResults', "Nenhum servidor corresponde a '{0}'", this.searchQuery);
+				this.emptySubtext.textContent = localize('tryDifferentSearch', "Tente outro termo de busca");
 			} else {
-				this.emptyText.textContent = localize('emptyGallery', "No MCP servers available");
+				this.emptyText.textContent = localize('emptyGallery', "Nenhum servidor MCP disponível");
 				this.emptySubtext.textContent = '';
 			}
 		} else {
@@ -734,12 +734,12 @@ export class McpListWidget extends Disposable {
 
 			if (this.searchQuery.trim()) {
 				// Search with no results
-				this.emptyText.textContent = localize('noMatchingServers', "No servers match '{0}'", this.searchQuery);
-				this.emptySubtext.textContent = localize('tryDifferentSearch', "Try a different search term");
+				this.emptyText.textContent = localize('noMatchingServers', "Nenhum servidor corresponde a '{0}'", this.searchQuery);
+				this.emptySubtext.textContent = localize('tryDifferentSearch', "Tente outro termo de busca");
 			} else {
 				// No servers configured
-				this.emptyText.textContent = localize('noMcpServers', "No MCP servers configured");
-				this.emptySubtext.textContent = localize('addMcpServer', "Add an MCP server configuration to get started");
+				this.emptyText.textContent = localize('noMcpServers', "Nenhum servidor MCP configurado");
+				this.emptySubtext.textContent = localize('addMcpServer', "Adicione a configuração de um servidor MCP para começar");
 			}
 		} else {
 			this.emptyContainer.style.display = 'none';
@@ -748,8 +748,8 @@ export class McpListWidget extends Disposable {
 
 		// Group servers by scope
 		const groups: { scope: LocalMcpServerScope; label: string; icon: ThemeIcon; description: string; servers: IWorkbenchMcpServer[] }[] = [
-			{ scope: LocalMcpServerScope.Workspace, label: localize('workspaceGroup', "Workspace"), icon: workspaceIcon, description: localize('workspaceGroupDescription', "MCP servers configured in your workspace settings, shared with your team via version control."), servers: [] },
-			{ scope: LocalMcpServerScope.User, label: localize('userGroup', "User"), icon: userIcon, description: localize('userGroupDescription', "MCP servers configured in your user settings. Private to you and available across all projects."), servers: [] },
+			{ scope: LocalMcpServerScope.Workspace, label: localize('workspaceGroup', "Workspace"), icon: workspaceIcon, description: localize('workspaceGroupDescription', "Servidores MCP configurados nas configurações do workspace, compartilhados com o time pelo controle de versão."), servers: [] },
+			{ scope: LocalMcpServerScope.User, label: localize('userGroup', "Usuário"), icon: userIcon, description: localize('userGroupDescription', "Servidores MCP configurados nas suas configurações de usuário. São privados e valem para todos os projetos."), servers: [] },
 		];
 
 		for (const server of this.filteredServers) {
@@ -817,7 +817,7 @@ export class McpListWidget extends Disposable {
 				icon: pluginIcon,
 				count: pluginServers.length,
 				isFirst,
-				description: localize('pluginGroupDescription', "MCP servers provided by installed plugins."),
+				description: localize('pluginGroupDescription', "Servidores MCP fornecidos pelos plugins instalados."),
 				collapsed,
 			});
 			if (!collapsed) {
@@ -840,11 +840,11 @@ export class McpListWidget extends Disposable {
 				type: 'group-header',
 				id: 'mcp-group-extension',
 				scope: 'extension',
-				label: localize('extensionGroup', "Extensions"),
+				label: localize('extensionGroup', "Extensões"),
 				icon: extensionIcon,
 				count: extensionServers.length,
 				isFirst,
-				description: localize('extensionGroupDescription', "MCP servers contributed by installed VS Code extensions."),
+				description: localize('extensionGroupDescription', "Servidores MCP contribuídos pelas extensões instaladas do VS Code."),
 				collapsed,
 			});
 			if (!collapsed) {
@@ -867,11 +867,11 @@ export class McpListWidget extends Disposable {
 				type: 'group-header',
 				id: 'mcp-group-builtin',
 				scope: 'builtin',
-				label: localize('builtInGroup', "Built-in"),
+				label: localize('builtInGroup', "Nativos"),
 				icon: builtinIcon,
 				count: otherBuiltinServers.length,
 				isFirst,
-				description: localize('builtInGroupDescription', "MCP servers built into VS Code. These are available automatically."),
+				description: localize('builtInGroupDescription', "Servidores MCP embutidos no VS Code. Ficam disponíveis automaticamente."),
 				collapsed,
 			});
 			if (!collapsed) {
@@ -1030,7 +1030,7 @@ export class McpListWidget extends Disposable {
 			const disposables = new DisposableStore();
 			const showPluginAction = disposables.add(new Action(
 				'mcpServer.showPlugin',
-				localize('showPlugin', "Show Plugin"),
+				localize('showPlugin', "Mostrar Plugin"),
 				undefined,
 				true,
 				async () => {
@@ -1046,14 +1046,14 @@ export class McpListWidget extends Disposable {
 			));
 			const uninstallAction = disposables.add(new Action(
 				'mcpServer.uninstallPlugin',
-				localize('uninstallPlugin', "Uninstall Plugin"),
+				localize('uninstallPlugin', "Desinstalar Plugin"),
 				undefined,
 				true,
 				async () => {
 					const result = await this.dialogService.confirm({
-						message: localize('confirmUninstallPluginMcp', "This MCP server is provided by the plugin '{0}'", plugin.label),
-						detail: localize('confirmUninstallPluginMcpDetail', "Individual MCP servers from a plugin cannot be removed separately. Would you like to uninstall the entire plugin?"),
-						primaryButton: localize('uninstallPluginBtn', "Uninstall Plugin"),
+						message: localize('confirmUninstallPluginMcp', "Este servidor MCP é fornecido pelo plugin '{0}'", plugin.label),
+						detail: localize('confirmUninstallPluginMcpDetail', "Servidores MCP de um plugin não podem ser removidos separadamente. Deseja desinstalar o plugin inteiro?"),
+						primaryButton: localize('uninstallPluginBtn', "Desinstalar Plugin"),
 						type: 'question',
 					});
 					if (result.confirmed) {

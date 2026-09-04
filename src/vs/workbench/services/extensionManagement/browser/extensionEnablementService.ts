@@ -135,29 +135,6 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 				});
 			});
 		}
-
-		this.ensureChatExtensionInitialDisabledState();
-	}
-
-	private ensureChatExtensionInitialDisabledState(): void {
-		if (!this._chatExtensionId || this.environmentService.isSessionsWindow || this.environmentService.skipBuiltinExtensions?.some(id => id.toLowerCase() === this._chatExtensionId)) {
-			return;
-		}
-
-		// The builtin chat extension (Copilot) has been superseded by the local `agent-chat`
-		// extension that registers `@agent` as the default chat participant. Disable Copilot on
-		// first launch so it does not register competing chat participants or commands. Run this
-		// migration only once so the user can manually re-enable Copilot later if desired.
-		const agentChatMigrationKey = 'agentChatBuiltinDisabledMigration';
-		if (!this.storageService.getBoolean(agentChatMigrationKey, StorageScope.PROFILE, false)) {
-			if (!this._isDisabledGlobally({ id: this._chatExtensionId })) {
-				const chatExtensionId = this._chatExtensionId;
-				this.logService.debug('Disabling builtin Copilot chat extension in favor of agent-chat');
-				this._disableExtension({ id: chatExtensionId })
-					.catch(err => this.logService.error(`Failed to disable builtin chat extension ${chatExtensionId}`, err));
-			}
-			this.storageService.store(agentChatMigrationKey, true, StorageScope.PROFILE, StorageTarget.MACHINE);
-		}
 	}
 
 	private get hasWorkspace(): boolean {
@@ -403,13 +380,6 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 			return enablementState;
 		}
 
-		// Ensure the chat extension is disabled in fresh profiles where chat setup is not completed.
-		// This is called here (in addition to the constructor) because on profile switch the
-		// enablement service is not recreated, but the storage scope changes to the new profile.
-		if (extension.identifier.id.toLowerCase() === this._chatExtensionId) {
-			this.ensureChatExtensionInitialDisabledState();
-		}
-
 		enablementState = this._getUserEnablementState(extension.identifier);
 		const isEnabled = this.isEnabledEnablementState(enablementState);
 
@@ -613,7 +583,11 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 	}
 
 	private _isDisabledByUnification(identifier: IExtensionIdentifier): boolean {
-		return this._extensionUnificationEnabled && identifier.id.toLowerCase() === this._completionsExtensionId;
+		if (!this._extensionUnificationEnabled || this._completionsExtensionId === this._chatExtensionId) {
+			return false; // no separate completions extension to be superseded by the chat extension
+		}
+
+		return identifier.id.toLowerCase() === this._completionsExtensionId;
 	}
 
 	private _isDisabledBySessionsWindow(extension: IExtension): boolean {

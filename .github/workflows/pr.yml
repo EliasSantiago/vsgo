@@ -22,7 +22,7 @@ jobs:
     runs-on: [ self-hosted, 1ES.Pool=1es-vscode-oss-ubuntu-22.04-x64, "JobId=compile-${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}" ]
     steps:
       - name: Checkout microsoft/vscode
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -133,26 +133,30 @@ jobs:
       job_name: Remote
       remote_tests: true
 
-  macos-electron-tests:
-    name: macOS
-    uses: ./.github/workflows/pr-darwin-test.yml
-    with:
-      job_name: Electron
-      electron_tests: true
-
-  macos-browser-tests:
-    name: macOS
-    uses: ./.github/workflows/pr-darwin-test.yml
-    with:
-      job_name: Browser
-      browser_tests: true
-
-  macos-remote-tests:
-    name: macOS
-    uses: ./.github/workflows/pr-darwin-test.yml
-    with:
-      job_name: Remote
-      remote_tests: true
+#   ── macOS: DESATIVADO por custo. Os três jobs rodam em macos-14-xlarge (o
+#   runner mais caro do GitHub Actions) a cada pull request. Para reativar,
+#   descomente o bloco inteiro.
+#
+#   macos-electron-tests:
+#     name: macOS
+#     uses: ./.github/workflows/pr-darwin-test.yml
+#     with:
+#       job_name: Electron
+#       electron_tests: true
+#
+#   macos-browser-tests:
+#     name: macOS
+#     uses: ./.github/workflows/pr-darwin-test.yml
+#     with:
+#       job_name: Browser
+#       browser_tests: true
+#
+#   macos-remote-tests:
+#     name: macOS
+#     uses: ./.github/workflows/pr-darwin-test.yml
+#     with:
+#       job_name: Remote
+#       remote_tests: true
 
   windows-electron-tests:
     name: Windows
@@ -183,7 +187,7 @@ jobs:
       pull-requests: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -228,7 +232,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -247,7 +251,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -257,13 +261,13 @@ jobs:
           node-version: '22.21.x'
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           architecture: 'x64'
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0'
 
@@ -351,7 +355,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -361,13 +365,13 @@ jobs:
           node-version: '22.21.x'
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           architecture: 'x64'
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0'
 

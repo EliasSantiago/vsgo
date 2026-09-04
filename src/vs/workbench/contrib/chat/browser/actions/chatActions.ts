@@ -62,6 +62,7 @@ import { CopilotUsageExtensionFeatureId } from '../../common/languageModelStats.
 import { ILanguageModelToolsConfirmationService } from '../../common/tools/languageModelToolsConfirmationService.js';
 import { ILanguageModelToolsService, IToolData, IToolSet, isToolSet } from '../../common/tools/languageModelToolsService.js';
 import { ChatViewId, IChatWidget, IChatWidgetService, isIChatViewViewContext } from '../chat.js';
+import { ShowContextUsageActionId } from '../widgetHosts/viewPane/chatContextUsageWidget.js';
 import { IChatEditorOptions } from '../widgetHosts/editor/chatEditor.js';
 import { ChatEditorInput, showClearEditingSessionConfirmation } from '../widgetHosts/editor/chatEditorInput.js';
 import { convertBufferToScreenshotVariable } from '../attachments/chatScreenshotContext.js';
@@ -552,6 +553,30 @@ class PrimaryOpenChatGlobalAction extends OpenChatGlobalAction {
 			}]
 		});
 	}
+
+	override async run(accessor: ServicesAccessor, opts?: string | IChatViewOpenOptions): Promise<IChatAgentResult & { type?: 'confirmation' } | undefined> {
+		if (!opts) {
+			const layoutService = accessor.get(IWorkbenchLayoutService);
+			const viewsService = accessor.get(IViewsService);
+			const viewDescriptorService = accessor.get(IViewDescriptorService);
+
+			if (viewsService.isViewVisible(ChatViewId)) {
+				const chatLocation = viewDescriptorService.getViewLocationById(ChatViewId);
+				let part: Parts.PANEL_PART | Parts.SIDEBAR_PART | Parts.AUXILIARYBAR_PART | undefined;
+				switch (chatLocation) {
+					case ViewContainerLocation.Panel: part = Parts.PANEL_PART; break;
+					case ViewContainerLocation.Sidebar: part = Parts.SIDEBAR_PART; break;
+					case ViewContainerLocation.AuxiliaryBar: part = Parts.AUXILIARYBAR_PART; break;
+				}
+				if (part) {
+					layoutService.setPartHidden(true, part);
+					return;
+				}
+			}
+		}
+
+		return super.run(accessor, opts);
+	}
 }
 
 export function getOpenChatActionIdForMode(mode: IChatMode): string {
@@ -660,7 +685,7 @@ export function registerChatActions() {
 				}, {
 					id: MenuId.EditorTitle,
 					group: 'navigation',
-					when: ContextKeyExpr.and(ActiveEditorContext.isEqualTo(ChatEditorInput.EditorID), ChatContextKeys.newChatButtonExperimentIcon.notEqualsTo('copilot'), ChatContextKeys.newChatButtonExperimentIcon.notEqualsTo('new-session'), ChatContextKeys.newChatButtonExperimentIcon.notEqualsTo('comment')),
+					when: ContextKeyExpr.and(ActiveEditorContext.isEqualTo(ChatEditorInput.EditorID), ChatContextKeys.newChatButtonExperimentIcon.notEqualsTo('sparkle'), ChatContextKeys.newChatButtonExperimentIcon.notEqualsTo('new-session'), ChatContextKeys.newChatButtonExperimentIcon.notEqualsTo('comment')),
 					order: 1
 				}],
 			});
@@ -677,14 +702,14 @@ export function registerChatActions() {
 			super({
 				id: ACTION_ID_OPEN_CHAT + '.copilotIcon',
 				title: localize2('interactiveSession.open', "New Chat Editor"),
-				icon: Codicon.copilot,
+				icon: Codicon.chatSparkle,
 				f1: false,
 				category: CHAT_CATEGORY,
 				precondition: ChatContextKeys.enabled,
 				menu: [{
 					id: MenuId.EditorTitle,
 					group: 'navigation',
-					when: ContextKeyExpr.and(ActiveEditorContext.isEqualTo(ChatEditorInput.EditorID), ChatContextKeys.newChatButtonExperimentIcon.isEqualTo('copilot')),
+					when: ContextKeyExpr.and(ActiveEditorContext.isEqualTo(ChatEditorInput.EditorID), ChatContextKeys.newChatButtonExperimentIcon.isEqualTo('sparkle')),
 					order: 1
 				}],
 			});
@@ -1070,11 +1095,22 @@ export function registerChatActions() {
 	registerAction2(class ShowContextUsageAction extends Action2 {
 		constructor() {
 			super({
-				id: 'workbench.action.chat.showContextUsage',
+				id: ShowContextUsageActionId,
 				title: localize2('interactiveSession.showContextUsage.label', "Show Context Window Usage"),
 				category: CHAT_CATEGORY,
 				f1: true,
 				precondition: ChatContextKeys.enabled,
+				menu: [{
+					// Ordered after the model picker (3) and the session picker (4)
+					// so the ring reads as part of the model it describes.
+					id: MenuId.ChatInput,
+					order: 5,
+					group: 'navigation',
+					when: ContextKeyExpr.and(
+						ChatContextKeys.location.isEqualTo(ChatAgentLocation.Chat),
+						ChatContextKeys.inQuickChat.negate(),
+					),
+				}],
 			});
 		}
 
@@ -1237,7 +1273,7 @@ export function registerChatActions() {
 					},
 				],
 				custom: {
-					icon: Codicon.copilotWarningLarge,
+					icon: Codicon.chatSparkleWarning,
 					markdownDetails: coalesce([
 						{ markdown: new MarkdownString(message, true) },
 						upgradeToPro ? { markdown: new MarkdownString(upgradeToPro, true) } : undefined
@@ -1477,20 +1513,29 @@ export function registerChatActions() {
 		}
 	});
 
-	// Show a direct gear action to open the Customizations editor
-	MenuRegistry.appendMenuItem(MenuId.ViewTitle, {
+	// Show gear in the window title bar (right side, adjacent to layout controls) so it is always visible
+	MenuRegistry.appendMenuItem(MenuId.TitleBar, {
 		command: {
 			id: AICustomizationManagementCommands.OpenEditor,
-			title: localize2('openChatCustomizations', "Open Customizations"),
+			title: localize2('openChatCustomizationsTitleBar', "Open Customizations"),
 			category: CHAT_CATEGORY,
 			icon: Codicon.gear
 		},
-		group: 'navigation',
-		when: ContextKeyExpr.and(
-			ChatContextKeys.enabled,
-			ContextKeyExpr.equals('view', ChatViewId),
-		),
-		order: 6
+		group: '0_leading',
+		when: ChatContextKeys.enabled,
+		order: -999
+	});
+
+	// Also show in the global activity manage menu so it's accessible when the chat is hidden
+	MenuRegistry.appendMenuItem(MenuId.GlobalActivity, {
+		command: {
+			id: AICustomizationManagementCommands.OpenEditor,
+			title: localize2('openChatCustomizationsGlobal', "Open Customizations"),
+			category: CHAT_CATEGORY,
+		},
+		group: '2_configuration',
+		when: ChatContextKeys.enabled,
+		order: 3
 	});
 }
 
@@ -1757,6 +1802,40 @@ MenuRegistry.appendMenuItem(MenuId.EditorContext, {
 });
 
 // --- Chat Default Visibility
+
+/**
+ * Closes the chat from its own title bar.
+ *
+ * Every other way out of the chat is indirect — the command palette, the
+ * activity bar toggle, the container's context menu — and none of them is where
+ * someone looks when they want the panel gone.
+ *
+ * Order 0 puts it immediately after the New Chat split button, which sits at
+ * -1. A larger order pushes it past the width of the title bar and into the
+ * overflow menu, which is the same as not being there.
+ */
+registerAction2(class CloseChatViewAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.chat.closeView',
+			title: localize2('chat.closeView.label', "Close Chat"),
+			icon: Codicon.close,
+			f1: true,
+			category: CHAT_CATEGORY,
+			precondition: ChatContextKeys.enabled,
+			menu: {
+				id: MenuId.ViewTitle,
+				when: ContextKeyExpr.equals('view', ChatViewId),
+				order: 0,
+				group: 'navigation'
+			},
+		});
+	}
+
+	async run(accessor: ServicesAccessor) {
+		accessor.get(IViewsService).closeView(ChatViewId);
+	}
+});
 
 registerAction2(class ToggleDefaultVisibilityAction extends Action2 {
 	constructor() {

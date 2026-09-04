@@ -27,6 +27,7 @@ import { IExtHostProgress } from './extHostProgress.js';
 import { IProgressStep } from '../../../platform/progress/common/progress.js';
 import { CancellationError, isCancellationError } from '../../../base/common/errors.js';
 import { raceCancellationError, SequencerByKey } from '../../../base/common/async.js';
+import { UserInteractionRequiredError } from '../../contrib/mcp/common/mcpTypes.js';
 
 export interface IExtHostAuthentication extends ExtHostAuthentication { }
 export const IExtHostAuthentication = createDecorator<IExtHostAuthentication>('IExtHostAuthentication');
@@ -258,23 +259,43 @@ export class ExtHostAuthentication implements ExtHostAuthenticationShape {
 		resourceMetadata: IAuthorizationProtectedResourceMetadata | undefined,
 		clientId: string | undefined,
 		clientSecret: string | undefined,
-		initialTokens: IAuthorizationToken[] | undefined
+		initialTokens: IAuthorizationToken[] | undefined,
+		errorOnUserInteraction?: boolean
 	): Promise<string> {
 		if (!clientId) {
 			const authorizationServer = URI.revive(authorizationServerComponents);
+			// Kept so the prompt can tell the two cases apart. A server that offers no
+			// registration endpoint and one whose endpoint rejected us are different
+			// problems with different fixes, and reporting both as "not supported"
+			// sends people looking in the wrong place.
+			let registrationFailure: string | undefined;
 			if (serverMetadata.registration_endpoint) {
 				try {
 					const registration = await fetchDynamicRegistration(serverMetadata, this._initData.environment.appName, resourceMetadata?.scopes_supported);
 					clientId = registration.client_id;
 					clientSecret = registration.client_secret;
 				} catch (err) {
+					registrationFailure = err.message;
 					this._logService.warn(`Dynamic registration failed for ${authorizationServer.toString()}: ${err.message}. Prompting user for client ID and client secret...`);
 				}
 			}
 			// Still no client id so dynamic client registration was either not supported or failed
 			if (!clientId) {
+				// Background starts stop here. The prompt that follows is modal, and a
+				// server that cannot register itself would raise it again on every
+				// attempt — in the middle of whatever the user was actually doing.
+				// Failing keeps the offer where it belongs: an explicit start.
+				//
+				// The typed error matters: callers recognise it and settle into a
+				// "needs user interaction" state, which reads as a server waiting on
+				// the user. A plain error would be logged as a warning and the start
+				// would carry on unauthenticated, only to fail later on a 401.
+				if (errorOnUserInteraction) {
+					this._logService.info(`Client registration for ${authorizationServer.toString()} needs user interaction; not prompting for a background start`);
+					throw new UserInteractionRequiredError('client registration');
+				}
 				this._logService.info(`Prompting user for client registration details for ${authorizationServer.toString()}`);
-				const clientDetails = await this._proxy.$promptForClientRegistration(authorizationServer.toString());
+				const clientDetails = await this._proxy.$promptForClientRegistration(authorizationServer.toString(), registrationFailure);
 				if (!clientDetails) {
 					throw new Error('User did not provide client details');
 				}

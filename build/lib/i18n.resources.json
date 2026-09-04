@@ -179,6 +179,18 @@
 			"project": "vscode-workbench"
 		},
 		{
+			"name": "vs/workbench/contrib/specDriven",
+			"project": "vscode-workbench"
+		},
+		{
+			"name": "vs/workbench/contrib/qa",
+			"project": "vscode-workbench"
+		},
+		{
+			"name": "vs/workbench/contrib/securityScan",
+			"project": "vscode-workbench"
+		},
+		{
 			"name": "vs/workbench/contrib/quickaccess",
 			"project": "vscode-workbench"
 		},

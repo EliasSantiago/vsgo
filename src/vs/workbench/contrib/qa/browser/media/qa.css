@@ -1,0 +1,188 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.qa-view {
+	display: flex;
+	flex-direction: column;
+	padding: 8px 12px;
+	overflow-y: auto;
+	height: 100%;
+}
+
+.qa-form {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding-bottom: 12px;
+	border-bottom: 1px solid var(--vscode-widget-border);
+}
+
+.qa-form-label {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--vscode-descriptionForeground);
+	margin-top: 6px;
+}
+
+.qa-form-input {
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 2px;
+	padding: 4px 6px;
+	font-family: inherit;
+	font-size: inherit;
+	outline: none;
+}
+
+.qa-form-input:focus {
+	border-color: var(--vscode-focusBorder);
+}
+
+.qa-form-textarea {
+	resize: vertical;
+	min-height: 60px;
+}
+
+.qa-form-buttons {
+	display: flex;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.qa-button {
+	border: 0;
+	padding: 4px 12px;
+	border-radius: 2px;
+	cursor: pointer;
+	font-family: inherit;
+	font-size: inherit;
+}
+
+.qa-button-primary {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+.qa-button-primary:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.qa-button-cancel {
+	background: var(--vscode-statusBarItem-errorBackground, #f14c4c);
+	color: var(--vscode-statusBarItem-errorForeground, #fff);
+}
+
+.qa-current-run {
+	margin-top: 12px;
+}
+
+.qa-running {
+	background: var(--vscode-editor-inactiveSelectionBackground);
+	border-left: 3px solid var(--vscode-progressBar-background);
+	padding: 8px 10px;
+	border-radius: 2px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.qa-running-title {
+	font-weight: 600;
+	color: var(--vscode-progressBar-background);
+}
+
+.qa-running-prompt {
+	color: var(--vscode-foreground);
+}
+
+.qa-running-status {
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+}
+
+.qa-running-step {
+	font-family: var(--monaco-monospace-font, monospace);
+	font-size: 11px;
+	color: var(--vscode-textPreformat-foreground);
+	background: var(--vscode-textCodeBlock-background);
+	padding: 2px 4px;
+	border-radius: 2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.qa-section-title {
+	margin-top: 16px;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.qa-runs-list {
+	display: flex;
+	flex-direction: column;
+	margin-top: 6px;
+}
+
+.qa-run-row {
+	display: flex;
+	gap: 8px;
+	padding: 6px 4px;
+	border-bottom: 1px solid var(--vscode-widget-border);
+	align-items: flex-start;
+}
+
+.qa-run-badge {
+	flex: 0 0 auto;
+	font-size: 10px;
+	font-weight: 700;
+	padding: 2px 6px;
+	border-radius: 2px;
+	letter-spacing: 0.5px;
+	min-width: 36px;
+	text-align: center;
+}
+
+.qa-run-passed .qa-run-badge { background: var(--vscode-testing-iconPassed, #73c991); color: #000; }
+.qa-run-failed .qa-run-badge { background: var(--vscode-testing-iconFailed, #f14c4c); color: #fff; }
+.qa-run-error  .qa-run-badge { background: var(--vscode-errorForeground, #f14c4c); color: #fff; }
+.qa-run-cancelled .qa-run-badge { background: var(--vscode-descriptionForeground); color: var(--vscode-editor-background); }
+.qa-run-running .qa-run-badge { background: var(--vscode-progressBar-background); color: #fff; }
+
+.qa-run-text {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	overflow: hidden;
+}
+
+.qa-run-prompt {
+	font-weight: 500;
+	color: var(--vscode-foreground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.qa-run-meta {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.qa-run-summary {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+}
+
+.qa-empty {
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+	padding: 8px 0;
+}

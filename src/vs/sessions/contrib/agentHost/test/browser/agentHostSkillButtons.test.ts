@@ -45,7 +45,7 @@ function makeActiveSession(providerId: string): IActiveSession {
 		resource: chat.resource,
 		providerId,
 		sessionType: 'copilotcli',
-		icon: Codicon.copilot,
+		icon: Codicon.chatSparkle,
 		createdAt: chat.createdAt,
 		workspace: observableValue('w', undefined),
 		title: chat.title,

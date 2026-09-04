@@ -19,6 +19,8 @@ import { Codicon } from '../../../../../base/common/codicons.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { ILanguageModelsConfigurationService, ILanguageModelsProviderGroup } from '../../common/languageModelsConfiguration.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { ILogService } from '../../../../../platform/log/common/log.js';
 
 class ManageLanguageModelAuthenticationAction extends Action2 {
 	static readonly ID = 'workbench.action.chat.manageLanguageModelAuthentication';
@@ -292,6 +294,7 @@ class ConfigureAIProviderAction extends Action2 {
 			placeHolder: localize('configureAIProvider.placeholder', 'Select a provider to configure (API key, endpoint, etc.)'),
 			matchOnDescription: true,
 		});
+		// eslint-disable-next-line local/code-no-in-operator
 		if (!picked || !('vendor' in picked)) {
 			return;
 		}
@@ -321,6 +324,8 @@ class ManageAIProvidersAction extends Action2 {
 		const languageModelsService = accessor.get(ILanguageModelsService);
 		const configurationService = accessor.get(ILanguageModelsConfigurationService);
 		const dialogService = accessor.get(IDialogService);
+		const notificationService = accessor.get(INotificationService);
+		const logService = accessor.get(ILogService);
 
 		const ADD_NEW_ID = '__addNew__';
 		type ProviderItem = IQuickPickItem & { vendor?: string; group?: ILanguageModelsProviderGroup };
@@ -332,7 +337,7 @@ class ManageAIProvidersAction extends Action2 {
 
 			items.push({
 				id: ADD_NEW_ID,
-				label: localize('addNewProvider', '$(add) Add new provider...'),
+				label: '$(add) ' + localize('addNewProvider', 'Add new provider...'),
 				description: localize('addNewProviderHint', 'Configure another API key, endpoint, etc.'),
 				alwaysShow: true,
 			});
@@ -382,6 +387,11 @@ class ManageAIProvidersAction extends Action2 {
 			}
 
 			const result = await new Promise<{ kind: 'pick' | 'edit' | 'remove'; item?: ProviderItem } | undefined>(resolve => {
+				// `picker.hide()` fires `onDidHide` synchronously, so capture the chosen result
+				// in a local variable and let `onDidHide` be the single resolve point.
+				// Otherwise `resolve(undefined)` from `onDidHide` wins the race and silently
+				// swallows trash/gear clicks and item selections.
+				let pending: { kind: 'pick' | 'edit' | 'remove'; item?: ProviderItem } | undefined;
 				const picker = quickInputService.createQuickPick<ProviderItem>({ useSeparators: true });
 				picker.title = localize('manageAIProvidersTitle', 'Manage AI Providers');
 				picker.placeholder = localize('manageAIProvidersPlaceholder', 'Select a provider to edit, or add a new one');
@@ -389,17 +399,17 @@ class ManageAIProvidersAction extends Action2 {
 				picker.items = items;
 				picker.onDidAccept(() => {
 					const item = picker.selectedItems[0];
+					pending = item ? { kind: 'pick', item } : undefined;
 					picker.hide();
-					resolve(item ? { kind: 'pick', item } : undefined);
 				});
 				picker.onDidTriggerItemButton(e => {
 					const isEdit = (e.button.iconClass ?? '').includes('codicon-gear');
+					pending = { kind: isEdit ? 'edit' : 'remove', item: e.item };
 					picker.hide();
-					resolve({ kind: isEdit ? 'edit' : 'remove', item: e.item });
 				});
 				picker.onDidHide(() => {
 					picker.dispose();
-					resolve(undefined);
+					resolve(pending);
 				});
 				picker.show();
 			});
@@ -428,8 +438,14 @@ class ManageAIProvidersAction extends Action2 {
 					placeHolder: localize('configureAIProvider.placeholder', 'Select a provider to configure (API key, endpoint, etc.)'),
 					matchOnDescription: true,
 				});
+				// eslint-disable-next-line local/code-no-in-operator
 				if (picked && 'vendor' in picked) {
-					await languageModelsService.configureLanguageModelsProviderGroup(picked.vendor);
+					try {
+						await languageModelsService.configureLanguageModelsProviderGroup(picked.vendor);
+					} catch (err) {
+						logService.error('[lm] configureLanguageModelsProviderGroup failed', err);
+						notificationService.error(localize('configureProviderFailed', "Failed to configure provider \"{0}\": {1}", picked.label, (err as Error)?.message ?? String(err)));
+					}
 				}
 				continue;
 			}
@@ -442,13 +458,31 @@ class ManageAIProvidersAction extends Action2 {
 					primaryButton: localize('remove', 'Remove'),
 				});
 				if (confirmed.confirmed) {
-					await languageModelsService.removeLanguageModelsProviderGroup(result.item.vendor, result.item.group.name);
+					const vendorId = result.item.vendor;
+					const groupName = result.item.group.name;
+					try {
+						await languageModelsService.removeLanguageModelsProviderGroup(vendorId, groupName);
+					} catch (err) {
+						logService.error('[lm] removeLanguageModelsProviderGroup failed', err);
+						notificationService.error(localize('removeProviderFailed', "Failed to remove provider \"{0}\": {1}", groupName, (err as Error)?.message ?? String(err)));
+						continue;
+					}
+					// Verify it's actually gone after the await; if not, surface a clear error so we can debug.
+					const after = configurationService.getLanguageModelsProviderGroups();
+					if (after.some(g => g.vendor === vendorId && g.name === groupName)) {
+						notificationService.error(localize('removeProviderStuck', "Provider \"{0}\" still appears configured after delete — the on-disk update may have failed silently. Check the Output panel for details.", groupName));
+					}
 				}
 				continue;
 			}
 
 			if (result.item.vendor && result.item.group) {
-				await languageModelsService.configureLanguageModelsProviderGroup(result.item.vendor, result.item.group.name);
+				try {
+					await languageModelsService.configureLanguageModelsProviderGroup(result.item.vendor, result.item.group.name);
+				} catch (err) {
+					logService.error('[lm] configureLanguageModelsProviderGroup failed', err);
+					notificationService.error(localize('editProviderFailed', "Failed to edit provider \"{0}\": {1}", result.item.group.name, (err as Error)?.message ?? String(err)));
+				}
 				continue;
 			}
 		}

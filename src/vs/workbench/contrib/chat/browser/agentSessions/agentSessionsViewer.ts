@@ -1418,8 +1418,6 @@ const WEEK_THRESHOLD = 7 * DAY_THRESHOLD;
 
 export function groupAgentSessionsByDate(sessions: IAgentSession[], sortBy?: AgentSessionsSorting): Map<AgentSessionSection, IAgentSessionSection> {
 	const now = Date.now();
-	const startOfToday = new Date(now).setHours(0, 0, 0, 0);
-	const startOfYesterday = startOfToday - DAY_THRESHOLD;
 	const weekThreshold = now - WEEK_THRESHOLD;
 
 	const pinnedSessions: IAgentSession[] = [];
@@ -1438,11 +1436,8 @@ export function groupAgentSessionsByDate(sessions: IAgentSession[], sortBy?: Age
 			const sessionTime = sortBy === AgentSessionsSorting.Updated
 				? session.timing.lastRequestEnded ?? session.timing.created
 				: session.timing.created;
-			if (sessionTime >= startOfToday) {
-				todaySessions.push(session);
-			} else if (sessionTime >= startOfYesterday) {
-				yesterdaySessions.push(session);
-			} else if (sessionTime >= weekThreshold) {
+			// Group sessions into just two date buckets: "Last 7 days" and "Older".
+			if (sessionTime >= weekThreshold) {
 				weekSessions.push(session);
 			} else {
 				olderSessions.push(session);

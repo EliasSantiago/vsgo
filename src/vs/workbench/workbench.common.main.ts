@@ -224,8 +224,14 @@ import './contrib/mcp/browser/mcp.contribution.js';
 import './contrib/mcp/browser/mcp.view.contribution.js';
 import './contrib/chat/browser/chatSessions/chatSessions.contribution.js';
 
+// vsgo artifacts folder
+import './contrib/vsgo/browser/vsgo.contribution.js';
+
 // Security Scan
 import './contrib/securityScan/browser/securityScan.contribution.js';
+
+// Spec Driven Development
+import './contrib/specDriven/browser/specDriven.contribution.js';
 import './contrib/chat/browser/contextContrib/chatContext.contribution.js';
 import './contrib/imageCarousel/browser/imageCarousel.contribution.js';
 

@@ -1,0 +1,240 @@
+# Gera os instaladores do vsgo para Linux.
+#
+# Cada sistema é compilado em um runner do seu próprio SO: os módulos nativos
+# (node-pty, spdlog, sqlite3, native-keymap, @parcel/watcher) são binários
+# específicos de plataforma e não podem ser cross-compilados. Buildar tudo em
+# uma máquina só produz pacotes que instalam mas quebram terminal, log, storage
+# e file watcher.
+#
+# Os jobs de macOS estão comentados por CUSTO de runner: o minuto
+# de runner macOS custa 10x o de Linux (e ainda roda em matriz arm64 + x64).
+# Hoje Linux e Windows são publicados. Para voltar a gerar .dmg/.zip,
+# descomente o job "macos" abaixo e coloque-o de volta em "needs" do job publish.
+#
+# Disparo:
+#   - automático ao enviar uma tag "v*"  (bash scripts/release.sh --tag)
+#   - manual pela aba Actions → Release → Run workflow
+#
+# Os artefatos saem como artifact do workflow e, quando disparado por tag,
+# também ficam anexados à release do GitHub.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      minified:
+        description: 'Build de produção (minificado)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  # workflow_dispatch manda string; push de tag não manda nada (default: produção).
+  BUILD_FLAG: ${{ (github.event_name == 'push' || inputs.minified) && '--min' || '' }}
+
+jobs:
+  linux:
+    name: Linux x64
+    # 22.04 de propósito: o glibc do runner vira o piso de compatibilidade do
+    # pacote. Runner mais novo = exige distro mais nova no usuário final.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependências do sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbfile-dev libkrb5-dev libsecret-1-dev \
+            fakeroot dpkg-dev
+
+      - name: npm ci
+        run: |
+          for i in 1 2 3; do npm ci && break; echo "npm ci falhou ($i), tentando de novo..."; done
+        env:
+          npm_config_arch: x64
+          VSCODE_ARCH: x64
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Baixar extensões embutidas
+        run: node build/lib/builtInExtensions.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (.deb + .tar.gz)
+        run: bash scripts/build-linux.sh $BUILD_FLAG
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vsgo-linux-x64
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64
+    # Pinado de propósito: o windows-latest migrou para Windows 2025 com Visual
+    # Studio 2026, e o node-gyp 11.2.0 (o que o npm 10 embute e o que o repo
+    # empacota em build/npm/gyp) não reconhece essa versão — o npm ci falha com
+    # "Could not find any Visual Studio installation to use". O 2022 tem o VS que
+    # ele entende. Ao trocar, confira antes se o node-gyp já suporta o VS da imagem.
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: npm ci
+        shell: pwsh
+        run: |
+          for ($i = 1; $i -le 3; $i++) {
+            npm ci
+            if ($LASTEXITCODE -eq 0) { break }
+            Write-Host "npm ci falhou ($i), tentando de novo..."
+          }
+          if ($LASTEXITCODE -ne 0) { throw "npm ci falhou" }
+        env:
+          npm_config_arch: x64
+          npm_config_msvs_version: 2022
+          VSCODE_ARCH: x64
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Baixar extensões embutidas
+        run: node build/lib/builtInExtensions.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (instaladores .exe)
+        shell: bash
+        run: bash scripts/build-win.sh $BUILD_FLAG --all
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vsgo-win32-x64
+          path: dist/*
+          if-no-files-found: error
+
+#   ── macOS: DESATIVADO por custo (runner macOS = 10x o preço/minuto do Linux).
+#   Para reativar: descomente o bloco inteiro e volte a incluir "macos" no
+#   needs do job publish.
+#
+#   macos:
+#     name: macOS ${{ matrix.arch }}
+#     # Os dois builds rodam em Apple Silicon: o SDK do Xcode cross-compila x86_64
+#     # sem problema (ao contrário de Linux→macOS). Se algum módulo nativo passar a
+#     # dar erro no alvo x64, mova este job para um runner Intel.
+#     runs-on: macos-15
+#     timeout-minutes: 180
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         arch: [arm64, x64]
+#     steps:
+#       - uses: actions/checkout@v6
+#         with:
+#           lfs: true
+#
+#       - uses: actions/setup-node@v6
+#         with:
+#           node-version-file: .nvmrc
+#           cache: npm
+#
+#       - name: npm ci
+#         run: |
+#           python3 -m pip install --break-system-packages setuptools || true
+#           for i in 1 2 3; do npm ci && break; echo "npm ci falhou ($i), tentando de novo..."; done
+#         env:
+#           npm_config_arch: ${{ matrix.arch }}
+#           VSCODE_ARCH: ${{ matrix.arch }}
+#           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#
+#       - name: Baixar extensões embutidas
+#         run: node build/lib/builtInExtensions.ts
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#
+#       - name: Build (.dmg + .zip)
+#         run: bash scripts/build-mac.sh --arch ${{ matrix.arch }} $BUILD_FLAG
+#
+#       - uses: actions/upload-artifact@v7
+#         with:
+#           name: vsgo-darwin-${{ matrix.arch }}
+#           path: dist/*
+#           if-no-files-found: error
+
+  publish:
+    name: Publicar
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Baixar artefatos dos sistemas buildados
+        uses: actions/download-artifact@v7
+        with:
+          path: staging
+          merge-multiple: true
+
+      - name: Gerar checksums, manifesto e página de download
+        run: bash scripts/make-manifest.sh "$GITHUB_WORKSPACE/staging"
+
+      - name: Pasta pronta para o servidor de download
+        uses: actions/upload-artifact@v7
+        with:
+          name: vsgo-download
+          path: staging/*
+          if-no-files-found: error
+
+      # Só os instaladores vão para a release: quem chega ali quer baixar e usar.
+      # O manifest.json, o index.html e o SHA256SUMS.txt servem ao servidor de
+      # download próprio e continuam completos no artifact vsgo-download. O
+      # COMO-INSTALAR.md vira o texto da release, não um anexo. O hash de cada
+      # arquivo o próprio GitHub já mostra na página.
+      - name: Anexar os instaladores à release do GitHub
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          shopt -s nullglob
+          assets=(staging/*.exe staging/*.dmg staging/*.zip staging/*.deb staging/*.tar.gz)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "Nenhum instalador encontrado em staging/" >&2
+            exit 1
+          fi
+          # A release pode já existir: criá-la pela interface do GitHub é uma das
+          # formas de criar a tag que dispara este workflow. Nesse caso os
+          # instaladores entram na release que já está lá, em vez de o build
+          # inteiro falhar no último passo.
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${assets[@]}" \
+              --title "vsgo ${GITHUB_REF_NAME#v}" \
+              --notes-file staging/COMO-INSTALAR.md
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

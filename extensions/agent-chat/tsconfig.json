@@ -20,6 +20,7 @@
 		"../../src/vscode-dts/vscode.proposed.chatProvider.d.ts",
 		"../../src/vscode-dts/vscode.proposed.languageModelCapabilities.d.ts",
 		"../../src/vscode-dts/vscode.proposed.languageModelSystem.d.ts",
+		"../../src/vscode-dts/vscode.proposed.languageModelThinkingPart.d.ts",
 		"../../node_modules/@types/node/index.d.ts"
 	]
 }

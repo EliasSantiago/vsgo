@@ -544,9 +544,9 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	properties: {
 		'workbench.browser.enableChatTools': {
 			type: 'boolean',
-			default: false,
-			experiment: { mode: 'startup' },
-			tags: ['experimental'],
+			// On by default in vsgo: the integrated browser is the agent's browser
+			// automation backend, so it must not depend on an experiment payload.
+			default: true,
 			markdownDescription: localize(
 				{ comment: ['This is the description for a setting.'], key: 'browser.enableChatTools' },
 				'When enabled, chat agents can use browser tools to open and interact with pages in the Integrated Browser.'

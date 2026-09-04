@@ -98,6 +98,7 @@ export class ChatEditingTextModelChangeService extends Disposable {
 	}
 
 	private readonly _editDecorationClear = this._register(new RunOnceScheduler(() => { this._editDecorations = this.modifiedModel.deltaDecorations(this._editDecorations, []); }, 500));
+	private readonly _streamingDiffScheduler = this._register(new RunOnceScheduler(() => { this._updateDiffInfoSeq(); }, 400));
 	private _editDecorations: string[] = [];
 
 	private readonly _didAcceptOrRejectAllHunks = this._register(new Emitter<ModifiedFileEntryState.Accepted | ModifiedFileEntryState.Rejected>());
@@ -248,8 +249,11 @@ export class ChatEditingTextModelChangeService extends Disposable {
 		}
 
 		if (isLastEdits) {
+			this._streamingDiffScheduler.cancel();
 			this._updateDiffInfoSeq();
 			this._editDecorationClear.schedule();
+		} else {
+			this._streamingDiffScheduler.schedule();
 		}
 
 		return { rewriteRatio, maxLineNumber };

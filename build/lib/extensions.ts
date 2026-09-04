@@ -71,7 +71,7 @@ function fromLocal(extensionPath: string, forWeb: boolean, _disableMangle: boole
 
 	let hasEsbuild = fs.existsSync(path.join(extensionPath, esbuildConfigFileName));
 
-	// Fallback: check for .esbuild.mts/.esbuild.ts (used by extensions with their own build system, e.g. copilot)
+	// Fallback: check for .esbuild.mts/.esbuild.ts (used by extensions with their own build system)
 	if (!hasEsbuild && !forWeb) {
 		for (const fallback of ['.esbuild.mts', '.esbuild.ts']) {
 			if (fs.existsSync(path.join(extensionPath, fallback))) {
@@ -112,7 +112,55 @@ function fromLocal(extensionPath: string, forWeb: boolean, _disableMangle: boole
 		});
 	}
 
+	if (!forWeb) {
+		input = assertEntryPointIsPackaged(input, extensionPath, isBundled);
+	}
+
 	return input;
+}
+
+/**
+ * Fails the build when a built-in extension's entry point is not among the
+ * files being packaged.
+ *
+ * Nothing else notices. The manifest still declares every command, participant
+ * and contribution, so the extension looks installed and the UI keeps offering
+ * what it contributes — but the extension host cannot load `main`, so nothing
+ * that extension registers at runtime ever exists, and every button that
+ * reaches for it dies quietly in the shipped app. That is invisible when
+ * running from source, where `main` is whatever the compile task just wrote.
+ *
+ * An extension that compiles TypeScript without a bundler config is the way in:
+ * packaging copies the source tree minus what `.vscodeignore` excludes, and
+ * `out/` is not part of a clean checkout.
+ */
+function assertEntryPointIsPackaged(input: Stream, extensionPath: string, isBundled: boolean): Stream {
+	const manifest = JSON.parse(fs.readFileSync(path.join(extensionPath, 'package.json'), 'utf8'));
+	if (!manifest.main) {
+		return input;
+	}
+
+	// Mirrors the rewrite above, so the check runs against the path the
+	// packaged manifest will actually point at.
+	const main = isBundled ? manifest.main.replace('/out/', '/dist/') : manifest.main;
+	const entry = main.replace(/^\.\//, '');
+	// Node resolves an extension-less entry, and a directory through its index.
+	const candidates = [entry, `${entry}.js`, `${entry}/index.js`];
+	const packaged = new Set<string>();
+
+	return input.pipe(es.through(function (file: File) {
+		packaged.add(file.relative.replace(/\\/g, '/'));
+		this.emit('data', file);
+	}, function () {
+		if (candidates.some(candidate => packaged.has(candidate))) {
+			this.emit('end');
+			return;
+		}
+
+		this.emit('error', new Error(
+			`Extension '${path.basename(extensionPath)}' declares main '${manifest.main}', but '${entry}' is not among the files being packaged. `
+			+ `An extension compiled with tsc alone ships only what is in the checkout, and 'out/' is not — add an esbuild.mts (see extensions/merge-conflict) so the entry point is bundled into 'dist/'.`));
+	}));
 }
 
 export function typeCheckExtension(extensionPath: string, forWeb: boolean): Promise<void> {
@@ -317,7 +365,6 @@ const nativeExtensions = [
 ];
 
 const excludedExtensions = [
-	'copilot',
 	'vscode-api-tests',
 	'vscode-colorize-tests',
 	'vscode-colorize-perf-tests',
@@ -458,33 +505,6 @@ function doPackageLocalExtensionsStream(forWeb: boolean, disableMangle: boolean,
 		result
 			.pipe(util2.setExecutableBit(['**/*.sh']))
 	);
-}
-
-/**
- * Package the built-in copilot extension specifically.
- * This is used by non-CI local builds where copilot is not downloaded as a VSIX
- * but must be compiled from source and included in the build.
- */
-export function packageCopilotExtensionStream(disableMangle: boolean): Stream {
-	const extensionPath = path.join(root, 'extensions', 'copilot');
-	if (!fs.existsSync(extensionPath)) {
-		return es.readArray([]);
-	}
-
-	const localExtensionsStream = minifyExtensionResources(
-		fromLocal(extensionPath, false, disableMangle)
-			.pipe(rename(p => p.dirname = `extensions/copilot/${p.dirname}`))
-	);
-
-	const productionDependencies = getProductionDependencies('extensions/copilot');
-	const dependenciesSrc = productionDependencies.map(d => path.relative(root, d)).map(d => [`${d}/**`, `!${d}/**/{test,tests}/**`]).flat();
-
-	return es.merge(
-		localExtensionsStream,
-		gulp.src(dependenciesSrc, { base: '.' })
-			.pipe(util2.cleanNodeModules(path.join(root, 'build', '.moduleignore')))
-			.pipe(util2.cleanNodeModules(path.join(root, 'build', `.moduleignore.${process.platform}`)))
-	).pipe(util2.setExecutableBit(['**/*.sh']));
 }
 
 export function packageMarketplaceExtensionsStream(forWeb: boolean): Stream {

@@ -470,7 +470,7 @@ export class AttachContextAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.chat.attachContext',
-			title: localize2('workbench.action.chat.attachContext.label.2', "Add Context..."),
+			title: localize2('workbench.action.chat.attachContext.label.2', "Adicionar Contexto..."),
 			icon: Codicon.add,
 			category: CHAT_CATEGORY,
 			keybinding: {
@@ -600,7 +600,7 @@ export class AttachContextAction extends Action2 {
 				SymbolsQuickAccessProvider.PREFIX,
 				AbstractGotoSymbolQuickAccessProvider.PREFIX
 			],
-			placeholder: placeholder ?? localize('chatContext.attach.placeholder', 'Search attachments'),
+			placeholder: placeholder ?? localize('chatContext.attach.placeholder', 'Buscar anexos'),
 			providerOptions,
 		});
 	}

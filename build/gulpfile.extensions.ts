@@ -54,6 +54,8 @@ function onExtensionCompilationEnd(): void {
 // 	ignore: ['**/out/**', '**/node_modules/**']
 // });
 const compilations = [
+	'extensions/agent-chat/tsconfig.json',
+	'extensions/agent-pr-review/tsconfig.json',
 	'extensions/configuration-editing/tsconfig.json',
 	'extensions/css-language-features/client/tsconfig.json',
 	'extensions/css-language-features/server/tsconfig.json',
@@ -285,13 +287,6 @@ gulp.task(compileNonNativeExtensionsBuildTask);
  */
 export const compileNativeExtensionsBuildTask = task.define('compile-native-extensions-build', () => ext.packageNativeLocalExtensionsStream(false, false).pipe(gulp.dest('.build')));
 gulp.task(compileNativeExtensionsBuildTask);
-
-/**
- * Compiles the built-in copilot extension for the build.
- * Used by non-CI local builds where copilot is not downloaded as a VSIX.
- */
-export const compileCopilotExtensionBuildTask = task.define('compile-copilot-extension-build', () => ext.packageCopilotExtensionStream(false).pipe(gulp.dest('.build')));
-gulp.task(compileCopilotExtensionBuildTask);
 
 /**
  * Compiles the extensions for the build.

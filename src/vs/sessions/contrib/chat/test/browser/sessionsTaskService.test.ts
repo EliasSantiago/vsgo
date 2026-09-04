@@ -55,7 +55,7 @@ function makeSession(opts: { repository?: URI; worktree?: URI } = {}): ISession 
 		resource: chat.resource,
 		providerId: 'test',
 		sessionType: 'background',
-		icon: Codicon.copilot,
+		icon: Codicon.chatSparkle,
 		createdAt: chat.createdAt,
 		workspace: observableValue('workspace', workspace),
 		title: chat.title,

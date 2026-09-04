@@ -1,5 +1,9 @@
 .vscode/**
 src/**
 tsconfig.json
+**/*.tsbuildinfo
+out/**
+esbuild*.mts
+package-lock.json
 **/*.map
 **/.gitignore

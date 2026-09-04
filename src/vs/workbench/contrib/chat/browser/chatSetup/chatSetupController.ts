@@ -23,6 +23,7 @@ import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { IActivityService, ProgressBadge } from '../../../../services/activity/common/activity.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
+import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
 import { IExtensionsWorkbenchService } from '../../../extensions/common/extensions.js';
 import { ChatEntitlement, ChatEntitlementContext, ChatEntitlementRequests, isProUser } from '../../../../services/chat/common/chatEntitlementService.js';
 import { CHAT_OPEN_ACTION_ID } from '../actions/chatActions.js';
@@ -210,7 +211,9 @@ export class ChatSetupController extends Disposable {
 				}
 			}
 
-			await this.doInstallWithRetry();
+			if (!this.isChatExtensionInstalled()) {
+				await this.doInstallWithRetry();
+			}
 		} catch (error) {
 			this.logService.error(`[chat setup] install: error ${error}`);
 			this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: isCancellationError(error) ? 'cancelled' : 'failedInstall', installDuration: watch.elapsed(), signUpErrorCode: undefined, provider });
@@ -257,6 +260,10 @@ export class ChatSetupController extends Disposable {
 
 			throw error;
 		}
+	}
+
+	private isChatExtensionInstalled(): boolean {
+		return this.extensionsWorkbenchService.local.some(extension => ExtensionIdentifier.equals(extension.identifier.id, defaultChat.chatExtensionId));
 	}
 
 	private async doInstall(): Promise<void> {

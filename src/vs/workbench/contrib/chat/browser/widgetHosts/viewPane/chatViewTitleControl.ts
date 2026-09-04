@@ -7,6 +7,7 @@ import './media/chatViewTitleControl.css';
 import { addDisposableListener, EventType, h } from '../../../../../../base/browser/dom.js';
 import { renderAsPlaintext } from '../../../../../../base/browser/markdownRenderer.js';
 import { Gesture, EventType as TouchEventType } from '../../../../../../base/browser/touch.js';
+import { Codicon } from '../../../../../../base/common/codicons.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { MarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { Disposable, MutableDisposable } from '../../../../../../base/common/lifecycle.js';
@@ -14,6 +15,7 @@ import { MarshalledId } from '../../../../../../base/common/marshallingIds.js';
 import { localize } from '../../../../../../nls.js';
 import { HiddenItemStrategy, MenuWorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../../platform/actions/common/actions.js';
+import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { IChatViewTitleActionContext } from '../../../common/actions/chatActions.js';
 import { IChatModel } from '../../../common/model/chatModel.js';
@@ -29,6 +31,7 @@ export class ChatViewTitleControl extends Disposable {
 
 	private static readonly DEFAULT_TITLE = localize('chat', "Chat");
 	private static readonly PICK_AGENT_SESSION_ACTION_ID = 'workbench.action.chat.pickAgentSession';
+	private static readonly CLOSE_CHAT_ACTION_ID = 'workbench.action.chat.closeChatView';
 
 	private readonly _onDidChangeHeight = this._register(new Emitter<void>());
 	readonly onDidChangeHeight = this._onDidChangeHeight.event;
@@ -80,6 +83,28 @@ export class ChatViewTitleControl extends Disposable {
 
 				const agentSessionsPicker = instantiationService.createInstance(AgentSessionsPicker, that.titleLabel.value?.element, undefined);
 				await agentSessionsPicker.pickAgentSession();
+			}
+		}));
+
+		this._register(registerAction2(class extends Action2 {
+			constructor() {
+				super({
+					id: ChatViewTitleControl.CLOSE_CHAT_ACTION_ID,
+					title: localize('chat.closeChat', "Fechar Chat"),
+					icon: Codicon.close,
+					f1: false,
+					menu: [{
+						id: MenuId.ChatViewSessionTitleToolbar,
+						group: 'navigation',
+						order: 100
+					}]
+				});
+			}
+
+			async run(accessor: ServicesAccessor): Promise<void> {
+				// The chat lives in the auxiliary bar, so closing that bar is what
+				// "closing the chat" means to someone looking at it.
+				await accessor.get(ICommandService).executeCommand('workbench.action.closeAuxiliaryBar');
 			}
 		}));
 	}
@@ -142,7 +167,7 @@ export class ChatViewTitleControl extends Disposable {
 		const markdownTitle = new MarkdownString(this.model?.title ?? '');
 		this.title = renderAsPlaintext(markdownTitle);
 
-		this.updateTitle(this.title ?? ChatViewTitleControl.DEFAULT_TITLE);
+		this.updateTitle(this.title || ChatViewTitleControl.DEFAULT_TITLE);
 
 		const context = this.model && {
 			$mid: MarshalledId.ChatViewContext,
@@ -175,7 +200,7 @@ export class ChatViewTitleControl extends Disposable {
 	}
 
 	private shouldRender(): boolean {
-		return !!this.model?.title; // we need a chat showing and not being empty
+		return !!this.model;
 	}
 
 	getHeight(): number {

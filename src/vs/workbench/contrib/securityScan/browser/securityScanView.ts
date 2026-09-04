@@ -24,7 +24,9 @@ import { ITelemetryService } from '../../../../platform/telemetry/common/telemet
 import { IViewDescriptorService } from '../../../common/views.js';
 import { IViewPaneOptions, ViewPane } from '../../../browser/parts/views/viewPane.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IFinding, ISecurityScanService, ScanState } from '../common/securityScan.js';
+import { trackAiFeatureModel } from '../../chat/common/aiFeatureModel.js';
+import { ILanguageModelsService } from '../../chat/common/languageModels.js';
+import { IFinding, ISecurityScanService, SECURITY_SCAN_FEATURE, ScanState } from '../common/securityScan.js';
 
 interface IFileGroup {
 	resource: URI;
@@ -40,6 +42,12 @@ export class SecurityScanView extends ViewPane {
 	private readonly collapsedGroups = new Set<string>();
 	private showIgnored = false;
 	private readonly renderStore = this._register(new DisposableStore());
+	/**
+	 * Separate from `renderStore`: the header is redrawn on its own for progress,
+	 * and `renderList` clears `renderStore` right after — which would dispose a
+	 * listener the header had just registered.
+	 */
+	private readonly headerStore = this._register(new DisposableStore());
 
 	constructor(
 		options: IViewPaneOptions,
@@ -55,12 +63,16 @@ export class SecurityScanView extends ViewPane {
 		@ISecurityScanService private readonly securityScanService: ISecurityScanService,
 		@IEditorService private readonly editorService: IEditorService,
 		@ILabelService private readonly labelService: ILabelService,
+		@ILanguageModelsService languageModelsService: ILanguageModelsService,
 		@ITelemetryService _telemetryService: ITelemetryService,
 	) {
 		super(options, keybindingService, contextMenuService, configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
 
 		this._register(this.securityScanService.onDidChangeFindings(() => this.refresh()));
 		this._register(this.securityScanService.onDidChangeProgress(() => this.redrawHeader()));
+		// Beside the title, so which model a scan will run on is answerable
+		// without opening the settings.
+		this._register(trackAiFeatureModel(languageModelsService, configurationService, SECURITY_SCAN_FEATURE, label => this.updateTitleDescription(label)));
 	}
 
 	protected override renderBody(container: HTMLElement): void {
@@ -89,22 +101,61 @@ export class SecurityScanView extends ViewPane {
 		if (!this.headerEl) {
 			return;
 		}
+		this.headerStore.clear();
 		dom.clearNode(this.headerEl);
 		const progress = this.securityScanService.progress;
 		if (progress.state === ScanState.Scanning) {
 			const icon = dom.append(this.headerEl, dom.$('span.codicon.codicon-sync.codicon-modifier-spin'));
 			icon.setAttribute('aria-hidden', 'true');
-			const label = progress.currentFile
-				? localize('securityScan.scanningFile', "Scanning ({0}/{1}): {2}", progress.current, progress.total, basename(progress.currentFile))
-				: localize('securityScan.scanningGeneric', "Scanning…");
+			// Phase first, file second: on a slow model the file can sit unchanged
+			// for minutes, and the phase is what says the scan is alive and where
+			// it has got to.
+			const phase = progress.phase;
+			// Preparation stages carry a name but no number, since how many layers
+			// there will be is not known until the files have been walked.
+			const label = !phase
+				? localize('securityScan.scanningGeneric', "Analisando…")
+				: phase.total > 0
+					? localize('securityScan.scanningPhase', "Fase {0}/{1} — {2}", phase.index, phase.total, phase.label)
+					: localize('securityScan.scanningPreparing', "{0}…", phase.label);
 			dom.append(this.headerEl, dom.$('span', undefined, label));
+
+			const detailParts: string[] = [];
+			if (progress.total > 0) {
+				detailParts.push(localize('securityScan.scanningCount', "{0}/{1} arquivos", progress.current, progress.total));
+			}
+			if (progress.currentFile) {
+				detailParts.push(phase?.aiReview
+					? localize('securityScan.scanningAiFile', "revisando com IA: {0}", basename(progress.currentFile))
+					: basename(progress.currentFile));
+			}
+			if (detailParts.length > 0) {
+				const detail = dom.append(this.headerEl, dom.$('span.security-scan-progress-detail'));
+				detail.textContent = ` · ${detailParts.join(' · ')}`;
+			}
 		} else {
 			const findings = this.securityScanService.getFindings(this.showIgnored);
 			const counts = countBySeverity(findings);
 			const summary = findings.length === 0
-				? localize('securityScan.noFindings', "No findings.")
-				: localize('securityScan.summary', "{0} findings — {1} error, {2} warning, {3} info", findings.length, counts.error, counts.warning, counts.info);
+				? localize('securityScan.noFindings', "Nenhum achado.")
+				: localize('securityScan.summary', "{0} achados — {1} erro, {2} aviso, {3} informação", findings.length, counts.error, counts.warning, counts.info);
 			dom.append(this.headerEl, dom.$('span', undefined, summary));
+
+			// Without this the panel says "nenhum achado" while the report says
+			// otherwise, and the difference — findings the user once ignored — is
+			// invisible. Hiding them is right; hiding that they exist is not.
+			if (!this.showIgnored) {
+				const hidden = this.securityScanService.getFindings(true).length - findings.length;
+				if (hidden > 0) {
+					dom.append(this.headerEl, dom.$('span', undefined, ' · '));
+					const hiddenEl = dom.append(this.headerEl, dom.$('a.security-scan-hidden-count'));
+					hiddenEl.textContent = localize('securityScan.hiddenCount', "{0} ignorado(s)", hidden);
+					hiddenEl.title = localize('securityScan.hiddenCountTooltip', "Mostrar os achados marcados como ignorados");
+					hiddenEl.setAttribute('role', 'button');
+					hiddenEl.tabIndex = 0;
+					this.headerStore.add(dom.addDisposableListener(hiddenEl, dom.EventType.CLICK, () => this.toggleShowIgnored()));
+				}
+			}
 			const lastScan = this.securityScanService.lastScanAt;
 			if (lastScan) {
 				dom.append(this.headerEl, dom.$('span', undefined, ' · '));
@@ -197,9 +248,17 @@ export class SecurityScanView extends ViewPane {
 		const title = dom.append(firstRow, dom.$('span.finding-title'));
 		title.textContent = finding.title;
 		const meta = dom.append(firstRow, dom.$('span.finding-meta'));
+		// The origin is part of how much weight a finding carries: a rule matched
+		// text, a model formed an opinion.
+		const origin = finding.source === 'rule'
+			? localize('securityScan.originRule', "regra")
+			: localize('securityScan.originAi', "IA");
 		meta.textContent = finding.cwe
-			? localize('securityScan.metaWithCwe', "{0} · line {1}", finding.cwe, finding.range.startLineNumber)
-			: localize('securityScan.meta', "line {0}", finding.range.startLineNumber);
+			? localize('securityScan.metaWithCwe', "{0} · {1} · linha {2}", finding.cwe, origin, finding.range.startLineNumber)
+			: localize('securityScan.meta', "{0} · linha {1}", origin, finding.range.startLineNumber);
+		if (finding.ruleId) {
+			meta.title = finding.ruleId;
+		}
 
 		const actions = dom.append(firstRow, dom.$('span.finding-actions'));
 		if (finding.fix) {

@@ -171,7 +171,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		this.overlay = append(container, $('.onboarding-a-overlay'));
 		this.overlay.setAttribute('role', 'dialog');
 		this.overlay.setAttribute('aria-modal', 'true');
-		this.overlay.setAttribute('aria-label', localize('onboarding.a.aria', "Welcome to Visual Studio Code"));
+		this.overlay.setAttribute('aria-label', localize('onboarding.a.aria', "Bem-vindo ao Visual Studio Code"));
 
 		// Card
 		this.card = append(this.overlay, $('.onboarding-a-card'));
@@ -179,7 +179,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		// Close button (upper-right corner of card)
 		this.closeButton = append(this.card, $<HTMLButtonElement>('button.onboarding-a-close-btn'));
 		this.closeButton.type = 'button';
-		this.closeButton.setAttribute('aria-label', localize('onboarding.close', "Close"));
+		this.closeButton.setAttribute('aria-label', localize('onboarding.close', "Fechar"));
 		this.closeButton.appendChild(renderIcon(Codicon.close));
 
 		// Header with progress
@@ -204,7 +204,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		const footerRight = append(footer, $('.onboarding-a-footer-right'));
 
 		this.backButton = append(footerRight, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-secondary'));
-		this.backButton.textContent = localize('onboarding.back', "Back");
+		this.backButton.textContent = localize('onboarding.back', "Voltar");
 		this.backButton.type = 'button';
 		this.footerFocusableElements.push(this.backButton);
 
@@ -344,7 +344,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		this.progressContainer.appendChild(this.stepLabelEl);
 		this.stepLabelEl.textContent = localize(
 			'onboarding.stepOf',
-			"{0} of {1}",
+			"{0} de {1}",
 			this.currentStepIndex + 1,
 			this.steps.length
 		);
@@ -390,7 +390,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 		this.bodyEl?.setAttribute('aria-label', localize(
 			'onboarding.step.aria',
-			"Step {0} of {1}: {2}",
+			"Etapa {0} de {1}: {2}",
 			this.currentStepIndex + 1,
 			this.steps.length,
 			getOnboardingStepTitle(stepId)
@@ -405,13 +405,13 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			if (this.currentStepIndex === 0) {
 				// Sign-in step: secondary "Continue without Signing In"
 				this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-secondary';
-				this.nextButton.textContent = localize('onboarding.continueWithoutSignIn', "Continue without Signing In");
+				this.nextButton.textContent = localize('onboarding.continueWithoutSignIn', "Continuar sem Entrar");
 			} else if (this._isLastStep()) {
 				this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-primary';
-				this.nextButton.textContent = localize('onboarding.getStarted', "Get Started");
+				this.nextButton.textContent = localize('onboarding.getStarted', "Começar");
 			} else {
 				this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-primary';
-				this.nextButton.textContent = localize('onboarding.next', "Continue");
+				this.nextButton.textContent = localize('onboarding.next', "Continuar");
 			}
 		}
 		if (this.footerLeft) {
@@ -420,7 +420,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 				if (!this._footerSignInBtn && !this._userSignedIn) {
 					this._footerSignInBtn = append(this.footerLeft, $<HTMLButtonElement>('button.onboarding-a-signin-nudge-btn'));
 					this._footerSignInBtn.type = 'button';
-					this._footerSignInBtn.textContent = localize('onboarding.sessions.signInNudge', "Sign in for AI Powered Features");
+					this._footerSignInBtn.textContent = localize('onboarding.sessions.signInNudge', "Entre para Usar os Recursos de IA");
 					this.stepDisposables.add(addDisposableListener(this._footerSignInBtn, EventType.CLICK, async () => {
 						this._logAction('signInNudge');
 						await this._handleSignIn();
@@ -452,34 +452,34 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		const content = append(wrapper, $('.onboarding-a-signin-content'));
 		const contentMain = append(content, $('.onboarding-a-signin-content-main'));
 		const title = append(contentMain, $('h2.onboarding-a-signin-title'));
-		title.textContent = localize('onboarding.signIn.heroTitle', "Welcome to VS Code");
+		title.textContent = localize('onboarding.signIn.heroTitle', "Bem-vindo ao VS Code");
 
 		const subtitle = append(contentMain, $('p.onboarding-a-signin-subtitle'));
-		subtitle.textContent = localize('onboarding.signIn.heroSubtitle', "Sign in to continue with AI-powered development.");
+		subtitle.textContent = localize('onboarding.signIn.heroSubtitle', "Entre para continuar com desenvolvimento assistido por IA.");
 
 		const actions = append(contentMain, $('.onboarding-a-signin-actions'));
 
-		const githubBtn = this._registerStepFocusable(this._createSignInButton(actions, 'github', localize('onboarding.signIn.github', "Continue with GitHub"), {
+		const githubBtn = this._registerStepFocusable(this._createSignInButton(actions, 'github', localize('onboarding.signIn.github', "Continuar com o GitHub"), {
 			emphasized: true,
-			label: localize('onboarding.signIn.github.aria', "Continue with GitHub")
+			label: localize('onboarding.signIn.github.aria', "Continuar com o GitHub")
 		}));
 		this.stepDisposables.add(addDisposableListener(githubBtn, EventType.CLICK, () => {
 			this._logAction('signIn', undefined, 'github');
 			this._handleSignIn();
 		}));
 
-		const googleBtn = this._registerStepFocusable(this._createSignInButton(actions, 'google', localize('onboarding.signIn.google', "Continue with Google"), {
+		const googleBtn = this._registerStepFocusable(this._createSignInButton(actions, 'google', localize('onboarding.signIn.google', "Continuar com o Google"), {
 			iconOnly: true,
-			label: localize('onboarding.signIn.google', "Continue with Google")
+			label: localize('onboarding.signIn.google', "Continuar com o Google")
 		}));
 		this.stepDisposables.add(addDisposableListener(googleBtn, EventType.CLICK, () => {
 			this._logAction('signIn', undefined, 'google');
 			this._handleSignIn('google');
 		}));
 
-		const appleBtn = this._registerStepFocusable(this._createSignInButton(actions, 'apple', localize('onboarding.signIn.apple', "Continue with Apple"), {
+		const appleBtn = this._registerStepFocusable(this._createSignInButton(actions, 'apple', localize('onboarding.signIn.apple', "Continuar com a Apple"), {
 			iconOnly: true,
-			label: localize('onboarding.signIn.apple', "Continue with Apple")
+			label: localize('onboarding.signIn.apple', "Continuar com a Apple")
 		}));
 		this.stepDisposables.add(addDisposableListener(appleBtn, EventType.CLICK, () => {
 			this._logAction('signIn', undefined, 'apple');
@@ -488,7 +488,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 		const gheBtn = this._registerStepFocusable(this._createSignInButton(actions, 'github-enterprise', localize('onboarding.signIn.ghe', "GHE"), {
 			textOnly: true,
-			label: localize('onboarding.signIn.ghe.aria', "Continue with GitHub Enterprise")
+			label: localize('onboarding.signIn.ghe.aria', "Continuar com o GitHub Enterprise")
 		}));
 		this.stepDisposables.add(addDisposableListener(gheBtn, EventType.CLICK, () => {
 			this._logAction('signIn', undefined, 'github-enterprise');
@@ -501,17 +501,17 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 		// GitHub Copilot disclaimer
 		const copilotDisclaimer = append(disclaimerCol, $('.onboarding-a-signin-disclaimer'));
-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.prefix', "By signing in, you agree to {0}'s ", defaultChat.provider.default.name));
-		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.terms', "Terms"), defaultChat.termsStatementUrl);
-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.middle', " and "));
-		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.privacy', "Privacy Statement"), defaultChat.privacyStatementUrl);
-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.copilotPrefix', ". {0} Copilot may show ", defaultChat.provider.default.name));
-		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.publicCode', "public code"), defaultChat.publicCodeMatchesUrl);
-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.improveSuffix', " suggestions and use your data to improve the product."));
+		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.prefix', "Ao entrar, você concorda com os "));
+		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.terms', "Termos"), defaultChat.termsStatementUrl);
+		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.middle', " e a "));
+		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.privacy', "Declaração de Privacidade"), defaultChat.privacyStatementUrl);
+		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.copilotPrefix', " do {0}. O {0} Copilot pode exibir sugestões de ", defaultChat.provider.default.name));
+		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.publicCode', "código público"), defaultChat.publicCodeMatchesUrl);
+		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.improveSuffix', " e usar seus dados para melhorar o produto."));
 		copilotDisclaimer.append(' ');
-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.settingsPrefix', "You can change these "));
-		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.settings', "settings"), defaultChat.manageSettingsUrl);
-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.suffix', " anytime."));
+		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.settingsPrefix', "Você pode alterar essas "));
+		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.settings', "configurações"), defaultChat.manageSettingsUrl);
+		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.suffix', " quando quiser."));
 	}
 
 	private _createSignInButton(parent: HTMLElement, providerClass: 'github' | 'github-enterprise' | 'google' | 'apple', label: string, options?: { emphasized?: boolean; iconOnly?: boolean; textOnly?: boolean; label?: string }): HTMLButtonElement {
@@ -568,7 +568,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: 'failedNotSignedIn', installDuration: watch.elapsed(), signUpErrorCode: undefined, provider });
 			this.notificationService.notify({
 				severity: Severity.Error,
-				message: localize('onboarding.signIn.error', "Sign-in failed. You can try again later from the Accounts menu."),
+				message: localize('onboarding.signIn.error', "Não foi possível entrar. Você pode tentar de novo mais tarde pelo menu Contas."),
 			});
 		}
 	}
@@ -603,7 +603,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: 'failedNotSignedIn', installDuration: watch.elapsed(), signUpErrorCode: undefined, provider: defaultChat.provider.enterprise.id });
 			this.notificationService.notify({
 				severity: Severity.Error,
-				message: localize('onboarding.signIn.enterprise.error', "GitHub Enterprise sign-in failed. Check your instance URL and try again."),
+				message: localize('onboarding.signIn.enterprise.error', "Não foi possível entrar no GitHub Enterprise. Verifique a URL da sua instância e tente de novo."),
 			});
 		}
 	}
@@ -619,8 +619,8 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 		let isSingleWord = false;
 		const result = await this.quickInputService.input({
-			prompt: localize('onboarding.signIn.enterprise.prompt', "What is your {0} instance?", defaultChat.provider.enterprise.name),
-			placeHolder: localize('onboarding.signIn.enterprise.placeholder', 'i.e. "octocat" or "https://octocat.ghe.com"...'),
+			prompt: localize('onboarding.signIn.enterprise.prompt', "Qual é a sua instância do {0}?", defaultChat.provider.enterprise.name),
+			placeHolder: localize('onboarding.signIn.enterprise.placeholder', 'ex.: "octocat" ou "https://octocat.ghe.com"...'),
 			ignoreFocusLost: true,
 			value: uri,
 			validateInput: async value => {
@@ -632,14 +632,14 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 				if (domainRegEx.test(value)) {
 					isSingleWord = true;
 					return {
-						content: localize('onboarding.signIn.enterprise.resolve', "Will resolve to {0}", `https://${value}.ghe.com`),
+						content: localize('onboarding.signIn.enterprise.resolve', "Vai resolver para {0}", `https://${value}.ghe.com`),
 						severity: Severity.Info
 					};
 				}
 
 				if (!fullUriRegEx.test(value)) {
 					return {
-						content: localize('onboarding.signIn.enterprise.invalid', 'You must enter a valid {0} instance (i.e. "octocat" or "https://octocat.ghe.com")', defaultChat.provider.enterprise.name),
+						content: localize('onboarding.signIn.enterprise.invalid', 'Informe uma instância válida do {0} (ex.: "octocat" ou "https://octocat.ghe.com")', defaultChat.provider.enterprise.name),
 						severity: Severity.Error
 					};
 				}
@@ -672,14 +672,14 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 		// Theme section
 		const themeLabel = append(wrapper, $('div.onboarding-a-section-label'));
-		themeLabel.textContent = localize('onboarding.personalize.theme', "Color Theme");
+		themeLabel.textContent = localize('onboarding.personalize.theme', "Tema de Cores");
 
 		const themeHint = append(wrapper, $('div.onboarding-a-theme-hint'));
-		themeHint.textContent = localize('onboarding.personalize.themeHint', "You can browse and install more themes later from the Extensions view.");
+		themeHint.textContent = localize('onboarding.personalize.themeHint', "Você pode explorar e instalar mais temas depois na visão de Extensões.");
 
 		const themeGrid = append(wrapper, $('.onboarding-a-theme-grid'));
 		themeGrid.setAttribute('role', 'radiogroup');
-		themeGrid.setAttribute('aria-label', localize('onboarding.personalize.themeLabel', "Choose a color theme"));
+		themeGrid.setAttribute('aria-label', localize('onboarding.personalize.themeLabel', "Escolha um tema de cores"));
 
 		const hasOtherEditors = this._hasOtherEditors();
 		const allThemes = product.onboardingThemes ?? [];
@@ -708,14 +708,14 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 		if (hasOtherEditors) {
 			const keymapLabel = append(wrapper, $('div.onboarding-a-section-label.onboarding-a-section-label-keymap'));
-			keymapLabel.textContent = localize('onboarding.personalize.keymap', "Keyboard Mapping");
+			keymapLabel.textContent = localize('onboarding.personalize.keymap', "Mapeamento de Teclado");
 
 			const keymapHint = append(wrapper, $('div.onboarding-a-theme-hint'));
-			keymapHint.textContent = localize('onboarding.personalize.keymapHint', "Coming from another editor? Import your keyboard mapping to feel right at home.");
+			keymapHint.textContent = localize('onboarding.personalize.keymapHint', "Vindo de outro editor? Importe seu mapeamento de teclado para se sentir em casa.");
 
 			const keymapList = append(wrapper, $('.onboarding-a-keymap-list'));
 			keymapList.setAttribute('role', 'radiogroup');
-			keymapList.setAttribute('aria-label', localize('onboarding.personalize.keymapLabel', "Choose a keyboard mapping"));
+			keymapList.setAttribute('aria-label', localize('onboarding.personalize.keymapLabel', "Escolha um mapeamento de teclado"));
 
 			const keymapPills: HTMLButtonElement[] = [];
 			for (const keymap of keymapOptions) {
@@ -743,7 +743,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 					}
 					pill.classList.add('selected');
 					pill.setAttribute('aria-checked', 'true');
-					this.accessibilityService.alert(localize('onboarding.keymap.selected.alert', "{0} keyboard mapping selected", keymap.label));
+					this.accessibilityService.alert(localize('onboarding.keymap.selected.alert', "Mapeamento de teclado {0} selecionado", keymap.label));
 				}));
 			}
 			const selectedKeymapIndex = keymapOptions.findIndex(k => k.id === this.selectedKeymapId);
@@ -756,13 +756,13 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		clearNode(container);
 		const modifier = isMacintosh ? 'Cmd' : 'Ctrl';
 		container.append(
-			localize('onboarding.personalize.tip.prefix', "Tip: Press "),
+			localize('onboarding.personalize.tip.prefix', "Dica: pressione "),
 			this._createKbd(localize({ key: 'onboarding.personalize.tip.modifier', comment: ['This is a keyboard modifier key, Ctrl on Windows/Linux or Cmd on Mac'] }, "{0}", modifier)),
 			'+',
 			this._createKbd(localize('onboarding.personalize.tip.shift', "Shift")),
 			'+',
 			this._createKbd(localize('onboarding.personalize.tip.p', "P")),
-			localize('onboarding.personalize.tip.suffix', " to access all VS Code commands."),
+			localize('onboarding.personalize.tip.suffix', " para acessar todos os comandos do VS Code."),
 		);
 	}
 
@@ -796,7 +796,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			}
 			card.classList.add('selected');
 			card.setAttribute('aria-checked', 'true');
-			this.accessibilityService.alert(localize('onboarding.theme.selected.alert', "{0} theme selected", theme.label));
+			this.accessibilityService.alert(localize('onboarding.theme.selected.alert', "Tema {0} selecionado", theme.label));
 		}));
 
 		this.stepDisposables.add(addDisposableListener(card, EventType.KEY_DOWN, (e: KeyboardEvent) => {
@@ -834,7 +834,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		} catch {
 			this.notificationService.notify({
 				severity: Severity.Warning,
-				message: localize('onboarding.keymap.installError', "Could not install {0} keymap. You can install it later from Extensions.", keymap.label),
+				message: localize('onboarding.keymap.installError', "Não foi possível instalar o mapeamento de teclado {0}. Você pode instalá-lo depois em Extensões.", keymap.label),
 			});
 		}
 	}
@@ -911,7 +911,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 		const cards = append(wrapper, $('.onboarding-a-ai-pref-cards'));
 		cards.setAttribute('role', 'radiogroup');
-		cards.setAttribute('aria-label', localize('onboarding.aiPref.label', "Choose your AI collaboration style"));
+		cards.setAttribute('aria-label', localize('onboarding.aiPref.label', "Escolha seu estilo de colaboração com a IA"));
 
 		const allCards: HTMLButtonElement[] = [];
 		for (const option of ONBOARDING_AI_PREFERENCE_OPTIONS) {
@@ -945,14 +945,14 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 					c.setAttribute('aria-checked', c.dataset.id === option.id ? 'true' : 'false');
 				}
 				this._applyAiPreference(option.id);
-				this.accessibilityService.alert(localize('onboarding.aiPref.selected.alert', "{0} selected", option.label));
+				this.accessibilityService.alert(localize('onboarding.aiPref.selected.alert', "{0} selecionado", option.label));
 			}));
 		}
 		const selectedAiIndex = ONBOARDING_AI_PREFERENCE_OPTIONS.findIndex(o => o.id === this.selectedAiMode);
 		this._setupRadioGroupNavigation(allCards, Math.max(0, selectedAiIndex));
 
 		const hint = append(wrapper, $('div.onboarding-a-ai-pref-hint'));
-		hint.textContent = localize('onboarding.aiPref.hint', "You can change this anytime in Settings.");
+		hint.textContent = localize('onboarding.aiPref.hint', "Você pode alterar isso quando quiser nas Configurações.");
 	}
 
 	private _applyAiPreference(mode: AiCollaborationMode): void {
@@ -979,7 +979,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			? ['\u2318', '\u2303', 'I']  // Cmd+Control+I
 			: ['Ctrl', 'Alt', 'I'];
 		const shortcut = keys.map(k => this._createKbd(k));
-		el.append(localize('onboarding.step.agentSessions.subtitle.before', "Open Chat anytime with "));
+		el.append(localize('onboarding.step.agentSessions.subtitle.before', "Abra o Chat quando quiser com "));
 		for (let i = 0; i < shortcut.length; i++) {
 			if (i > 0) {
 				el.append('+');
@@ -996,34 +996,34 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		// Group 1: Chat modes — Plan / Agent
 		const chatGroup = append(features, $('.onboarding-a-sessions-group'));
 		const chatLabel = append(chatGroup, $('div.onboarding-a-sessions-group-label'));
-		chatLabel.textContent = localize('onboarding.sessions.group.chat', "Choose Your Agent");
+		chatLabel.textContent = localize('onboarding.sessions.group.chat', "Escolha Seu Agente");
 		const chatGrid = append(chatGroup, $('.onboarding-a-sessions-grid.onboarding-a-sessions-grid-2'));
 
 		this._createFeatureCard(chatGrid, Codicon.listOrdered,
-			localize('onboarding.sessions.planMode', "Plan"),
-			localize('onboarding.sessions.planMode.desc', "Produce a structured implementation plan before any code changes, then hand it off to an implementation agent to execute."));
+			localize('onboarding.sessions.planMode', "Planejar"),
+			localize('onboarding.sessions.planMode.desc', "Gera um plano de implementação estruturado antes de qualquer mudança de código e o entrega a um agente de implementação para executar."));
 
 		this._createFeatureCard(chatGrid, Codicon.commentDiscussion,
-			localize('onboarding.sessions.agentMode', "Agent"),
-			localize('onboarding.sessions.agentMode.desc', "Describe a goal. The agent plans the approach, edits files, runs commands, and self-corrects. You review and approve along the way."));
+			localize('onboarding.sessions.agentMode', "Agente"),
+			localize('onboarding.sessions.agentMode.desc', "Descreva um objetivo. O agente planeja o caminho, edita arquivos, roda comandos e se corrige. Você revisa e aprova ao longo do processo."));
 
 		// Group 2: ways to run and customize agents beyond the default Chat experience
 		const moreGroup = append(features, $('.onboarding-a-sessions-group'));
 		const moreLabel = append(moreGroup, $('div.onboarding-a-sessions-group-label'));
-		moreLabel.textContent = localize('onboarding.sessions.group.more', "Agents That Work Your Way");
+		moreLabel.textContent = localize('onboarding.sessions.group.more', "Agentes do Seu Jeito");
 		const moreGrid = append(moreGroup, $('.onboarding-a-sessions-grid.onboarding-a-sessions-grid-2'));
 
 		this._createFeatureCard(moreGrid, Codicon.rocket,
-			localize('onboarding.sessions.runAnywhere', "Run Agents Anywhere"),
-			localize('onboarding.sessions.runAnywhere.desc', "Run agents locally for interactive work, in the background with Copilot CLI, or in the cloud with cloud agents that open a pull request your team can review."));
+			localize('onboarding.sessions.runAnywhere', "Execute Agentes em Qualquer Lugar"),
+			localize('onboarding.sessions.runAnywhere.desc', "Rode agentes localmente para trabalho interativo, em segundo plano pela linha de comando ou na nuvem, com agentes que abrem um pull request para o seu time revisar."));
 
 		this._createFeatureCard(moreGrid, Codicon.settingsGear,
-			localize('onboarding.sessions.customize', "Customize Your Agents"),
-			localize('onboarding.sessions.customize.desc', "Tailor Copilot to your project with custom instructions and agents, skills, reusable prompts, and MCP servers that connect to the tools and context you rely on."));
+			localize('onboarding.sessions.customize', "Personalize Seus Agentes"),
+			localize('onboarding.sessions.customize.desc', "Adapte o agente ao seu projeto com instruções e agentes personalizados, habilidades, prompts reutilizáveis e servidores MCP que conectam as ferramentas e o contexto de que você depende."));
 
 		// Tutorial link at bottom of content, above footer
 		const docsRow = append(wrapper, $('.onboarding-a-sessions-docs'));
-		this._createDocLink(docsRow, localize('onboarding.sessions.agentsTutorial', "Agents tutorial"), 'https://code.visualstudio.com/docs/copilot/agents/agents-tutorial', 'agentsTutorial');
+		this._createDocLink(docsRow, localize('onboarding.sessions.agentsTutorial', "Tutorial de agentes"), 'https://code.visualstudio.com/docs/copilot/agents/agents-tutorial', 'agentsTutorial');
 	}
 
 	private _createFeatureCard(parent: HTMLElement, icon: ThemeIcon, title: string, description?: string): HTMLElement {

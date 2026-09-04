@@ -37,6 +37,7 @@ export const AICustomizationManagementSection = {
 	Plugins: 'plugins',
 	Models: 'models',
 	AIProviders: 'aiProviders',
+	Usage: 'usage',
 } as const;
 
 export type AICustomizationManagementSection = typeof AICustomizationManagementSection[keyof typeof AICustomizationManagementSection];

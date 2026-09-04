@@ -87,7 +87,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.resolve.outputs.is_version != 'true' && inputs.test_build || github.ref }}
 
@@ -186,7 +186,7 @@ jobs:
       matrix: ${{ fromJSON(needs.setup.outputs.perf_matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.setup.outputs.test_is_version != 'true' && inputs.test_build || github.ref }}
 
@@ -215,7 +215,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download build output
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: build-output
 
@@ -359,7 +359,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.setup.outputs.test_is_version != 'true' && inputs.test_build || github.ref }}
 
@@ -388,7 +388,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download build output
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: build-output
 
@@ -458,7 +458,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.setup.outputs.test_is_version != 'true' && inputs.test_build || github.ref }}
 
@@ -468,14 +468,14 @@ jobs:
           node-version-file: .nvmrc
 
       - name: Download perf summary data
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: perf-summary-*
           path: perf-results
 
       - name: Download leak results
         if: inputs.skip_leak_check != true && needs.leak-check.result != 'skipped'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: leak-results
           path: leak-results

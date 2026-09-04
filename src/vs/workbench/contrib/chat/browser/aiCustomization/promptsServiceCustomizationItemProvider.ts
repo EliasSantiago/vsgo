@@ -105,7 +105,7 @@ export class PromptsServiceCustomizationItemProvider implements ICustomizationIt
 					description: skill.description,
 					storage: skill.storage,
 					enabled: true,
-					badge: uiTooltip ? localize('uiIntegrationBadge', "UI Integration") : undefined,
+					badge: uiTooltip ? localize('uiIntegrationBadge', "Integração de UI") : undefined,
 					badgeTooltip: uiTooltip,
 					extensionId: skill.extension?.identifier.value,
 					pluginUri: skill.pluginUri,
@@ -125,7 +125,7 @@ export class PromptsServiceCustomizationItemProvider implements ICustomizationIt
 							description: file.description,
 							storage: file.storage,
 							enabled: false,
-							badge: uiTooltip ? localize('uiIntegrationBadge', "UI Integration") : undefined,
+							badge: uiTooltip ? localize('uiIntegrationBadge', "Integração de UI") : undefined,
 							badgeTooltip: uiTooltip,
 							extensionId: file.extension?.identifier.value,
 							pluginUri: file.pluginUri,
@@ -204,7 +204,7 @@ export class PromptsServiceCustomizationItemProvider implements ICustomizationIt
 						uri: agent.uri,
 						type: promptType,
 						name: hookMeta?.label ?? hookType,
-						description: `${agent.name}: ${truncatedCmd || localize('hookUnset', "(unset)")}`,
+						description: `${agent.name}: ${truncatedCmd || localize('hookUnset', "(não definido)")}`,
 						storage: agent.source.storage,
 						groupKey: 'agents',
 						enabled: !disabledUris.has(agent.uri),
@@ -252,11 +252,11 @@ export class PromptsServiceCustomizationItemProvider implements ICustomizationIt
 
 			if (pattern !== undefined) {
 				const badge = pattern === '**'
-					? localize('alwaysAdded', "always added")
+					? localize('alwaysAdded', "sempre incluída")
 					: pattern;
 				const badgeTooltip = pattern === '**'
-					? localize('alwaysAddedTooltip', "This instruction is automatically included in every interaction.")
-					: localize('onContextTooltip', "This instruction is automatically included when files matching '{0}' are in context.", pattern);
+					? localize('alwaysAddedTooltip', "Esta instrução entra automaticamente em toda interação.")
+					: localize('onContextTooltip', "Esta instrução entra automaticamente quando arquivos correspondentes a '{0}' estão no contexto.", pattern);
 				items.push({
 					uri,
 					type: promptType,

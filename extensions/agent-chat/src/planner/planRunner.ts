@@ -46,7 +46,7 @@ export class PlanRunner {
 				if (result.status === 'done') {
 					options.stream.markdown(`\n✅ **${step.id}** — ${truncate(result.summary, 200)}\n`);
 				} else {
-					options.stream.markdown(`\n❌ **${step.id}** — ${result.error ?? 'failed'}\n`);
+					options.stream.markdown(`\n❌ **${step.id}** — ${result.error ?? 'falhou'}\n`);
 				}
 			} finally {
 				fileGate.release();
