@@ -46,3 +46,9 @@ dist
 .github/prompts/*.local.prompt.md
 .agents/skills/.local/
 .github/skills/.local/
+
+# Capturas de referência largadas em docs/ durante o trabalho (telas de outros
+# produtos, mockups, prints de bug). Ficam na máquina de quem as tirou: são
+# material de apoio de uma conversa, não documentação do projeto.
+docs/*.png
+docs/*.jpg
