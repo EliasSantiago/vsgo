@@ -23,6 +23,19 @@ export function registerAccountCommands(
 
 	subs.push(vscode.commands.registerCommand('agent-chat.vsgo.signIn', () => signIn(provider)));
 
+	/*
+	 * Criar conta é o mesmo fluxo de entrar, começando uma tela antes.
+	 *
+	 * Quem nunca teve conta caía no formulário de login e tinha que achar o
+	 * "Criar conta" no meio dele; agora o site abre direto no cadastro e, feito
+	 * ele, a autorização continua exatamente de onde estava — a instalação é
+	 * conectada no fim do mesmo passeio, sem uma segunda ida ao editor.
+	 */
+	subs.push(vscode.commands.registerCommand('agent-chat.vsgo.signUp', () => {
+		auth.signUpNext();
+		return signIn(provider);
+	}));
+
 	subs.push(vscode.commands.registerCommand('agent-chat.vsgo.signOut', async () => {
 		const session = await auth.currentSession();
 		if (!session) {
@@ -80,12 +93,15 @@ async function manage(auth: VsgoAuthProvider, provider: VsgoProvider): Promise<v
 		const choice = await vscode.window.showQuickPick(
 			[
 				{ label: '$(sign-in) Entrar na conta vsgo', detail: 'Abre o navegador para autorizar esta instalação', id: 'in' },
+				{ label: '$(person-add) Criar uma conta vsgo', detail: 'Abre o cadastro; ao terminar, esta instalação já fica conectada', id: 'up' },
 				{ label: '$(link-external) Ver planos e preços', detail: `${vsgoBaseUrl()}/precos`, id: 'plans' },
 			],
 			{ title: 'Conta vsgo', placeHolder: 'Nenhuma conta conectada nesta instalação' },
 		);
 		if (choice?.id === 'in') {
 			await signIn(provider);
+		} else if (choice?.id === 'up') {
+			await vscode.commands.executeCommand('agent-chat.vsgo.signUp');
 		} else if (choice?.id === 'plans') {
 			await vscode.env.openExternal(vscode.Uri.parse(`${vsgoBaseUrl()}/precos`));
 		}

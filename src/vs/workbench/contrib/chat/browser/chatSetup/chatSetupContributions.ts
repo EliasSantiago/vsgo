@@ -247,6 +247,28 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 				const lifecycleService = accessor.get(ILifecycleService);
 				const configurationService = accessor.get(IConfigurationService);
 
+				/*
+				 * Produto com conta própria: entrar é entrar NELA (vsgo).
+				 *
+				 * Todo "Sign In" do workbench desemboca aqui — o botão da barra
+				 * de título, o item do menu de Contas, o cartão do chat — e o
+				 * que vinha depois era o setup do agente de chat padrão:
+				 * instalar a extensão, pedir sessão ao provedor social e
+				 * consultar o entitlement no servidor DELE. Num produto que
+				 * vende a própria conta, isso manda a pessoa criar cadastro na
+				 * casa errada.
+				 *
+				 * Com `accountSignInCommand` no product.json, o comando da
+				 * extensão da conta assume: ele abre o navegador na tela de
+				 * login/cadastro do produto e volta com a credencial desta
+				 * instalação. Sem o campo, nada muda e o fluxo original segue.
+				 */
+				const accountSignIn = product.defaultChatAgent?.accountSignInCommand;
+				if (accountSignIn) {
+					await commandService.executeCommand(accountSignIn);
+					return true;
+				}
+
 				await context.update({ hidden: false });
 				configurationService.updateValue(ChatConfiguration.AIDisabled, false);
 

@@ -413,6 +413,21 @@ export interface IDefaultChatAgent {
 		apple: { id: string; name: string };
 	};
 
+	/**
+	 * Comandos de conta do produto (vsgo).
+	 *
+	 * Quando estão preenchidos, todo ponto de entrada de "Sign In" do
+	 * workbench — o botão da barra de título, o item do menu de Contas, o
+	 * fluxo de setup do chat — delega a eles em vez de rodar a instalação e o
+	 * entitlement do agente de chat padrão. É assim que um produto que tem a
+	 * PRÓPRIA conta usa a UI que o VS Code já traz, sem herdar o cadastro de
+	 * outra empresa junto.
+	 *
+	 * Vazios (o padrão do Code OSS), nada muda.
+	 */
+	readonly accountSignInCommand?: string;
+	readonly accountSignUpCommand?: string;
+
 	readonly providerExtensionId: string;
 	readonly providerUriSetting: string;
 	readonly providerScopes: string[][];

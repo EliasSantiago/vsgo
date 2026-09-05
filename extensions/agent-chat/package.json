@@ -695,6 +695,10 @@
 				"title": "vsgo: Entrar na conta"
 			},
 			{
+				"command": "agent-chat.vsgo.signUp",
+				"title": "vsgo: Criar uma conta"
+			},
+			{
 				"command": "agent-chat.vsgo.signOut",
 				"title": "vsgo: Sair da conta"
 			},

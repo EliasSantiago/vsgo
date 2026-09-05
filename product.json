@@ -105,11 +105,13 @@
 		"managePlanUrl": "https://vsgo.orkestrai.com.br/precos",
 		"manageOverageUrl": "https://vsgo.orkestrai.com.br/precos",
 		"upgradePlanUrl": "https://vsgo.orkestrai.com.br/precos",
-		"signUpUrl": "https://vsgo.orkestrai.com.br/docs",
+		"signUpUrl": "https://vsgo.orkestrai.com.br/register",
+		"accountSignInCommand": "agent-chat.vsgo.signIn",
+		"accountSignUpCommand": "agent-chat.vsgo.signUp",
 		"provider": {
 			"default": {
-				"id": "github",
-				"name": "GitHub"
+				"id": "vsgo",
+				"name": "Conta vsgo"
 			},
 			"enterprise": {
 				"id": "github-enterprise",
@@ -124,21 +126,10 @@
 				"name": "Apple"
 			}
 		},
-		"providerExtensionId": "vscode.github-authentication",
+		"providerExtensionId": "vscode.agent-chat",
 		"providerUriSetting": "github-enterprise.uri",
 		"providerScopes": [
-			[
-				"read:user",
-				"user:email",
-				"repo",
-				"workflow"
-			],
-			[
-				"user:email"
-			],
-			[
-				"read:user"
-			]
+			[]
 		],
 		"entitlementUrl": "https://api.github.com/copilot_internal/user",
 		"entitlementSignupLimitedUrl": "https://api.github.com/copilot_internal/subscribe_limited_user",

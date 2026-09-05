@@ -5,6 +5,7 @@
 
 import product from '../../../../platform/product/common/product.js';
 import { Barrier } from '../../../../base/common/async.js';
+import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { Lazy } from '../../../../base/common/lazy.js';
@@ -1115,6 +1116,24 @@ export class ChatEntitlementContext extends Disposable {
 	private readonly canSignUpContextKey: IContextKey<boolean>;
 	private readonly signedOutContextKey: IContextKey<boolean>;
 
+	/*
+	 * Produto com conta própria (vsgo): quem responde "está logado?" é ela.
+	 *
+	 * `signedOut` sai do entitlement do agente de chat padrão, que é o serviço
+	 * do Copilot. Num produto que não fala com esse serviço o entitlement fica
+	 * eternamente `Unknown`, e o botão "Sign In" da barra de título ficava
+	 * aceso para sempre — inclusive depois de a pessoa conectar a conta do
+	 * próprio produto, que é o que o botão pede.
+	 *
+	 * Com `accountSignInCommand` no product.json, a pergunta passa a ser
+	 * respondida pelo provedor de autenticação da conta: tem sessão, está
+	 * dentro. Sem o campo, `undefined`, e o cálculo original vale.
+	 * Declarado aqui, e não junto do método, porque `trackProductAccount()`
+	 * roda dentro do construtor e o projeto confere a ordem de inicialização
+	 * de campos (`define-class-fields-check`).
+	 */
+	private productAccountSignedOut: boolean | undefined = undefined;
+
 	private readonly freeContextKey: IContextKey<boolean>;
 	private readonly eduContextKey: IContextKey<boolean>;
 	private readonly proContextKey: IContextKey<boolean>;
@@ -1150,7 +1169,9 @@ export class ChatEntitlementContext extends Disposable {
 		@IStorageService private readonly storageService: IStorageService,
 		@ILogService private readonly logService: ILogService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
-		@ITelemetryService private readonly telemetryService: ITelemetryService
+		@ITelemetryService private readonly telemetryService: ITelemetryService,
+		@IAuthenticationService private readonly authenticationService: IAuthenticationService,
+		@IProductService private readonly productService: IProductService
 	) {
 		super();
 
@@ -1197,6 +1218,41 @@ export class ChatEntitlementContext extends Disposable {
 		this.updateContextSync();
 
 		this.registerListeners();
+		this.trackProductAccount();
+	}
+
+	private trackProductAccount(): void {
+		const agent = this.productService.defaultChatAgent;
+		if (!agent?.accountSignInCommand) {
+			return;
+		}
+
+		const providerId = agent.provider.default.id;
+		const refresh = async () => {
+			let signedOut = true;
+			try {
+				signedOut = (await this.authenticationService.getSessions(providerId)).length === 0;
+			} catch (error) {
+				this.logService.trace(`[chat entitlement context] conta do produto: falha ao ler sessões de ${providerId}: ${toErrorMessage(error)}`);
+			}
+			if (signedOut !== this.productAccountSignedOut) {
+				this.productAccountSignedOut = signedOut;
+				this.updateContextSync();
+			}
+		};
+
+		this._register(this.authenticationService.onDidChangeSessions(e => {
+			if (e.providerId === providerId) {
+				refresh();
+			}
+		}));
+		this._register(this.authenticationService.onDidRegisterAuthenticationProvider(e => {
+			if (e.id === providerId) {
+				refresh();
+			}
+		}));
+
+		refresh();
 	}
 
 	private registerListeners(): void {
@@ -1298,7 +1354,7 @@ export class ChatEntitlementContext extends Disposable {
 	private updateContextSync(): void {
 		const state = this.withConfiguration(this._state);
 
-		this.signedOutContextKey.set(state.entitlement === ChatEntitlement.Unknown);
+		this.signedOutContextKey.set(this.productAccountSignedOut ?? state.entitlement === ChatEntitlement.Unknown);
 		this.canSignUpContextKey.set(state.entitlement === ChatEntitlement.Available);
 
 		this.freeContextKey.set(state.entitlement === ChatEntitlement.Free);

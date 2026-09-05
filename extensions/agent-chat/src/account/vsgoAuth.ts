@@ -68,7 +68,23 @@ export class VsgoAuthProvider implements vscode.AuthenticationProvider, vscode.D
 
 	private cached: IStoredSession | undefined;
 
+	/*
+	 * Próxima autorização começa pela tela de CADASTRO.
+	 *
+	 * `vscode.authentication.getSession` não leva opções nossas até o provedor,
+	 * e é por ele que o sign-in precisa passar (é ali que moram o consentimento
+	 * por extensão e a conta no menu lateral). Então o comando de criar conta
+	 * levanta esta bandeirinha antes de chamar, e o `createSession` a consome —
+	 * o que muda é um parâmetro na URL que o navegador abre.
+	 */
+	private startAtSignUp = false;
+
 	constructor(private readonly secrets: vscode.SecretStorage) { }
+
+	/** Chamado pelo comando "Criar conta" antes de pedir a sessão. */
+	signUpNext(): void {
+		this.startAtSignUp = true;
+	}
 
 	/**
 	 * Recebe o `vsgo://vscode.agent-chat/auth-callback?code=…&state=…` que a
@@ -113,10 +129,21 @@ export class VsgoAuthProvider implements vscode.AuthenticationProvider, vscode.D
 		authorizeUrl.searchParams.set('device', deviceName());
 		authorizeUrl.searchParams.set('redirect', callback.toString(true));
 
+		// Sem sessão no site, o `novo=1` faz a página de autorização mandar
+		// para o cadastro em vez do login. Com sessão, não muda nada: quem já
+		// está dentro vê a tela de autorização direto.
+		const signUp = this.startAtSignUp;
+		this.startAtSignUp = false;
+		if (signUp) {
+			authorizeUrl.searchParams.set('novo', '1');
+		}
+
 		const grant = await vscode.window.withProgress(
 			{
 				location: vscode.ProgressLocation.Notification,
-				title: 'Conectando à sua conta vsgo pelo navegador…',
+				title: signUp
+					? 'Criando sua conta vsgo pelo navegador…'
+					: 'Conectando à sua conta vsgo pelo navegador…',
 				cancellable: true,
 			},
 			async (_progress, token) => {
