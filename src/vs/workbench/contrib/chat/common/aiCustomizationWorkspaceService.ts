@@ -28,6 +28,8 @@ export const BUILTIN_STORAGE: AICustomizationPromptsStorage = 'builtin';
  * Possible section IDs for the AI Customization Management Editor sidebar.
  */
 export const AICustomizationManagementSection = {
+	/** A primeira da lista e a que abre por padrão: conta e ajustes do editor. */
+	General: 'general',
 	Agents: 'agents',
 	Skills: 'skills',
 	Instructions: 'instructions',

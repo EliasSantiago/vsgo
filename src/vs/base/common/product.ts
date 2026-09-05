@@ -427,6 +427,18 @@ export interface IDefaultChatAgent {
 	 */
 	readonly accountSignInCommand?: string;
 	readonly accountSignUpCommand?: string;
+	readonly accountSignOutCommand?: string;
+
+	/**
+	 * Comando que devolve `{ name, email, plan }` de quem está conectado, ou
+	 * `undefined`. A `AuthenticationSession` carrega só `id` e `label`, e a
+	 * tela de configurações mostra nome e e-mail em linhas separadas; quem é
+	 * dona desse dado é a extensão da conta.
+	 */
+	readonly accountInfoCommand?: string;
+
+	/** Painel da conta no site, aberto a partir da tela de configurações. */
+	readonly accountDashboardUrl?: string;
 
 	readonly providerExtensionId: string;
 	readonly providerUriSetting: string;

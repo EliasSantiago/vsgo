@@ -2264,3 +2264,131 @@ properties inherit, so they reach every scroller inside the editor. */
 	padding: 24px 0;
 	color: var(--vscode-descriptionForeground);
 }
+
+/* ── Seção Geral ─────────────────────────────────────────────────────────────
+ *
+ * Lista de linhas: rótulo e explicação à esquerda, o controle à direita. É o
+ * formato que uma tela de configurações de editor moderno usa, e o que
+ * permite ler a coluna inteira de cima a baixo sem caçar onde fica o botão de
+ * cada coisa. As cores saem todas dos tokens de tema, então a seção acompanha
+ * qualquer tema instalado.
+ */
+
+.general-widget {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	padding: 4px 2px 24px;
+	max-width: 820px;
+}
+
+.general-header {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.general-title {
+	margin: 0;
+	font-size: 20px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.general-description {
+	margin: 0;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.general-group {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+/* As linhas de um grupo formam um bloco só, com divisória entre elas: uma
+   lista de ajustes se lê de cima a baixo, e cartões soltos a transformariam
+   num mosaico de blocos independentes. */
+.general-rows {
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35));
+	border-radius: 6px;
+	overflow: hidden;
+	background-color: var(--vscode-editor-background);
+}
+
+.general-group-title {
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--vscode-descriptionForeground);
+}
+
+.general-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 12px 14px;
+	border-bottom: 1px solid var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35));
+}
+
+.general-row:last-child {
+	border-bottom: none;
+}
+
+.general-row-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.general-row-label {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.general-row-description {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Vazio quando a conta não tem nome cadastrado: sem a regra, a linha do
+   e-mail somia e o cartão pulava de altura entre um estado e outro. */
+.general-row-description:empty {
+	display: none;
+}
+
+.general-row-badge {
+	align-self: flex-start;
+	margin-top: 4px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	border: 1px solid var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35));
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
+
+/* Os botões não encolhem: quem cede espaço quando a janela aperta é o texto,
+   que tem reticências, e não a ação. */
+.general-row-action {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: none;
+}
+
+.general-row-action .monaco-button {
+	width: auto;
+	padding: 4px 14px;
+}

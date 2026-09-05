@@ -49,6 +49,7 @@ class AICustomizationWorkspaceService implements IAICustomizationWorkspaceServic
 	}
 
 	readonly managementSections: readonly AICustomizationManagementSection[] = [
+		AICustomizationManagementSection.General,
 		AICustomizationManagementSection.Agents,
 		AICustomizationManagementSection.Skills,
 		AICustomizationManagementSection.Instructions,

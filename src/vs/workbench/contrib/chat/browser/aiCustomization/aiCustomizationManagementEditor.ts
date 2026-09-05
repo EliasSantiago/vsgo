@@ -42,6 +42,7 @@ import { IAICustomizationItemsModel, ITEMS_MODEL_SECTIONS } from './aiCustomizat
 import { McpListWidget } from './mcpListWidget.js';
 import { PluginListWidget } from './pluginListWidget.js';
 import { AIProvidersWidget } from './aiProvidersWidget.js';
+import { GeneralWidget } from './generalWidget.js';
 import { AIUsageWidget } from './aiUsageWidget.js';
 import {
 	AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID,
@@ -276,6 +277,8 @@ export class AICustomizationManagementEditor extends EditorPane {
 	private pluginListWidget: PluginListWidget | undefined;
 	private modelsWidget: ChatModelsWidget | undefined;
 	private aiProvidersWidget: AIProvidersWidget | undefined;
+	private generalWidget: GeneralWidget | undefined;
+	private generalContentContainer: HTMLElement | undefined;
 	private aiUsageWidget: AIUsageWidget | undefined;
 	private promptsContentContainer!: HTMLElement;
 	private mcpContentContainer: HTMLElement | undefined;
@@ -401,6 +404,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 
 		// Build sections from the workspace service configuration
 		const sectionInfo: Record<string, { label: string; icon: ThemeIcon; description: string }> = {
+			[AICustomizationManagementSection.General]: { label: localize('general', "Geral"), icon: Codicon.settingsGear, description: localize('generalSectionDesc', "A sua conta e os ajustes que valem para o editor inteiro.") },
 			[AICustomizationManagementSection.Agents]: { label: localize('agents', "Agentes"), icon: agentIcon, description: localize('agentsDesc', "Defina agentes personalizados com personas, acesso a ferramentas e instruções específicas para cada tarefa.") },
 			[AICustomizationManagementSection.Skills]: { label: localize('skills', "Skills"), icon: skillIcon, description: localize('skillsDesc', "Crie arquivos de skill reutilizáveis com conhecimento e fluxos de trabalho de um domínio específico.") },
 			[AICustomizationManagementSection.Instructions]: { label: localize('instructions', "Instruções"), icon: instructionsIcon, description: localize('instructionsDesc', "Defina instruções sempre ativas que guiam o comportamento da IA no seu workspace ou perfil de usuário.") },
@@ -420,10 +424,19 @@ export class AICustomizationManagementEditor extends EditorPane {
 		}
 		this.rebuildVisibleSections();
 
-		// Restore selected section from storage, falling back to welcome page
+		/*
+		 * Qual seção abre.
+		 *
+		 * A última visitada, se ainda existir. Na primeira vez, a Geral: é onde
+		 * está a conta, e conta é a primeira coisa que se resolve num editor
+		 * recém-instalado. Sem a Geral na lista (a janela de sessões não a
+		 * tem), a página de boas-vindas continua sendo o começo.
+		 */
 		const savedSection = this.storageService.get(AI_CUSTOMIZATION_MANAGEMENT_SELECTED_SECTION_KEY, StorageScope.PROFILE);
 		if (savedSection && this.sections.some(s => s.id === savedSection)) {
 			this.selectedSection = savedSection as AICustomizationManagementSection;
+		} else if (this.sections.some(s => s.id === AICustomizationManagementSection.General)) {
+			this.selectedSection = AICustomizationManagementSection.General;
 		} else {
 			this.selectedSection = undefined; // Show welcome page
 		}
@@ -935,6 +948,15 @@ export class AICustomizationManagementEditor extends EditorPane {
 			}));
 		}
 
+		// Container for General content
+		if (hasSections.has(AICustomizationManagementSection.General)) {
+			this.generalContentContainer = DOM.append(contentInner, $('.general-content-container'));
+			const generalBackBar = DOM.append(this.generalContentContainer, $('.section-back-bar'));
+			generalBackBar.appendChild(this.createBackArrowButton());
+			this.generalWidget = this.editorDisposables.add(this.instantiationService.createInstance(GeneralWidget));
+			this.generalContentContainer.appendChild(this.generalWidget.element);
+		}
+
 		// Container for AI Providers content
 		if (hasSections.has(AICustomizationManagementSection.AIProviders)) {
 			this.aiProvidersContentContainer = DOM.append(contentInner, $('.ai-providers-content-container'));
@@ -1156,6 +1178,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 		const isModelsSection = this.selectedSection === AICustomizationManagementSection.Models;
 		const isMcpSection = this.selectedSection === AICustomizationManagementSection.McpServers;
 		const isPluginsSection = this.selectedSection === AICustomizationManagementSection.Plugins;
+		const isGeneralSection = this.selectedSection === AICustomizationManagementSection.General;
 		const isAIProvidersSection = this.selectedSection === AICustomizationManagementSection.AIProviders;
 		const isUsageSection = this.selectedSection === AICustomizationManagementSection.Usage;
 
@@ -1180,6 +1203,9 @@ export class AICustomizationManagementEditor extends EditorPane {
 		if (this.pluginDetailContainer) {
 			this.pluginDetailContainer.style.display = isPluginDetailMode ? '' : 'none';
 		}
+		if (this.generalContentContainer) {
+			this.generalContentContainer.style.display = !isEditorMode && !isDetailMode && isGeneralSection ? '' : 'none';
+		}
 		if (this.aiProvidersContentContainer) {
 			this.aiProvidersContentContainer.style.display = !isEditorMode && !isDetailMode && isAIProvidersSection ? '' : 'none';
 		}
@@ -1201,6 +1227,11 @@ export class AICustomizationManagementEditor extends EditorPane {
 		// Refresh usage widget with the latest data when switching to it
 		if (isUsageSection && this.aiUsageWidget) {
 			this.aiUsageWidget.render();
+		}
+
+		// A conta pode ter mudado enquanto outra seção estava aberta.
+		if (isGeneralSection && this.generalWidget) {
+			this.generalWidget.render();
 		}
 	}
 

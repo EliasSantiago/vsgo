@@ -108,6 +108,9 @@
 		"signUpUrl": "https://vsgo.orkestrai.com.br/register",
 		"accountSignInCommand": "agent-chat.vsgo.signIn",
 		"accountSignUpCommand": "agent-chat.vsgo.signUp",
+		"accountSignOutCommand": "agent-chat.vsgo.signOut",
+		"accountInfoCommand": "agent-chat.vsgo.accountInfo",
+		"accountDashboardUrl": "https://vsgo.orkestrai.com.br/dashboard",
 		"provider": {
 			"default": {
 				"id": "vsgo",

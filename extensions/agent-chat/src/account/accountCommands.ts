@@ -36,6 +36,32 @@ export function registerAccountCommands(
 		return signIn(provider);
 	}));
 
+	/*
+	 * Quem está conectado, para a tela de configurações do editor.
+	 *
+	 * A `AuthenticationSession` que o workbench enxerga carrega só `id` e um
+	 * `label`; a seção Geral mostra nome e e-mail em linhas separadas, e o
+	 * plano ao lado. Quem tem esses campos é aqui, então eles saem por comando
+	 * em vez de virarem uma string espremida no label.
+	 *
+	 * Sem conta conectada devolve `undefined`, que é o que faz a tela mostrar
+	 * "Entrar" em vez de uma identidade vazia.
+	 *
+	 * Não é declarado em `contributes.commands` de propósito: é um comando de
+	 * dado, chamado pelo workbench, e não uma ação para a paleta.
+	 */
+	subs.push(vscode.commands.registerCommand('agent-chat.vsgo.accountInfo', async () => {
+		const session = await auth.currentSession();
+		if (!session) {
+			return undefined;
+		}
+		return {
+			name: session.account.name ?? undefined,
+			email: session.account.email ?? undefined,
+			plan: session.plan.name,
+		};
+	}));
+
 	subs.push(vscode.commands.registerCommand('agent-chat.vsgo.signOut', async () => {
 		const session = await auth.currentSession();
 		if (!session) {
