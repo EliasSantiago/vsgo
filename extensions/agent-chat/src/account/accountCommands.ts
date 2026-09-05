@@ -49,18 +49,12 @@ export function registerAccountCommands(
 	 *
 	 * Não é declarado em `contributes.commands` de propósito: é um comando de
 	 * dado, chamado pelo workbench, e não uma ação para a paleta.
+	 *
+	 * Quem responde é `accountInfo()`, que confere o estado atual no servidor
+	 * em vez de repetir o que foi gravado no dia da conexão — o plano muda no
+	 * site, e a tela que o mostra tem de acompanhar.
 	 */
-	subs.push(vscode.commands.registerCommand('agent-chat.vsgo.accountInfo', async () => {
-		const session = await auth.currentSession();
-		if (!session) {
-			return undefined;
-		}
-		return {
-			name: session.account.name ?? undefined,
-			email: session.account.email ?? undefined,
-			plan: session.plan.name,
-		};
-	}));
+	subs.push(vscode.commands.registerCommand('agent-chat.vsgo.accountInfo', () => auth.accountInfo()));
 
 	subs.push(vscode.commands.registerCommand('agent-chat.vsgo.signOut', async () => {
 		const session = await auth.currentSession();

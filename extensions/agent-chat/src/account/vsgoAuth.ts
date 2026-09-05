@@ -202,6 +202,79 @@ export class VsgoAuthProvider implements vscode.AuthenticationProvider, vscode.D
 	}
 
 	/**
+	 * A conta como ela está AGORA no servidor, e não como estava na conexão.
+	 *
+	 * Nome, e-mail e plano são gravados no cofre no momento em que a instalação
+	 * foi conectada, e ficam ali parados: quem trocou de plano no site continua
+	 * vendo "Free" na tela de configurações do editor até desconectar e
+	 * conectar de novo — justamente na tela que existe para responder "o que
+	 * esta conta me dá".
+	 *
+	 * `/v1/me` responde com o estado atual. Sem rede, ou com o servidor fora,
+	 * devolve o que está guardado: uma tela com o plano de ontem é melhor do
+	 * que uma tela vazia. Chave recusada é outra história — aí a sessão local
+	 * não vale mais nada e é descartada, como no resto do provedor.
+	 */
+	async accountInfo(): Promise<{ name?: string; email?: string; plan?: string } | undefined> {
+		const session = await this.read();
+		if (!session) {
+			return undefined;
+		}
+
+		const guardado = {
+			name: session.account.name ?? undefined,
+			email: session.account.email ?? undefined,
+			plan: session.plan.name,
+		};
+
+		try {
+			const res = await fetch(`${vsgoBaseUrl()}/v1/me`, {
+				headers: { 'Authorization': `Bearer ${session.accessToken}` },
+			});
+			if (res.status === 401 || res.status === 403) {
+				await this.invalidate();
+				return undefined;
+			}
+			if (!res.ok) {
+				return guardado;
+			}
+			const atual = await res.json() as {
+				email?: string | null;
+				name?: string | null;
+				plan?: { id: string; name: string; requests_per_minute: number; monthly_token_limit: number | null };
+			};
+			if (!atual.plan) {
+				return guardado;
+			}
+
+			// O cofre acompanha: a próxima leitura já sai certa mesmo offline.
+			await this.write({
+				...session,
+				account: {
+					...session.account,
+					email: atual.email ?? session.account.email,
+					name: atual.name ?? session.account.name,
+				},
+				plan: {
+					id: atual.plan.id,
+					name: atual.plan.name,
+					requests_per_minute: atual.plan.requests_per_minute,
+					monthly_token_limit: atual.plan.monthly_token_limit,
+				},
+			});
+
+			return {
+				name: atual.name ?? guardado.name,
+				email: atual.email ?? guardado.email,
+				plan: atual.plan.name,
+			};
+		} catch (err) {
+			log('[vsgo] /v1/me indisponível; usando a conta guardada:', err instanceof Error ? err.message : String(err));
+			return guardado;
+		}
+	}
+
+	/**
 	 * Descarta a sessão local porque o servidor recusou a chave.
 	 *
 	 * Uma chave revogada no painel ou uma conta suspensa deixam o editor com um
