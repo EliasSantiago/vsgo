@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -95,7 +95,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -151,7 +151,7 @@ jobs:
 #       matrix:
 #         arch: [arm64, x64]
 #     steps:
-#       - uses: actions/checkout@v6
+#       - uses: actions/checkout@v7
 #         with:
 #           lfs: true
 #
@@ -189,7 +189,7 @@ jobs:
     needs: [linux, windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
