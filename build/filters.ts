@@ -77,6 +77,7 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!src/vs/workbench/contrib/chat/common/chatModes.ts',
 	'!src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingEditorActions.ts',
 	'!src/vs/workbench/contrib/chat/browser/actions/chatExecuteActions.ts',
+	'!src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts',
 	'!src/vs/workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatTerminalToolConfirmationSubPart.ts',
 	'!src/vs/workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatToolConfirmationSubPart.ts',
 	'!src/vs/workbench/contrib/chat/browser/widget/input/autoModeToggleActionItem.ts',

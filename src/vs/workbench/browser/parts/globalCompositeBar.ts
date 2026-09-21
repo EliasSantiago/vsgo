@@ -31,6 +31,7 @@ import { IContextMenuService } from '../../../platform/contextview/browser/conte
 import { IKeybindingService } from '../../../platform/keybinding/common/keybinding.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 import { IProductService } from '../../../platform/product/common/productService.js';
+import product from '../../../platform/product/common/product.js';
 import { ISecretStorageService } from '../../../platform/secrets/common/secrets.js';
 import { AuthenticationSessionInfo, getCurrentAuthenticationSessionInfo } from '../../services/authentication/browser/authenticationService.js';
 import { AuthenticationSessionAccount, IAuthenticationService, INTERNAL_AUTH_PROVIDER_PREFIX } from '../../services/authentication/common/authentication.js';
@@ -741,8 +742,13 @@ function simpleActivityContextMenuActions(storageService: IStorageService, isAcc
 	];
 }
 
+/**
+ * Whether the Accounts entry shows in the activity bar or title bar. Hidden by
+ * default in a build that does not offer signing in (`accountSignIn: false` in
+ * product.json); the user can still turn it back on from the context menu.
+ */
 export function isAccountsActionVisible(storageService: IStorageService): boolean {
-	return storageService.getBoolean(AccountsActivityActionViewItem.ACCOUNTS_VISIBILITY_PREFERENCE_KEY, StorageScope.PROFILE, true);
+	return storageService.getBoolean(AccountsActivityActionViewItem.ACCOUNTS_VISIBILITY_PREFERENCE_KEY, StorageScope.PROFILE, product.accountSignIn !== false);
 }
 
 function setAccountsActionVisible(storageService: IStorageService, visible: boolean) {

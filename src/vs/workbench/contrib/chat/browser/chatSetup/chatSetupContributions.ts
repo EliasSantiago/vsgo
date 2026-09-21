@@ -550,8 +550,13 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 
 		registerAction2(ChatSetupTriggerAction);
 		registerAction2(ChatSetupTriggerForceSignInDialogAction);
-		registerAction2(ChatSetupFromAccountsAction);
-		registerAction2(ChatSetupSignInTitleBarAction);
+		// A build that does not offer signing in (`accountSignIn: false` in
+		// product.json) keeps both invitations out of the title bar and the
+		// Accounts menu.
+		if (product.accountSignIn !== false) {
+			registerAction2(ChatSetupFromAccountsAction);
+			registerAction2(ChatSetupSignInTitleBarAction);
+		}
 		registerAction2(ChatSetupTriggerAnonymousWithoutDialogAction);
 		registerAction2(ChatSetupTriggerSupportAnonymousAction);
 		registerAction2(UpgradePlanAction);
