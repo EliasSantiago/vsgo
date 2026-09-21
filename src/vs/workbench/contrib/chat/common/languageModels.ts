@@ -418,6 +418,21 @@ export interface ILanguageModelsService {
 	configureLanguageModelsProviderGroup(vendorId: string, name?: string): Promise<void>;
 
 	/**
+	 * Returns the configuration of a provider group as the user entered it, with
+	 * secrets read back from secret storage. `undefined` when the group or its
+	 * vendor does not exist.
+	 */
+	getLanguageModelsProviderGroupConfiguration(vendorId: string, providerGroupName: string): Promise<IStringDictionary<unknown> | undefined>;
+
+	/**
+	 * Creates a provider group, or replaces the one named `previousName`, from
+	 * values collected by a form. Secrets go to secret storage and the ones the
+	 * replaced group held are deleted. Per-model settings of a replaced group
+	 * are kept. Rejects when another group of the vendor already has `name`.
+	 */
+	saveLanguageModelsProviderGroup(vendorId: string, name: string, configuration: IStringDictionary<unknown> | undefined, previousName?: string): Promise<ILanguageModelsProviderGroup>;
+
+	/**
 	 * Opens the language models configuration file and navigates to
 	 * or creates the per-model configuration for the given model.
 	 */
@@ -1205,6 +1220,42 @@ export class LanguageModelsService implements ILanguageModelsService {
 			}
 			throw error;
 		}
+	}
+
+	async getLanguageModelsProviderGroupConfiguration(vendorId: string, providerGroupName: string): Promise<IStringDictionary<unknown> | undefined> {
+		const vendor = this.getVendors().find(({ vendor }) => vendor === vendorId);
+		const existing = this._languageModelsConfigurationService.getLanguageModelsProviderGroups().find(g => g.vendor === vendorId && g.name === providerGroupName);
+		if (!vendor || !existing) {
+			return undefined;
+		}
+		return this._resolveConfiguration(existing, vendor.configuration);
+	}
+
+	async saveLanguageModelsProviderGroup(vendorId: string, name: string, configuration: IStringDictionary<unknown> | undefined, previousName?: string): Promise<ILanguageModelsProviderGroup> {
+		const vendor = this.getVendors().find(({ vendor }) => vendor === vendorId);
+		if (!vendor) {
+			throw new Error(`Vendor ${vendorId} not found.`);
+		}
+
+		const groups = this._languageModelsConfigurationService.getLanguageModelsProviderGroups();
+		const existing = previousName !== undefined ? groups.find(g => g.vendor === vendorId && g.name === previousName) : undefined;
+		if (previousName !== undefined && !existing) {
+			throw new Error(`Language model provider group ${previousName} for vendor ${vendorId} not found.`);
+		}
+		if (groups.some(g => g.vendor === vendorId && g.name === name && g !== existing)) {
+			throw new Error(localize('nameExists', "A language models group with this name already exists for {0}", vendor.displayName));
+		}
+
+		const group = await this._resolveLanguageModelProviderGroup(name, vendorId, configuration, vendor.configuration);
+		if (!existing) {
+			return this._languageModelsConfigurationService.addLanguageModelsProviderGroup(group);
+		}
+
+		const saved = await this._languageModelsConfigurationService.updateLanguageModelsProviderGroup(existing, existing.settings ? { ...group, settings: existing.settings } : group);
+		// Every save stores its secrets under fresh keys, so the ones the replaced
+		// group pointed at are no longer referenced by anything.
+		await this._deleteSecretsInConfiguration(existing, vendor.configuration);
+		return saved;
 	}
 
 	async configureModel(modelId: string): Promise<void> {

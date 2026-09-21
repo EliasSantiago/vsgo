@@ -18,7 +18,9 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IProductService } from '../../../../../platform/product/common/productService.js';
 import { LocalModelsWidget } from './localModelsWidget.js';
+import { AIProviderConfigurationWidget } from './aiProviderConfigurationWidget.js';
 import { ILanguageModelProviderDescriptor, ILanguageModelsService } from '../../common/languageModels.js';
 import { ILanguageModelsConfigurationService, ILanguageModelsProviderGroup } from '../../common/languageModelsConfiguration.js';
 import Severity from '../../../../../base/common/severity.js';
@@ -46,10 +48,14 @@ export class AIProvidersWidget extends Disposable {
 	private headerText!: HTMLElement;
 	private itemCount = 0;
 
-	/** Drill-down shown in place of the provider list; created on first use. */
-	private localModelsContainer!: HTMLElement;
+	/**
+	 * Page shown in place of the provider list — the local models panel or a
+	 * provider's configuration form — under a shared back bar and breadcrumb.
+	 */
+	private drilldownContainer!: HTMLElement;
+	private breadcrumbTitle!: HTMLElement;
 	private localModelsWidget: LocalModelsWidget | undefined;
-	private breadcrumbTitle: HTMLElement | undefined;
+	private configurationWidget: AIProviderConfigurationWidget | undefined;
 
 	constructor(
 		@ILanguageModelsService private readonly languageModelsService: ILanguageModelsService,
@@ -60,6 +66,7 @@ export class AIProvidersWidget extends Disposable {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IExtensionService private readonly extensionService: IExtensionService,
 		@INotificationService private readonly notificationService: INotificationService,
+		@IProductService private readonly productService: IProductService,
 	) {
 		super();
 		this.element = $('.ai-providers-widget');
@@ -76,16 +83,45 @@ export class AIProvidersWidget extends Disposable {
 		this.headerText.textContent = localize('aiProvidersInfo', "Vincule chaves de API aos provedores de IA para habilitar no chat os modelos da Anthropic, OpenAI, Gemini, Mistral, Groq, DeepSeek, xAI e outros. Cada provedor pode ter várias configurações nomeadas.");
 
 		this.listContainer = DOM.append(this.element, $('.ai-providers-list'));
-		this.localModelsContainer = DOM.append(this.element, $('.ai-providers-drilldown'));
-		DOM.setVisibility(false, this.localModelsContainer);
+		this.createDrilldown();
 		this.refresh();
+	}
+
+	private createDrilldown(): void {
+		this.drilldownContainer = DOM.append(this.element, $('.ai-providers-drilldown'));
+		DOM.setVisibility(false, this.drilldownContainer);
+
+		const backBar = DOM.append(this.drilldownContainer, $('.local-models-back-bar'));
+		const backBtn = this._register(new Button(backBar, { ...defaultButtonStyles, supportIcons: true, secondary: true }));
+		backBtn.label = '$(arrow-left) ' + localize('backToProviders', "Todos os Provedores");
+		this._register(backBtn.onDidClick(() => this.showProviderList()));
+
+		// Breadcrumb, so the page reads as a place inside this editor rather
+		// than a screen that replaced it.
+		const crumb = DOM.append(backBar, $('.local-models-breadcrumb'));
+		const crumbRoot = DOM.append(crumb, $('span.local-models-breadcrumb-root'));
+		crumbRoot.textContent = localize('providersCrumb', "Provedores de IA");
+		const crumbSeparator = DOM.append(crumb, $('span.local-models-breadcrumb-separator'));
+		crumbSeparator.classList.add(...ThemeIcon.asClassNameArray(Codicon.chevronRight));
+		this.breadcrumbTitle = DOM.append(crumb, $('span.local-models-breadcrumb-current'));
+	}
+
+	/**
+	 * Whether the vendor is backed by the product's own account: no credential
+	 * schema and no local models, only a command that manages the account.
+	 */
+	private isAccountVendor(vendor: ILanguageModelProviderDescriptor): boolean {
+		return !vendor.configuration && !vendor.manageModelsCommand && !!vendor.managementCommand;
 	}
 
 	private refresh(): void {
 		this.listDisposables.clear();
 		DOM.clearNode(this.listContainer);
 
-		const vendors = this.languageModelsService.getVendors();
+		// With signing in to the product's account turned off, the provider that
+		// only exists through that account has nothing to offer here.
+		const accountSignIn = this.productService.accountSignIn !== false;
+		const vendors = this.languageModelsService.getVendors().filter(vendor => accountSignIn || !this.isAccountVendor(vendor));
 		const groups = this.languageModelsConfigurationService.getLanguageModelsProviderGroups();
 
 		const groupsByVendor = new Map<string, ILanguageModelsProviderGroup[]>();
@@ -141,7 +177,7 @@ export class AIProvidersWidget extends Disposable {
 		// declares `managementCommand` and no configuration schema, and the
 		// generic "Configurar" flow below would only prompt for a name and a key
 		// that do not exist for it.
-		const accountCommand = !vendor.configuration && !selfManaged ? vendor.managementCommand : undefined;
+		const accountCommand = this.isAccountVendor(vendor) ? vendor.managementCommand : undefined;
 
 		// Both credential-less kinds count models instead of configurations: it is
 		// the only signal they have that the provider is actually usable.
@@ -206,7 +242,7 @@ export class AIProvidersWidget extends Disposable {
 				? '$(add) ' + localize('configureProvider', "Configurar")
 				: '$(add) ' + localize('addAnotherProvider', "Adicionar Configuração");
 			this.listDisposables.add(primaryBtn.onDidClick(() => {
-				void this.languageModelsService.configureLanguageModelsProviderGroup(vendor.vendor);
+				void this.showConfiguration(vendor);
 			}));
 		}
 
@@ -231,7 +267,7 @@ export class AIProvidersWidget extends Disposable {
 			editBtn.label = '$(gear)';
 			this.listDisposables.add(this.hoverService.setupDelayedHover(editBtn.element, () => ({ content: localize('editGroupTooltip', "Editar configuração"), appearance: { showPointer: true } }), { groupId: 'ai-providers' }));
 			this.listDisposables.add(editBtn.onDidClick(() => {
-				void this.languageModelsService.configureLanguageModelsProviderGroup(vendor.vendor, group.name);
+				void this.showConfiguration(vendor, group.name);
 			}));
 
 			const removeBtn = this.listDisposables.add(new Button(groupActions, { ...defaultButtonStyles, supportIcons: true, secondary: true }));
@@ -252,13 +288,6 @@ export class AIProvidersWidget extends Disposable {
 	}
 
 	/**
-	 * Swaps the provider list for the local models panel.
-	 *
-	 * Falls back to running the vendor's own command when the panel cannot be
-	 * served — a third-party provider may declare `manageModelsCommand` without
-	 * implementing the local models protocol the panel speaks.
-	 */
-	/**
 	 * Whether the local models backend is reachable.
 	 *
 	 * `_vsgo.localModels.state` is registered at runtime by the provider extension
@@ -277,6 +306,13 @@ export class AIProvidersWidget extends Disposable {
 		return probe();
 	}
 
+	/**
+	 * Swaps the provider list for the local models panel.
+	 *
+	 * Falls back to running the vendor's own command when the panel cannot be
+	 * served — a third-party provider may declare `manageModelsCommand` without
+	 * implementing the local models protocol the panel speaks.
+	 */
 	private async showLocalModels(vendor: ILanguageModelProviderDescriptor, fallbackCommand: string): Promise<void> {
 		if (!this.localModelsWidget) {
 			const known = await this.hasLocalModelsBackend();
@@ -292,36 +328,46 @@ export class AIProvidersWidget extends Disposable {
 				return;
 			}
 			this.localModelsWidget = this._register(this.instantiationService.createInstance(LocalModelsWidget));
-
-			const backBar = DOM.append(this.localModelsContainer, $('.local-models-back-bar'));
-			const backBtn = this._register(new Button(backBar, { ...defaultButtonStyles, supportIcons: true, secondary: true }));
-			backBtn.label = '$(arrow-left) ' + localize('backToProviders', "Todos os Provedores");
-			this._register(backBtn.onDidClick(() => this.showProviderList()));
-
-			// Breadcrumb, so the panel reads as a place inside this editor rather
-			// than a screen that replaced it.
-			const crumb = DOM.append(backBar, $('.local-models-breadcrumb'));
-			const crumbRoot = DOM.append(crumb, $('span.local-models-breadcrumb-root'));
-			crumbRoot.textContent = localize('providersCrumb', "Provedores de IA");
-			const crumbSeparator = DOM.append(crumb, $('span.local-models-breadcrumb-separator'));
-			crumbSeparator.classList.add(...ThemeIcon.asClassNameArray(Codicon.chevronRight));
-			this.breadcrumbTitle = DOM.append(crumb, $('span.local-models-breadcrumb-current'));
-
-			this.localModelsContainer.appendChild(this.localModelsWidget.element);
+			this.drilldownContainer.appendChild(this.localModelsWidget.element);
 		}
 
-		this.breadcrumbTitle!.textContent = vendor.displayName;
-		DOM.setVisibility(false, this.headerText);
-		DOM.setVisibility(false, this.listContainer);
-		DOM.setVisibility(true, this.localModelsContainer);
+		this.showDrilldown(vendor.displayName, this.localModelsWidget.element);
 		await this.localModelsWidget.show();
 	}
 
-	private showProviderList(): void {
+	/** Swaps the provider list for the form that creates or edits one of its configurations. */
+	private async showConfiguration(vendor: ILanguageModelProviderDescriptor, groupName?: string): Promise<void> {
+		if (!this.configurationWidget) {
+			this.configurationWidget = this._register(this.instantiationService.createInstance(AIProviderConfigurationWidget));
+			this.drilldownContainer.appendChild(this.configurationWidget.element);
+		}
+
+		this.showDrilldown(vendor.displayName, this.configurationWidget.element);
+		await this.configurationWidget.show(vendor, groupName, () => this.showProviderList());
+	}
+
+	/** Shows `page` alone under the back bar, with `title` as the last breadcrumb. */
+	private showDrilldown(title: string, page: HTMLElement): void {
+		this.breadcrumbTitle.textContent = title;
+		for (const candidate of [this.localModelsWidget?.element, this.configurationWidget?.element]) {
+			if (candidate) {
+				DOM.setVisibility(candidate === page, candidate);
+			}
+		}
+		if (page !== this.localModelsWidget?.element) {
+			this.localModelsWidget?.hide();
+		}
+		DOM.setVisibility(false, this.headerText);
+		DOM.setVisibility(false, this.listContainer);
+		DOM.setVisibility(true, this.drilldownContainer);
+	}
+
+	/** Leaves any page open under the section and shows the provider list. */
+	showProviderList(): void {
 		this.localModelsWidget?.hide();
 		DOM.setVisibility(true, this.headerText);
 		DOM.setVisibility(true, this.listContainer);
-		DOM.setVisibility(false, this.localModelsContainer);
+		DOM.setVisibility(false, this.drilldownContainer);
 		this.refresh();
 	}
 

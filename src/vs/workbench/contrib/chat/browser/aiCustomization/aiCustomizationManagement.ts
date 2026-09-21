@@ -125,11 +125,6 @@ export const AI_CUSTOMIZATION_ITEM_DISABLED_KEY = 'aiCustomizationManagementItem
 
 
 /**
- * Storage key for persisting the selected section.
- */
-export const AI_CUSTOMIZATION_MANAGEMENT_SELECTED_SECTION_KEY = 'aiCustomizationManagement.selectedSection';
-
-/**
  * Storage key for persisting the sidebar width.
  */
 export const AI_CUSTOMIZATION_MANAGEMENT_SIDEBAR_WIDTH_KEY = 'aiCustomizationManagement.sidebarWidth';

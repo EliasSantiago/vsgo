@@ -241,12 +241,12 @@ export interface IProductConfiguration {
 	readonly onboardingKeymaps?: readonly IProductOnboardingKeymap[];
 	readonly onboardingThemes?: readonly IProductOnboardingTheme[];
 	/**
-	 * Whether the first-launch onboarding opens on the sign-in step and nudges
-	 * to sign in on its last one. `false` drops both, so a fresh install reaches
-	 * the editor without being asked to sign in; signing in stays available
-	 * from the Accounts menu and the chat. Absent means `true`.
+	 * Whether the product offers signing in to its own account. `false` keeps a
+	 * fresh install from asking for it: the first-launch onboarding skips its
+	 * sign-in step and nudge, and the AI Customization editor hides the account
+	 * row and the account-backed model provider. Absent means `true`.
 	 */
-	readonly onboardingSignIn?: boolean;
+	readonly accountSignIn?: boolean;
 
 	readonly embedded?: IEmbeddedProductConfiguration;
 

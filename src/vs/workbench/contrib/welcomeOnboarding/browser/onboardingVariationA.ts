@@ -110,7 +110,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	private _footerSignInBtn: HTMLButtonElement | undefined;
 
 	private currentStepIndex = 0;
-	private readonly steps = product.onboardingSignIn === false
+	private readonly steps = product.accountSignIn === false
 		? ONBOARDING_STEPS.filter(step => step !== OnboardingStepId.SignIn)
 		: ONBOARDING_STEPS;
 	private readonly disposables = this._register(new DisposableStore());

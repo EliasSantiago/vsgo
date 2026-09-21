@@ -50,7 +50,8 @@ export class GeneralWidget extends Disposable {
 
 	private readonly renderDisposables = this._register(new DisposableStore());
 
-	private accountContainer!: HTMLElement;
+	/** Absent when the build does not offer signing in to its account. */
+	private accountContainer: HTMLElement | undefined;
 
 	constructor(
 		@ICommandService private readonly commandService: ICommandService,
@@ -86,10 +87,14 @@ export class GeneralWidget extends Disposable {
 	private create(): void {
 		const header = DOM.append(this.element, $('.general-header'));
 		DOM.append(header, $('h2.general-title')).textContent = localize('generalTitle', "Geral");
-		DOM.append(header, $('p.general-description')).textContent = localize('generalDesc', "A sua conta e os ajustes que valem para o editor inteiro.");
+		DOM.append(header, $('p.general-description')).textContent = this.accountEnabled()
+			? localize('generalDesc', "A sua conta e os ajustes que valem para o editor inteiro.")
+			: localize('generalDescNoAccount', "Os ajustes que valem para o editor inteiro.");
 
-		this.accountContainer = this.createGroup();
-		void this.renderAccount();
+		if (this.accountEnabled()) {
+			this.accountContainer = this.createGroup();
+			void this.renderAccount();
+		}
 
 		this.renderPreferences();
 	}
@@ -112,6 +117,11 @@ export class GeneralWidget extends Disposable {
 		void this.renderAccount();
 	}
 
+	/** Whether this build offers signing in to its own account; see `accountSignIn` in product.json. */
+	private accountEnabled(): boolean {
+		return this.productService.accountSignIn !== false && !!this.productService.defaultChatAgent?.accountSignInCommand;
+	}
+
 	/** Uma linha da lista: rótulo, explicação e o controle à direita. */
 	private createRow(parent: HTMLElement, label: string, description: string): HTMLElement {
 		const row = DOM.append(parent, $('.general-row'));
@@ -128,6 +138,9 @@ export class GeneralWidget extends Disposable {
 	}
 
 	private async renderAccount(): Promise<void> {
+		if (!this.accountContainer) {
+			return;
+		}
 		this.renderDisposables.clear();
 		DOM.clearNode(this.accountContainer);
 
@@ -225,7 +238,7 @@ export class GeneralWidget extends Disposable {
 		});
 
 		const dashboardUrl = this.productService.defaultChatAgent?.accountDashboardUrl;
-		if (dashboardUrl) {
+		if (dashboardUrl && this.accountEnabled()) {
 			const dashboard = this.createRow(
 				group,
 				localize('accountDashboard', "Painel da conta"),

@@ -19,6 +19,7 @@ import { Orientation, Sizing, SplitView } from '../../../../../base/browser/ui/s
 import { localize } from '../../../../../nls.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
+import { IProductService } from '../../../../../platform/product/common/productService.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { IEditorOptions } from '../../../../../platform/editor/common/editor.js';
@@ -47,7 +48,6 @@ import { AIUsageWidget } from './aiUsageWidget.js';
 import {
 	AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID,
 	AI_CUSTOMIZATION_MANAGEMENT_SIDEBAR_WIDTH_KEY,
-	AI_CUSTOMIZATION_MANAGEMENT_SELECTED_SECTION_KEY,
 	AICustomizationManagementSection,
 	AICustomizationPromptsStorage,
 	BUILTIN_STORAGE,
@@ -382,6 +382,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 		@ICustomizationHarnessService private readonly harnessService: ICustomizationHarnessService,
 		@IViewsService private readonly viewsService: IViewsService,
 		@IAICustomizationItemsModel private readonly itemsModel: IAICustomizationItemsModel,
+		@IProductService private readonly productService: IProductService,
 	) {
 		super(AICustomizationManagementEditor.ID, group, telemetryService, themeService, storageService);
 
@@ -403,8 +404,11 @@ export class AICustomizationManagementEditor extends EditorPane {
 		this._register(toDisposable(() => this.disposeBuiltinEditingSessions()));
 
 		// Build sections from the workspace service configuration
+		const generalDescription = this.productService.accountSignIn === false
+			? localize('generalSectionDescNoAccount', "Os ajustes que valem para o editor inteiro.")
+			: localize('generalSectionDesc', "A sua conta e os ajustes que valem para o editor inteiro.");
 		const sectionInfo: Record<string, { label: string; icon: ThemeIcon; description: string }> = {
-			[AICustomizationManagementSection.General]: { label: localize('general', "Geral"), icon: Codicon.settingsGear, description: localize('generalSectionDesc', "A sua conta e os ajustes que valem para o editor inteiro.") },
+			[AICustomizationManagementSection.General]: { label: localize('general', "Geral"), icon: Codicon.settingsGear, description: generalDescription },
 			[AICustomizationManagementSection.Agents]: { label: localize('agents', "Agentes"), icon: agentIcon, description: localize('agentsDesc', "Defina agentes personalizados com personas, acesso a ferramentas e instruções específicas para cada tarefa.") },
 			[AICustomizationManagementSection.Skills]: { label: localize('skills', "Skills"), icon: skillIcon, description: localize('skillsDesc', "Crie arquivos de skill reutilizáveis com conhecimento e fluxos de trabalho de um domínio específico.") },
 			[AICustomizationManagementSection.Instructions]: { label: localize('instructions', "Instruções"), icon: instructionsIcon, description: localize('instructionsDesc', "Defina instruções sempre ativas que guiam o comportamento da IA no seu workspace ou perfil de usuário.") },
@@ -424,22 +428,10 @@ export class AICustomizationManagementEditor extends EditorPane {
 		}
 		this.rebuildVisibleSections();
 
-		/*
-		 * Qual seção abre.
-		 *
-		 * A última visitada, se ainda existir. Na primeira vez, a Geral: é onde
-		 * está a conta, e conta é a primeira coisa que se resolve num editor
-		 * recém-instalado. Sem a Geral na lista (a janela de sessões não a
-		 * tem), a página de boas-vindas continua sendo o começo.
-		 */
-		const savedSection = this.storageService.get(AI_CUSTOMIZATION_MANAGEMENT_SELECTED_SECTION_KEY, StorageScope.PROFILE);
-		if (savedSection && this.sections.some(s => s.id === savedSection)) {
-			this.selectedSection = savedSection as AICustomizationManagementSection;
-		} else if (this.sections.some(s => s.id === AICustomizationManagementSection.General)) {
-			this.selectedSection = AICustomizationManagementSection.General;
-		} else {
-			this.selectedSection = undefined; // Show welcome page
-		}
+		// The editor always opens on the overview (the welcome page, no section
+		// selected). Callers that want a specific section select it right after
+		// opening, through `selectSectionById`.
+		this.selectedSection = undefined;
 	}
 
 	protected override createEditor(parent: HTMLElement): void {
@@ -1073,9 +1065,6 @@ export class AICustomizationManagementEditor extends EditorPane {
 		this.selectedSection = undefined;
 		this.sectionContextKey.set('');
 
-		// Clear persisted section so welcome shows next time
-		this.storageService.remove(AI_CUSTOMIZATION_MANAGEMENT_SELECTED_SECTION_KEY, StorageScope.PROFILE);
-
 		this.welcomePage?.reset();
 		this.updateContentVisibility();
 		this.ensureSectionsListReflectsActiveSection(undefined);
@@ -1104,9 +1093,6 @@ export class AICustomizationManagementEditor extends EditorPane {
 
 		this.selectedSection = section;
 		this.sectionContextKey.set(section);
-
-		// Persist selection
-		this.storageService.store(AI_CUSTOMIZATION_MANAGEMENT_SELECTED_SECTION_KEY, section, StorageScope.PROFILE, StorageTarget.USER);
 
 		// Update content visibility
 		this.updateContentVisibility();
@@ -1441,6 +1427,15 @@ export class AICustomizationManagementEditor extends EditorPane {
 		// On (re)open, clear any override so the root comes from the default source
 		this.workspaceService.clearOverrideProjectRoot();
 
+		// A fresh open starts on the overview again; coming back to a tab that was
+		// already open keeps whatever page the user left it on.
+		if (context.newInGroup) {
+			if (this.selectedSection !== undefined || this.viewMode !== 'list') {
+				this.showWelcomePage();
+			}
+			this.aiProvidersWidget?.showProviderList();
+		}
+
 		this.inEditorContextKey.set(true);
 		this.sectionContextKey.set(this.selectedSection ?? '');
 
@@ -1534,7 +1529,6 @@ export class AICustomizationManagementEditor extends EditorPane {
 			}
 			this.selectedSection = sectionId;
 			this.sectionContextKey.set(sectionId);
-			this.storageService.store(AI_CUSTOMIZATION_MANAGEMENT_SELECTED_SECTION_KEY, sectionId, StorageScope.PROFILE, StorageTarget.USER);
 			this.updateContentVisibility();
 			if (this.isPromptsSection(sectionId)) {
 				void this.listWidget.setSection(sectionId);

@@ -2308,8 +2308,9 @@ properties inherit, so they reach every scroller inside the editor. */
 }
 
 /* As linhas de um grupo formam um bloco só, com divisória entre elas: uma
-   lista de ajustes se lê de cima a baixo, e cartões soltos a transformariam
-   num mosaico de blocos independentes. */
+ * lista de ajustes se lê de cima a baixo, e cartões soltos a transformariam
+ * num mosaico de blocos independentes.
+ */
 .general-rows {
 	display: flex;
 	flex-direction: column;
@@ -2364,7 +2365,8 @@ properties inherit, so they reach every scroller inside the editor. */
 }
 
 /* Vazio quando a conta não tem nome cadastrado: sem a regra, a linha do
-   e-mail somia e o cartão pulava de altura entre um estado e outro. */
+ * e-mail somia e o cartão pulava de altura entre um estado e outro.
+ */
 .general-row-description:empty {
 	display: none;
 }
@@ -2380,7 +2382,8 @@ properties inherit, so they reach every scroller inside the editor. */
 }
 
 /* Os botões não encolhem: quem cede espaço quando a janela aperta é o texto,
-   que tem reticências, e não a ação. */
+ * que tem reticências, e não a ação.
+ */
 .general-row-action {
 	display: flex;
 	align-items: center;
@@ -2389,6 +2392,87 @@ properties inherit, so they reach every scroller inside the editor. */
 }
 
 .general-row-action .monaco-button {
+	width: auto;
+	padding: 4px 14px;
+}
+
+/* --- Provider configuration form (a page inside AI Providers) --- */
+
+.ai-customization-management-editor .ai-provider-config {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	max-width: 560px;
+}
+
+.ai-customization-management-editor .ai-provider-config-header {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.ai-customization-management-editor .ai-provider-config-title {
+	margin: 0;
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.ai-customization-management-editor .ai-provider-config-description,
+.ai-customization-management-editor .ai-provider-config-note {
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .ai-provider-config-form {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.ai-customization-management-editor .ai-provider-config-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.ai-customization-management-editor .ai-provider-config-label {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.ai-customization-management-editor .ai-provider-config-required {
+	color: var(--vscode-errorForeground);
+}
+
+.ai-customization-management-editor .ai-provider-config-help {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.ai-customization-management-editor .ai-provider-config-control {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 2px;
+}
+
+.ai-customization-management-editor .ai-provider-config-option {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+}
+
+.ai-customization-management-editor .ai-provider-config-actions {
+	display: flex;
+	gap: 8px;
+}
+
+.ai-customization-management-editor .ai-provider-config-actions .monaco-button {
 	width: auto;
 	padding: 4px 14px;
 }
