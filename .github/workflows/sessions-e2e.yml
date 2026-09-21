@@ -22,6 +22,8 @@ concurrency:
 jobs:
   sessions-e2e:
     name: Sessions E2E Tests
+    # Só roda quando quem disparou é o dono do repositório (ver o comentário em release.yml).
+    if: github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

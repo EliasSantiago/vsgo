@@ -62,6 +62,8 @@ jobs:
   # ── Shared setup: build once, cache everything ──────────────────────
   setup:
     name: Build & Cache
+    # Só roda quando quem disparou é o dono do repositório (ver o comentário em release.yml).
+    if: github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -453,7 +455,8 @@ jobs:
   report:
     name: Report
     needs: [ setup, chat-perf, leak-check ]
-    if: always()
+    # Só roda quando quem disparou é o dono do repositório (ver o comentário em release.yml).
+    if: always() && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

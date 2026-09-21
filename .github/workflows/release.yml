@@ -15,6 +15,12 @@
 #   - automático ao enviar uma tag "v*"  (bash scripts/release.sh --tag)
 #   - manual pela aba Actions → Release → Run workflow
 #
+# Quem pode disparar: só o dono do repositório (github.repository_owner). Todo
+# job que inicia um workflow em .github/workflows tem o mesmo "if:", que olha
+# para quem fez o push/merge/tag/PR (github.actor) e para quem clicou em
+# "Re-run" (github.triggering_actor). Se outro colaborador disparar, os jobs
+# aparecem como "skipped" e não consomem minuto de runner.
+#
 # Os artefatos saem como artifact do workflow e, quando disparado por tag,
 # também ficam anexados à release do GitHub.
 
@@ -41,6 +47,8 @@ env:
 jobs:
   linux:
     name: Linux x64
+    # Só roda quando quem disparou é o dono do repositório (ver o comentário em release.yml).
+    if: github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     # 22.04 de propósito: o glibc do runner vira o piso de compatibilidade do
     # pacote. Runner mais novo = exige distro mais nova no usuário final.
     runs-on: ubuntu-22.04
@@ -87,6 +95,8 @@ jobs:
 
   windows:
     name: Windows x64
+    # Só roda quando quem disparou é o dono do repositório (ver o comentário em release.yml).
+    if: github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     # Pinado de propósito: o windows-latest migrou para Windows 2025 com Visual
     # Studio 2026, e o node-gyp 11.2.0 (o que o npm 10 embute e o que o repo
     # empacota em build/npm/gyp) não reconhece essa versão — o npm ci falha com
