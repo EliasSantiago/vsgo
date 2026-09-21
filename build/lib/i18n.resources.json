@@ -183,10 +183,6 @@
 			"project": "vscode-workbench"
 		},
 		{
-			"name": "vs/workbench/contrib/qa",
-			"project": "vscode-workbench"
-		},
-		{
 			"name": "vs/workbench/contrib/securityScan",
 			"project": "vscode-workbench"
 		},

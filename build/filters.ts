@@ -90,7 +90,6 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!src/vs/workbench/api/browser/mainThreadChatAgents2.ts',
 	'!src/vs/workbench/contrib/specDriven/**',
 	'!src/vs/workbench/contrib/welcomeOnboarding/**',
-	'!src/vs/workbench/contrib/qa/**',
 	'!src/vs/workbench/contrib/securityScan/**',
 	'!extensions/agent-chat/**',
 	'!scripts/build-linux.sh',
@@ -163,7 +162,6 @@ export const indentationFilter = Object.freeze<string[]>([
 
 	// vsgo: template literals embedding JS/JSON/markdown, whose content is
 	// intentionally space-indented and must not be reflowed to tabs.
-	'!src/vs/workbench/contrib/qa/browser/qaService.ts',
 	'!src/vs/workbench/contrib/securityScan/browser/securityScanService.ts',
 	'!src/vs/workbench/contrib/securityScan/browser/securityScanActions.ts',
 	'!src/vs/workbench/contrib/specDriven/browser/specKitTemplates.ts',

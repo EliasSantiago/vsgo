@@ -12,9 +12,9 @@ export const IVsgoWorkspaceService = createDecorator<IVsgoWorkspaceService>('vsg
 export const VSGO_DIR_NAME = '.vsgo';
 
 /**
- * Everything under `.vsgo` is regenerable machine output — QA runs, security reports, run
- * indexes — so the whole folder is kept out of version control. Documents meant to be read
- * and reviewed by people (specs, requirements) are written to the project tree instead,
+ * Everything under `.vsgo` is regenerable machine output — security reports, run indexes —
+ * so the whole folder is kept out of version control. Documents meant to be read and
+ * reviewed by people (specs, requirements) are written to the project tree instead,
  * never here.
  */
 export const VSGO_GITIGNORE_CONTENT = '*\n';
