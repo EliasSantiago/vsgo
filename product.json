@@ -194,6 +194,7 @@
 			"description": "Mapeamento de teclado do Notepad++"
 		}
 	],
+	"onboardingSignIn": false,
 	"onboardingThemes": [
 		{
 			"id": "omni",

@@ -72,6 +72,7 @@ export const unicodeFilter = Object.freeze<string[]>([
 	// vsgo: features authored with intentional pt-BR content (localized strings,
 	// LLM prompt/markdown templates, build scripts) where non-ASCII is expected.
 	'!src/main.ts',
+	'!src/vs/base/common/product.ts',
 	'!src/vs/workbench/api/common/extHostChatAgents2.ts',
 	'!src/vs/workbench/contrib/chat/common/chatModes.ts',
 	'!src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingEditorActions.ts',

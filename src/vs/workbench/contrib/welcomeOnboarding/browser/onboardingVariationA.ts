@@ -110,7 +110,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	private _footerSignInBtn: HTMLButtonElement | undefined;
 
 	private currentStepIndex = 0;
-	private readonly steps = ONBOARDING_STEPS;
+	private readonly steps = product.onboardingSignIn === false
+		? ONBOARDING_STEPS.filter(step => step !== OnboardingStepId.SignIn)
+		: ONBOARDING_STEPS;
 	private readonly disposables = this._register(new DisposableStore());
 	private readonly stepDisposables = this._register(new DisposableStore());
 	private previouslyFocusedElement: HTMLElement | undefined;
@@ -226,7 +228,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			if (this._isLastStep()) {
 				this._logAction('complete');
 				this._dismiss('complete');
-			} else if (this.currentStepIndex === 0) {
+			} else if (this._isSignInStep()) {
 				this._logAction('continueWithoutSignIn');
 				this._nextStep();
 			} else {
@@ -397,12 +399,16 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		));
 	}
 
+	private _isSignInStep(): boolean {
+		return this.steps[this.currentStepIndex] === OnboardingStepId.SignIn;
+	}
+
 	private _updateButtonStates(): void {
 		if (this.backButton) {
 			this.backButton.style.display = this.currentStepIndex === 0 ? 'none' : '';
 		}
 		if (this.nextButton) {
-			if (this.currentStepIndex === 0) {
+			if (this._isSignInStep()) {
 				// Sign-in step: secondary "Continue without Signing In"
 				this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-secondary';
 				this.nextButton.textContent = localize('onboarding.continueWithoutSignIn', "Continuar sem Entrar");
@@ -417,7 +423,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		if (this.footerLeft) {
 			if (this._isLastStep()) {
 				// Show sign-in nudge in footer
-				if (!this._footerSignInBtn && !this._userSignedIn) {
+				if (!this._footerSignInBtn && !this._userSignedIn && this.steps.includes(OnboardingStepId.SignIn)) {
 					this._footerSignInBtn = append(this.footerLeft, $<HTMLButtonElement>('button.onboarding-a-signin-nudge-btn'));
 					this._footerSignInBtn.type = 'button';
 					this._footerSignInBtn.textContent = localize('onboarding.sessions.signInNudge', "Entre para Usar os Recursos de IA");

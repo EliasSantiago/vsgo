@@ -240,6 +240,13 @@ export interface IProductConfiguration {
 
 	readonly onboardingKeymaps?: readonly IProductOnboardingKeymap[];
 	readonly onboardingThemes?: readonly IProductOnboardingTheme[];
+	/**
+	 * Whether the first-launch onboarding opens on the sign-in step and nudges
+	 * to sign in on its last one. `false` drops both, so a fresh install reaches
+	 * the editor without being asked to sign in; signing in stays available
+	 * from the Accounts menu and the chat. Absent means `true`.
+	 */
+	readonly onboardingSignIn?: boolean;
 
 	readonly embedded?: IEmbeddedProductConfiguration;
 
