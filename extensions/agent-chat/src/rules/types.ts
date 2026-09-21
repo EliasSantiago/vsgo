@@ -14,8 +14,17 @@ export interface Rule {
 	readonly body: string;
 }
 
+/**
+ * One project instruction file (`AGENTS.md`, `CLAUDE.md`, ...) found at a workspace folder root.
+ */
+export interface ProjectInstructions {
+	/** Path relative to the workspace folder, e.g. `.claude/CLAUDE.md`. */
+	readonly file: string;
+	readonly body: string;
+}
+
 export interface ResolvedRules {
 	readonly always: readonly Rule[];
 	readonly matched: readonly Rule[];
-	readonly rootAgentsMd?: string;
+	readonly projectInstructions: readonly ProjectInstructions[];
 }

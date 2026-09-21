@@ -633,14 +633,16 @@ export class SpecDrivenService extends Disposable implements ISpecDrivenService 
 
 		if (token.isCancellationRequested) { return parts.join('\n'); }
 
-		// Key manifest / documentation files
+		// Key manifest / documentation files. Project instructions come first so the file cap never
+		// drops them, and every variant is read: AGENTS.md and CLAUDE.md complement each other.
 		const keyFiles = [
+			'AGENTS.md', 'CLAUDE.md', '.claude/CLAUDE.md', 'CLAUDE.local.md',
 			'README.md', 'README.txt', 'README.rst',
 			'package.json', 'package-lock.json',
 			'pyproject.toml', 'setup.py', 'requirements.txt',
 			'Cargo.toml', 'go.mod', 'pom.xml',
 			'build.gradle', 'composer.json', 'Gemfile',
-			'CLAUDE.md', 'CONTRIBUTING.md',
+			'CONTRIBUTING.md',
 		];
 		let filesRead = 0;
 		for (const name of keyFiles) {

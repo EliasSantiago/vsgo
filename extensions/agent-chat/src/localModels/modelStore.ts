@@ -25,9 +25,12 @@ interface IInstalledMetadata {
 	readonly contextLength: number;
 	readonly gpuLayers: number;
 	readonly installedAt: number;
-	/** Absent on sidecars written before embedding models existed: treat as 'chat'. */
+	/**
+	 * Absent on sidecars written before embedding models existed: treat as 'chat'.
+	 * Embedding weights are no longer offered, but ones downloaded earlier may
+	 * still sit in the models directory and must stay out of the chat picker.
+	 */
 	readonly kind?: 'chat' | 'embedding';
-	readonly dims?: number;
 }
 
 export interface IInstalledModel extends IInstalledMetadata {
@@ -99,11 +102,6 @@ export class ModelStore {
 	 */
 	async listChatModels(): Promise<IInstalledModel[]> {
 		return (await this.list()).filter(m => (m.kind ?? 'chat') === 'chat');
-	}
-
-	/** Installed models that produce vectors for the semantic index. */
-	async listEmbeddingModels(): Promise<IInstalledModel[]> {
-		return (await this.list()).filter(m => m.kind === 'embedding');
 	}
 
 	async isInstalled(id: string): Promise<boolean> {
@@ -254,8 +252,7 @@ export class ModelStore {
 			contextLength: model.contextLength,
 			gpuLayers,
 			installedAt: Date.now(),
-			kind: model.kind ?? 'chat',
-			dims: model.dims,
+			kind: 'chat',
 		};
 		await fs.promises.writeFile(path.join(dir, `${model.id}.json`), JSON.stringify(meta, null, '\t'), 'utf8');
 		this._onDidChange.fire();

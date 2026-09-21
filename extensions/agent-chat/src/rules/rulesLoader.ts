@@ -5,15 +5,29 @@
 
 import * as vscode from 'vscode';
 import { log } from '../logger.js';
-import { Rule, ResolvedRules } from './types.js';
+import { ProjectInstructions, Rule, ResolvedRules } from './types.js';
 
 const RULES_GLOB = '.agents/rules/**/*.md';
-const AGENTS_MD = 'AGENTS.md';
+
+/**
+ * Project instruction files read from each workspace folder root, in the order they
+ * reach the prompt. All of them are loaded whenever they exist: a project written
+ * for Claude Code and one written for Codex/Copilot must both be understood, and a
+ * project carrying both files means both.
+ */
+const PROJECT_INSTRUCTION_FILES: readonly string[] = [
+	'AGENTS.md',
+	'CLAUDE.md',
+	'.claude/CLAUDE.md',
+	'CLAUDE.local.md',
+];
+const PROJECT_INSTRUCTIONS_GLOB = `{${PROJECT_INSTRUCTION_FILES.join(',')}}`;
+const PROJECT_INSTRUCTIONS_WATCH_GLOB = '**/{AGENTS.md,CLAUDE.md,CLAUDE.local.md}';
 
 export class RulesLoader implements vscode.Disposable {
 
 	private readonly cache = new Map<string, Rule>();
-	private readonly rootAgentsMd = new Map<string, string>();
+	private readonly projectInstructions = new Map<string, string>();
 	private readonly disposables: vscode.Disposable[] = [];
 	private loaded = false;
 	private loadPromise: Promise<void> | undefined;
@@ -25,11 +39,11 @@ export class RulesLoader implements vscode.Disposable {
 		rulesWatcher.onDidDelete(uri => this.cache.delete(uri.toString()));
 		this.disposables.push(rulesWatcher);
 
-		const agentsWatcher = vscode.workspace.createFileSystemWatcher(`**/${AGENTS_MD}`);
-		agentsWatcher.onDidChange(uri => this.refreshAgentsMd(uri));
-		agentsWatcher.onDidCreate(uri => this.refreshAgentsMd(uri));
-		agentsWatcher.onDidDelete(uri => this.rootAgentsMd.delete(uri.toString()));
-		this.disposables.push(agentsWatcher);
+		const instructionsWatcher = vscode.workspace.createFileSystemWatcher(PROJECT_INSTRUCTIONS_WATCH_GLOB);
+		instructionsWatcher.onDidChange(uri => this.refreshProjectInstructions(uri));
+		instructionsWatcher.onDidCreate(uri => this.refreshProjectInstructions(uri));
+		instructionsWatcher.onDidDelete(uri => this.projectInstructions.delete(uri.toString()));
+		this.disposables.push(instructionsWatcher);
 	}
 
 	dispose(): void {
@@ -37,7 +51,7 @@ export class RulesLoader implements vscode.Disposable {
 			d.dispose();
 		}
 		this.cache.clear();
-		this.rootAgentsMd.clear();
+		this.projectInstructions.clear();
 	}
 
 	async ensureLoaded(): Promise<void> {
@@ -52,7 +66,7 @@ export class RulesLoader implements vscode.Disposable {
 
 	async reload(): Promise<number> {
 		this.cache.clear();
-		this.rootAgentsMd.clear();
+		this.projectInstructions.clear();
 		this.loaded = false;
 		this.loadPromise = this.loadAll();
 		await this.loadPromise;
@@ -80,9 +94,17 @@ export class RulesLoader implements vscode.Disposable {
 			}
 		}
 
-		const rootAgentsMd = folder ? this.rootAgentsMd.get(vscode.Uri.joinPath(folder.uri, AGENTS_MD).toString()) : undefined;
+		const projectInstructions: ProjectInstructions[] = [];
+		if (folder) {
+			for (const file of PROJECT_INSTRUCTION_FILES) {
+				const body = this.projectInstructions.get(vscode.Uri.joinPath(folder.uri, file).toString());
+				if (body) {
+					projectInstructions.push({ file, body });
+				}
+			}
+		}
 
-		return { always, matched, rootAgentsMd };
+		return { always, matched, projectInstructions };
 	}
 
 	private async loadAll(): Promise<void> {
@@ -90,11 +112,11 @@ export class RulesLoader implements vscode.Disposable {
 			const ruleUris = await vscode.workspace.findFiles(RULES_GLOB, '**/node_modules/**');
 			await Promise.all(ruleUris.map(uri => this.refreshRule(uri)));
 
-			const agentsUris = await vscode.workspace.findFiles(AGENTS_MD, '**/node_modules/**');
-			await Promise.all(agentsUris.map(uri => this.refreshAgentsMd(uri)));
+			const instructionUris = await vscode.workspace.findFiles(PROJECT_INSTRUCTIONS_GLOB, '**/node_modules/**');
+			await Promise.all(instructionUris.map(uri => this.refreshProjectInstructions(uri)));
 
 			this.loaded = true;
-			log(`rules: loaded ${this.cache.size} rule(s), ${this.rootAgentsMd.size} AGENTS.md`);
+			log(`rules: loaded ${this.cache.size} rule(s), ${this.projectInstructions.size} project instruction file(s)`);
 		} catch (err) {
 			log(`rules: load failed: ${err instanceof Error ? err.message : String(err)}`);
 		}
@@ -111,17 +133,17 @@ export class RulesLoader implements vscode.Disposable {
 		}
 	}
 
-	private async refreshAgentsMd(uri: vscode.Uri): Promise<void> {
+	private async refreshProjectInstructions(uri: vscode.Uri): Promise<void> {
 		try {
 			const bytes = await vscode.workspace.fs.readFile(uri);
 			const text = new TextDecoder().decode(bytes).trim();
 			if (text) {
-				this.rootAgentsMd.set(uri.toString(), text);
+				this.projectInstructions.set(uri.toString(), text);
 			} else {
-				this.rootAgentsMd.delete(uri.toString());
+				this.projectInstructions.delete(uri.toString());
 			}
 		} catch (err) {
-			log(`rules: failed to load AGENTS.md ${uri.fsPath}: ${err instanceof Error ? err.message : String(err)}`);
+			log(`rules: failed to load project instructions ${uri.fsPath}: ${err instanceof Error ? err.message : String(err)}`);
 		}
 	}
 }
@@ -139,12 +161,12 @@ export function parseRule(uri: vscode.Uri, text: string): Rule {
 	};
 }
 
-interface Frontmatter {
+export interface Frontmatter {
 	readonly fields: Record<string, unknown>;
 	readonly body: string;
 }
 
-function extractFrontmatter(text: string): Frontmatter {
+export function extractFrontmatter(text: string): Frontmatter {
 	const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
 	if (!match) {
 		return { fields: {}, body: text };
@@ -203,7 +225,7 @@ function normalizeGlobs(value: unknown): readonly string[] {
 	return [];
 }
 
-function parseBool(value: unknown): boolean | undefined {
+export function parseBool(value: unknown): boolean | undefined {
 	if (typeof value === 'boolean') {
 		return value;
 	}

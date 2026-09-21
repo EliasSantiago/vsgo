@@ -8,15 +8,11 @@ import { ByokStorage } from './byokStorage.js';
 import { registerAllProviders } from './providers/index.js';
 import { registerCommands } from './commands.js';
 import { registerTools } from './tools.js';
-import { SemanticIndexService } from './semanticIndex/semanticIndexService.js';
-import { registerSemanticIndexCommands } from './semanticIndex/commands.js';
 import { createChatHandler } from './chatHandler.js';
 import { RulesLoader } from './rules/rulesLoader.js';
 import { MemoryService } from './memory/memoryService.js';
-import { MemoryTreeProvider } from './memory/memoryView.js';
 import { AgentSessionsStore } from './agentsWindow/agentSessionsStore.js';
 import { AgentSessionsService } from './agentsWindow/agentSessionsService.js';
-import { AgentSessionsTreeProvider } from './agentsWindow/agentSessionsView.js';
 import { WorktreeService } from './agentsWindow/worktreeService.js';
 import { BugBotProvider } from './bugBot/bugBotProvider.js';
 import { BugBotService } from './bugBot/bugBotService.js';
@@ -42,12 +38,10 @@ export function activate(context: vscode.ExtensionContext): void {
 	const storage = new ByokStorage(context.secrets);
 	const rulesLoader = new RulesLoader();
 	const memoryService = new MemoryService();
-	const memoryTree = new MemoryTreeProvider(memoryService);
 
 	const worktreeService = new WorktreeService();
 	const agentSessionsStore = new AgentSessionsStore(context.globalState);
 	const agentSessionsService = new AgentSessionsService(agentSessionsStore, worktreeService);
-	const agentSessionsTree = new AgentSessionsTreeProvider(agentSessionsStore);
 
 	const bugBotProvider = new BugBotProvider();
 	const bugBotService = new BugBotService(bugBotProvider);
@@ -73,27 +67,10 @@ export function activate(context: vscode.ExtensionContext): void {
 	// has to stop it, and the controller does that at the point of deletion.
 	const modelStoreListener = modelStore.onDidChange(() => localProvider.refresh());
 
-	// Semantic index over the workspace. Scoped to `storageUri` so each workspace
-	// keeps its own vectors, and inert until the embedding model is installed.
-	const semanticIndex = new SemanticIndexService(context.storageUri, context.globalState, { modelStore, serverManager, storage, memento: context.globalState });
-
 	const mcpServers = new McpServers();
 
 	const participant = vscode.chat.createChatParticipant(PARTICIPANT_ID, createChatHandler(rulesLoader, memoryService, mcpServers));
 	participant.iconPath = new vscode.ThemeIcon('sparkle');
-
-	const memoryView = vscode.window.createTreeView('agentChatMemory', { treeDataProvider: memoryTree, showCollapseAll: false });
-	const agentsView = vscode.window.createTreeView('agentChatSessions', { treeDataProvider: agentSessionsTree, showCollapseAll: false });
-
-	const diffRefreshTimer = setInterval(async () => {
-		for (const session of agentSessionsStore.all()) {
-			try {
-				await agentSessionsService.refreshDiff(session.id);
-			} catch {
-				// best-effort
-			}
-		}
-	}, 15000);
 
 	context.subscriptions.push(
 		participant,
@@ -102,11 +79,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		vsgoSessionListener,
 		rulesLoader,
 		memoryService,
-		memoryTree,
-		memoryView,
 		agentSessionsStore,
-		agentSessionsTree,
-		agentsView,
 		bugBotProvider,
 		bugBotService,
 		modelStore,
@@ -115,15 +88,12 @@ export function activate(context: vscode.ExtensionContext): void {
 		localProvider,
 		localModelsController,
 		mcpServers,
-		{ dispose: () => clearInterval(diffRefreshTimer) },
 		registerLocalModelsCommands(localModelsController),
 		registerMcpCommands(mcpServers),
 		registerAllProviders(storage, localProvider, vsgoProvider),
 		registerAccountCommands(vsgoAuth.provider, vsgoProvider),
 		registerCommands(storage, rulesLoader, memoryService, agentSessionsStore, agentSessionsService, bugBotProvider, serverManager),
-		semanticIndex,
-		registerTools(semanticIndex),
-		registerSemanticIndexCommands(semanticIndex),
+		registerTools(),
 		registerFigma(context.secrets),
 	);
 	// Nothing resolves a credential-less vendor on startup, so ask for the first
@@ -133,15 +103,6 @@ export function activate(context: vscode.ExtensionContext): void {
 	const warmUp = new vscode.CancellationTokenSource();
 	context.subscriptions.push(warmUp);
 	void preloadLastUsedModel(serverManager, warmUp.token);
-	// Indexing runs unattended once provisioned; the first run has to ask,
-	// because it downloads a model.
-	const indexWarmUp = new vscode.CancellationTokenSource();
-	context.subscriptions.push(indexWarmUp);
-	void semanticIndex.ensureReady(indexWarmUp.token).then(ready => {
-		if (!ready) {
-			void semanticIndex.promptForSetup();
-		}
-	});
 	mcpServers.startOnStartupIfConfigured();
 	log('activate: registered participant, providers, commands, tools, rules, memory, agents, bugBot, localModels, mcp');
 }

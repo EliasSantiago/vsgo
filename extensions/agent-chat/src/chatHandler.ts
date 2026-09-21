@@ -7,15 +7,14 @@ import * as vscode from 'vscode';
 import { RulesLoader } from './rules/rulesLoader.js';
 import { ResolvedRules, Rule } from './rules/types.js';
 import { MemoryEntry, MemoryService } from './memory/memoryService.js';
-import { parsePlan, SUBMIT_PLAN_TOOL, SUBMIT_PLAN_TOOL_NAME } from './planner/planSchema.js';
-import { PlanRunner } from './planner/planRunner.js';
-import { RUN_SUBAGENT_TOOL, RUN_SUBAGENT_TOOL_NAME, runStandaloneSubagent } from './planner/subagent.js';
+import { loadSubagentDefinitions } from './subagents/definitions.js';
+import { buildTaskTool, runTaskCalls, TASK_TOOL_NAME } from './subagents/subagentRunner.js';
 import { log } from './logger.js';
 import { FileLinkStream } from './fileLinks.js';
-import { collectDiagnostics, computeFileEdit, computeMultiFileEdit, DiagnosticsInput, EditFileInput, findFiles, gitDiff, GitDiffInput, GitInput, gitStatus, listDirectory, MultiEditInput, openFileInEditor, OpenFileInput, readFileForModel, ReadFileInput, resolveUri, searchWorkspace } from './tools.js';
+import { EDIT_FILE_TOOL_NAME, IToolRunEnvironment, MULTI_EDIT_TOOL_NAME, OPEN_FILE_TOOL_NAME, runAgentTool, WRITE_FILE_TOOL_NAME } from './toolExecutor.js';
 import { parseTodos, renderTodosForModel, renderTodosForUser, TODO_TOOL, TODO_TOOL_NAME, TodoItem } from './todoList.js';
 import { restoreTranscript, serializeTranscript, TRANSCRIPT_METADATA_KEY } from './transcript.js';
-import { clampToolResult, extractTextToolCalls, IAgentProfile, resolveProfile } from './agentProfile.js';
+import { extractTextToolCalls, IAgentProfile, resolveProfile } from './agentProfile.js';
 import { isMcpToolInfo, McpServers } from './mcp.js';
 import { usageBus } from './usageBus.js';
 import { FIGMA_TOOL_NAME } from './figma/figmaTool.js';
@@ -55,7 +54,6 @@ When the user asks you to change a function, class, method, variable, or any sym
 3. The active file shown in context is only a hint, not the only place to look. The symbol is often defined in a different file.
 4. \`agent_search\` looks INSIDE files, so it never matches a filename. When you are after a FILE rather than a symbol, use \`agent_find_files\` — it matches names at any depth, so a project whose convention you guessed wrong (\`app.routes.ts\`, not \`app-routing.module.ts\`) still turns up on a shorter fragment.
 5. An empty result narrows the guess; it does not answer the question. Retry with a shorter fragment, or search for what the code would contain rather than what it is called, before reporting anything as absent.
-6. When you do NOT know what the thing is called — the user describes a behaviour, a concept or a responsibility rather than a name — use \`agent_codebase_search\`. It searches a local semantic index by meaning, so "where does it decide which theme to load" finds the code even when none of those words appear in it. Write its query in the language the answer is most likely written in — English for code and identifiers, the user's own language when they ask about documentation or comments written in it. Use it FIRST for that kind of question, then \`agent_search\` to confirm the exact symbol it points you at. Grep and semantics answer different questions: reach for grep when you have a name, for semantic search when you have an intention.
 
 ## File editing rules (CRITICAL)
 When asked to refactor, fix, add, remove, or otherwise change code in a file:
@@ -165,24 +163,11 @@ found). Emitting one call per turn when five were independent wastes 80% of the
 budget and is the main reason a task runs out of turns before finishing.
 
 ## Delegation
-To delegate ONE focused, self-contained task to a sub-agent, call \`agent_run_subagent\` with a complete task description. The sub-agent runs with the same tools, works in its own context (it does NOT see this conversation), and returns a summary. Use it to keep your own context focused on larger work — e.g. delegate "investigate and fix failing test X" while you continue elsewhere.
-For multiple INDEPENDENT tasks that can run in parallel, call \`agent_submit_plan\` with a DAG instead.
-Skip both for trivial single-file edits — just do them inline.
+\`agent_task\` hands a self-contained task to a sub-agent with its own context; it does NOT see this conversation, so the prompt must carry everything it needs. It returns a written report.
+- Broad questions — "how does X work", "where is Y handled", "what uses Z" — go to \`explore\` sub-agents, which only read. Split the question into independent parts and send one call per part in the SAME turn: they run in parallel, and only their reports reach your context.
+- A well-scoped piece of work you can hand off whole goes to \`general\`. Sub-agents that edit run one at a time, never in parallel.
+- Skip delegation for anything you can do in one or two tool calls yourself.
 `.trim();
-
-const WRITE_FILE_TOOL_NAME = 'agent_write_file';
-const EDIT_FILE_TOOL_NAME = 'agent_edit_file';
-const MULTI_EDIT_TOOL_NAME = 'agent_multi_edit';
-const OPEN_FILE_TOOL_NAME = 'agent_open_file';
-
-/** Read-only tools whose result cannot change until the agent writes a file. */
-const REPEATABLE_READ_TOOLS: ReadonlySet<string> = new Set([
-	'agent_read_file',
-	'agent_list_dir',
-	'agent_search',
-	'agent_find_files',
-	'agent_codebase_search',
-]);
 
 /**
  * Browser automation tools contributed by the workbench itself. They drive the
@@ -221,16 +206,9 @@ const AGENT_TOOL_NAMES: ReadonlySet<string> = new Set([
 	'agent_run_command',
 	'agent_read_terminal',
 	'agent_code_graph',
-	'agent_codebase_search',
 	FIGMA_TOOL_NAME,
 	...BROWSER_TOOL_NAMES,
 ]);
-
-/** Augmented stream type that includes the proposed `textEdit` API from `chatParticipantAdditions`. */
-type ChatStreamWithEdits = vscode.ChatResponseStream & {
-	textEdit(target: vscode.Uri, edits: vscode.TextEdit | vscode.TextEdit[]): void;
-	textEdit(target: vscode.Uri, isDone: true): void;
-};
 
 export type ChatHandler = (
 	request: vscode.ChatRequest,
@@ -268,8 +246,9 @@ export async function handleChatRequest(
 	const profile = resolveProfile(model, { systemPrompt: BASE_SYSTEM_PROMPT, maxTurns: MAX_AGENT_TURNS });
 	const browserWanted = wantsBrowserTools(request, context);
 	const baseTools = collectTools(profile, browserWanted);
-	const tools: vscode.LanguageModelChatTool[] = profile.allowDelegation
-		? [...baseTools, SUBMIT_PLAN_TOOL, RUN_SUBAGENT_TOOL, TODO_TOOL]
+	const subagents = profile.allowDelegation ? await loadSubagentDefinitions() : [];
+	const tools: vscode.LanguageModelChatTool[] = subagents.length > 0
+		? [...baseTools, buildTaskTool(subagents), TODO_TOOL]
 		: [...baseTools, TODO_TOOL];
 	// What the model is allowed to invoke, used to validate tool calls that had to
 	// be recovered from plain text. The schemas travel along because a recovered
@@ -297,6 +276,10 @@ export async function handleChatRequest(
 	// Signatures of read-only calls already answered this request. Re-issuing one
 	// verbatim returns nothing new and costs a turn, so it is short-circuited.
 	const answeredReads = new Set<string>();
+	const toolEnvironment: IToolRunEnvironment = { stream, profile, toolInvocationToken: request.toolInvocationToken, mcpToolNames, answeredReads };
+	// What a sub-agent needs to know about the project, without the main agent's
+	// own instructions: it gets a system prompt of its own.
+	const projectContext = buildProjectContext(resolvedRules, memories);
 
 	// Checklist the model keeps for itself, replaced wholesale on every write.
 	let todos: readonly TodoItem[] = [];
@@ -446,32 +429,22 @@ export async function handleChatRequest(
 
 		const resultParts: vscode.LanguageModelToolResultPart[] = [];
 
-		// Plan tool must run first — it calls back into stream and model directly.
-		for (const tc of toolCalls) {
-			if (tc.name !== SUBMIT_PLAN_TOOL_NAME) {
-				continue;
-			}
-			if (token.isCancellationRequested) {
-				break;
-			}
-			const planSummary = await executePlanTool(tc, model, baseTools, stream, token);
-			resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(planSummary)]));
-		}
-
-		// Sub-agent tool also runs separately — it needs model + tools and streams its own progress.
-		for (const tc of toolCalls) {
-			if (tc.name !== RUN_SUBAGENT_TOOL_NAME) {
-				continue;
-			}
-			if (token.isCancellationRequested) {
-				break;
-			}
-			const summary = await executeSubagentTool(tc, model, baseTools, stream, token);
-			resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(summary)]));
+		// Delegated tasks go first and all at once: they are what can run in
+		// parallel, and they report through the stream on their own.
+		const taskCalls = toolCalls.filter(tc => tc.name === TASK_TOOL_NAME);
+		if (taskCalls.length > 0 && !token.isCancellationRequested) {
+			resultParts.push(...await runTaskCalls(taskCalls, subagents, {
+				model,
+				tools: baseTools,
+				environment: { stream, profile, toolInvocationToken: request.toolInvocationToken, mcpToolNames },
+				projectContext,
+			}, token));
+			// A sub-agent that edits changes what the main agent's reads return.
+			answeredReads.clear();
 		}
 
 		// All other tool calls run inside a single collapsible progress section.
-		const agentToolCalls = toolCalls.filter(tc => tc.name !== SUBMIT_PLAN_TOOL_NAME && tc.name !== RUN_SUBAGENT_TOOL_NAME);
+		const agentToolCalls = toolCalls.filter(tc => tc.name !== TASK_TOOL_NAME);
 		if (agentToolCalls.length > 0 && !token.isCancellationRequested) {
 			let toolsDoneResolve!: () => void;
 			const toolsDone = new Promise<void>(resolve => { toolsDoneResolve = resolve; });
@@ -485,83 +458,7 @@ export async function handleChatRequest(
 						if (token.isCancellationRequested) {
 							break;
 						}
-						const readSignature = REPEATABLE_READ_TOOLS.has(tc.name) ? `${tc.name}:${JSON.stringify(tc.input)}` : undefined;
-						if (readSignature !== undefined) {
-							if (answeredReads.has(readSignature)) {
-								resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(
-									'You already made this exact call in this request and nothing has changed since. Reuse the earlier result and move on to the next step.',
-								)]));
-								continue;
-							}
-							answeredReads.add(readSignature);
-						}
-						if (tc.name === 'agent_search') {
-							const input = tc.input as { query: string; isRegex?: boolean; path?: string };
-							const text = clampToolResult(await searchWorkspace(input), profile);
-							searchCount++;
-							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
-						} else if (tc.name === 'agent_find_files') {
-							const input = tc.input as { name: string; path?: string };
-							const text = clampToolResult(await findFiles(input), profile);
-							searchCount++;
-							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
-						} else if (tc.name === WRITE_FILE_TOOL_NAME) {
-							const input = tc.input as { path: string; content: string };
-							const uri = resolveUri(input.path);
-							const summary = await applyFileEdit(input, stream as ChatStreamWithEdits);
-							// The workspace changed, so earlier reads may now be stale.
-							answeredReads.clear();
-							accessedUris.push(uri);
-							taskProgress.report(new vscode.ChatResponseReferencePart(uri));
-							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(summary)]));
-						} else if (tc.name === EDIT_FILE_TOOL_NAME) {
-							const input = tc.input as EditFileInput;
-							const uri = resolveUri(input.path);
-							const outcome = await computeFileEdit(input);
-							if (outcome.content !== undefined) {
-								await applyFileEdit({ path: input.path, content: outcome.content }, stream as ChatStreamWithEdits);
-								answeredReads.clear();
-								accessedUris.push(uri);
-								taskProgress.report(new vscode.ChatResponseReferencePart(uri));
-							}
-							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(outcome.message)]));
-						} else if (tc.name === 'agent_read_file') {
-							const input = tc.input as ReadFileInput;
-							const uri = resolveUri(input.path);
-							// Budgeted rather than clamped: the reader cuts on a line
-							// boundary and tells the model which offset continues the file.
-							const text = await readFileForModel(input, profile.maxToolResultChars);
-							accessedUris.push(uri);
-							taskProgress.report(new vscode.ChatResponseReferencePart(uri));
-							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
-						} else if (tc.name === OPEN_FILE_TOOL_NAME) {
-							const input = tc.input as OpenFileInput;
-							const uri = resolveUri(input.path);
-							const summary = await openFileInEditor(input);
-							accessedUris.push(uri);
-							taskProgress.report(new vscode.ChatResponseReferencePart(uri));
-							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(summary)]));
-						} else if (tc.name === MULTI_EDIT_TOOL_NAME) {
-							const input = tc.input as MultiEditInput;
-							const uri = resolveUri(input.path);
-							const outcome = await computeMultiFileEdit(input);
-							if (outcome.content !== undefined) {
-								await applyFileEdit({ path: input.path, content: outcome.content }, stream as ChatStreamWithEdits);
-								answeredReads.clear();
-								accessedUris.push(uri);
-								taskProgress.report(new vscode.ChatResponseReferencePart(uri));
-							}
-							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(outcome.message)]));
-						} else if (tc.name === 'agent_diagnostics') {
-							const text = clampToolResult(await collectDiagnostics(tc.input as DiagnosticsInput), profile);
-							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
-						} else if (tc.name === 'agent_git_status') {
-							const text = clampToolResult(await gitStatus(tc.input as GitInput), profile);
-							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
-						} else if (tc.name === 'agent_git_diff') {
-							const text = clampToolResult(await gitDiff(tc.input as GitDiffInput), profile);
-							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
-						} else if (tc.name === TODO_TOOL_NAME) {
+						if (tc.name === TODO_TOOL_NAME) {
 							const parsed = parseTodos(tc.input);
 							if (parsed.todos) {
 								todos = parsed.todos;
@@ -570,37 +467,18 @@ export async function handleChatRequest(
 							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [
 								new vscode.LanguageModelTextPart(parsed.todos ? renderTodosForModel(parsed.todos) : parsed.error!),
 							]));
-						} else if (tc.name === 'agent_list_dir') {
-							const input = tc.input as { path?: string };
-							const text = clampToolResult(await listDirectory(input.path), profile);
-							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(text)]));
-						} else {
-							// agent_run_command, ferramentas MCP e desconhecidas — o VS Code
-							// cuida dos diálogos de confirmação.
-							try {
-								const result = await vscode.lm.invokeTool(tc.name, {
-									input: tc.input,
-									toolInvocationToken: request.toolInvocationToken,
-								}, token);
-								resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, result.content as Array<vscode.LanguageModelTextPart | vscode.LanguageModelPromptTsxPart>));
-							} catch (err) {
-								const message = err instanceof Error ? err.message : String(err);
-								// The next step travels with the error on purpose: a small model
-								// that receives only a failure stops and hands the task back to
-								// the user, which is never the right answer while other tools
-								// are still available.
-								//
-								// A saída indicada muda conforme a origem: mandar quem falhou numa
-								// ferramenta MCP tentar `agent_search` é conselho ruim — o trabalho
-								// dela é com um serviço externo, e nenhuma ferramenta local o faz.
-								const nextStep = mcpToolNames.has(tc.name)
-									? 'Essa ferramenta vem de um servidor MCP externo; nenhuma ferramenta local faz o trabalho dela. Se o erro indicar falta de autenticação ou servidor fora do ar, diga isso ao usuário e siga com o que for possível sem ela.'
-									: 'Não repita essa chamada — faça o mesmo trabalho com outra ferramenta (`agent_search` para um símbolo, `agent_find_files` para um arquivo, `agent_list_dir` para ver o que existe) e siga sem perguntar nada ao usuário.';
-								resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [new vscode.LanguageModelTextPart(
-									`Erro da ferramenta ${tc.name}: ${message}. ${nextStep}`,
-								)]));
-							}
+							continue;
+						}
+						const outcome = await runAgentTool(tc, toolEnvironment, token);
+						resultParts.push(outcome.part);
+						if (outcome.kind === 'search') {
+							searchCount++;
+						} else if (outcome.kind === 'command') {
 							cmdCount++;
+						}
+						if (outcome.uri) {
+							accessedUris.push(outcome.uri);
+							taskProgress.report(new vscode.ChatResponseReferencePart(outcome.uri));
 						}
 					}
 				} finally {
@@ -1232,63 +1110,6 @@ function progressLabel(toolCalls: readonly vscode.LanguageModelToolCallPart[]): 
 	return 'Analisando...';
 }
 
-async function executePlanTool(
-	toolCall: vscode.LanguageModelToolCallPart,
-	model: vscode.LanguageModelChat,
-	subagentTools: readonly vscode.LanguageModelChatTool[],
-	stream: vscode.ChatResponseStream,
-	token: vscode.CancellationToken,
-): Promise<string> {
-	let plan;
-	try {
-		plan = parsePlan(toolCall.input);
-	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		stream.markdown(`\n\n_Plano rejeitado_: ${message}\n\n`);
-		return `Plan validation failed: ${message}. Adjust the plan and try again, or do the work inline without submitting a plan.`;
-	}
-
-	const runner = new PlanRunner();
-	const result = await runner.run(plan, {
-		stream,
-		subagentCtx: { model, tools: subagentTools, globalContext: '' },
-	}, token);
-
-	const lines: string[] = [];
-	lines.push(result.success ? 'Plan completed successfully.' : 'Plan partially completed; some steps failed or were skipped.');
-	for (const r of result.results) {
-		lines.push(`- ${r.id} [${r.status}]: ${r.summary || r.error || ''}`);
-	}
-	return lines.join('\n');
-}
-
-/** Dispatch a single on-demand sub-agent and stream its progress. Returns the summary fed back to the main agent. */
-async function executeSubagentTool(
-	toolCall: vscode.LanguageModelToolCallPart,
-	model: vscode.LanguageModelChat,
-	subagentTools: readonly vscode.LanguageModelChatTool[],
-	stream: vscode.ChatResponseStream,
-	token: vscode.CancellationToken,
-): Promise<string> {
-	const input = toolCall.input as { task?: string; context?: string };
-	const task = typeof input.task === 'string' ? input.task.trim() : '';
-	if (task.length < 8) {
-		return 'Tarefa do subagente inválida: forneça uma descrição completa e autocontida (mínimo 8 caracteres).';
-	}
-	stream.markdown(`\n\n🤖 **Subagente** — ${truncate(task, 140)}\n`);
-	const result = await runStandaloneSubagent(task, input.context ?? '', { model, tools: subagentTools, globalContext: '' }, token);
-	if (result.status === 'done') {
-		stream.markdown(`\n✅ **Subagente concluído** — ${truncate(result.summary, 200)}\n`);
-		return result.summary || 'Subagente concluiu a tarefa.';
-	}
-	stream.markdown(`\n❌ **Subagente falhou** — ${result.error ?? 'erro desconhecido'}\n`);
-	if (result.summary) {
-		stream.markdown(`\n${truncate(result.summary, 400)}\n`);
-	}
-	const partial = result.summary ? ` Progresso parcial: ${result.summary}` : '';
-	return `Subagente não concluiu: ${result.error ?? 'erro desconhecido'}.${partial}`;
-}
-
 /** Truncate a string to at most `max` characters, appending an ellipsis when cut. */
 function truncate(text: string, max: number): string {
 	const trimmed = text.trim();
@@ -1354,9 +1175,6 @@ function collectTools(profile: IAgentProfile, browserWanted: boolean): vscode.La
 	// fails to invoke — and a model that gets an error with no way forward stops
 	// and asks the user to do the work by hand.
 	const graphEnabled = config.get<boolean>('codeGraph.enabled', false);
-	// Same reasoning for the semantic index: the manifest always contributes the
-	// tool, but it only has an implementation while the setting is on.
-	const semanticIndexEnabled = config.get<boolean>('semanticIndex.enabled', true);
 	const mcpEnabled = config.get<boolean>('mcp.enabled', true);
 	const mcpLimit = config.get<number>('mcp.maxTools', 48);
 	const result: vscode.LanguageModelChatTool[] = [];
@@ -1380,9 +1198,6 @@ function collectTools(profile: IAgentProfile, browserWanted: boolean): vscode.La
 			continue;
 		}
 		if (!graphEnabled && info.name === 'agent_code_graph') {
-			continue;
-		}
-		if (!semanticIndexEnabled && info.name === 'agent_codebase_search') {
 			continue;
 		}
 		result.push({
@@ -1579,13 +1394,18 @@ function formatBytes(n: number): string {
 }
 
 function buildSystemPrompt(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[], profile: IAgentProfile): string {
-	const sections: string[] = [profile.systemPrompt];
+	return [profile.systemPrompt, buildProjectContext(rules, memories)].filter(Boolean).join('\n\n');
+}
+
+/** Workspace roots, project instructions, rules and memories: what any agent working here should know. */
+function buildProjectContext(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[]): string {
+	const sections: string[] = [];
 	const workspaceSection = describeWorkspaceRoots();
 	if (workspaceSection) {
 		sections.push(workspaceSection);
 	}
-	if (rules?.rootAgentsMd) {
-		sections.push('# Project instructions (AGENTS.md)\n\n' + rules.rootAgentsMd);
+	for (const instructions of rules?.projectInstructions ?? []) {
+		sections.push(`# Project instructions (${instructions.file})\n\n${instructions.body}`);
 	}
 	if (rules && rules.always.length > 0) {
 		sections.push('# Always-on rules\n\n' + rules.always.map(renderRule).join('\n\n'));
@@ -1669,28 +1489,4 @@ function collectResponseText(turn: vscode.ChatResponseTurn): string {
 		}
 	}
 	return text;
-}
-
-/**
- * Streams a file write as a textEdit so VS Code shows the diff inline
- * with Accept / Reject decorations instead of writing directly to disk.
- */
-async function applyFileEdit(
-	input: { path: string; content: string },
-	stream: ChatStreamWithEdits,
-): Promise<string> {
-	const uri = resolveUri(input.path);
-	let range: vscode.Range;
-	try {
-		const oldBytes = await vscode.workspace.fs.readFile(uri);
-		const oldText = Buffer.from(oldBytes).toString('utf8');
-		const lines = oldText.split('\n');
-		range = new vscode.Range(0, 0, lines.length - 1, lines[lines.length - 1].length);
-	} catch {
-		// File does not exist yet — insert from position 0.
-		range = new vscode.Range(0, 0, 0, 0);
-	}
-	stream.textEdit(uri, new vscode.TextEdit(range, input.content));
-	stream.textEdit(uri, true);
-	return `Alterações em ${input.path} exibidas no editor para revisão (Aceitar / Rejeitar).`;
 }

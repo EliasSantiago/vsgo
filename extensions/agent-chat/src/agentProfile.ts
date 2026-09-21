@@ -21,7 +21,7 @@ export interface IAgentProfile {
 	readonly maxTurns: number;
 	/** Base system prompt, before workspace, rules and memories are appended. */
 	readonly systemPrompt: string;
-	/** Whether the planner and sub-agent tools are offered. */
+	/** Whether the `agent_task` delegation tool is offered. */
 	readonly allowDelegation: boolean;
 	/** Whether the Integrated Browser tools are offered. */
 	readonly allowBrowser: boolean;
@@ -183,10 +183,13 @@ function compactProfile(): IAgentProfile {
 		// budget below the full one truncated those runs mid-task.
 		maxTurns: 32,
 		systemPrompt: COMPACT_SYSTEM_PROMPT,
-		// Same tools the hosted models get. Withholding them did not make a small
-		// model choose better — it made tasks impossible, and the model answered
-		// by describing the work it could not do.
-		allowDelegation: true,
+		// A small model writes poor hand-off prompts and reads reports badly, and
+		// sub-agents all hit the same local server, so running them side by side
+		// is slower than doing the work in sequence.
+		allowDelegation: false,
+		// Same browser tools the hosted models get. Withholding them did not make a
+		// small model choose better — it made tasks impossible, and the model
+		// answered by describing the work it could not do.
 		allowBrowser: true,
 		// A 16k context cannot absorb a 100k-character file; one unbounded read
 		// would evict the system prompt and the task itself.
