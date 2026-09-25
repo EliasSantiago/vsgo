@@ -13,12 +13,13 @@ import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { AICustomizationManagementSection } from './aiCustomizationManagement.js';
-import { agentIcon, instructionsIcon, pluginIcon, skillIcon, hookIcon } from './aiCustomizationIcons.js';
+import { agentIcon, instructionsIcon, pluginIcon, skillIcon, hookIcon, toolsIcon } from './aiCustomizationIcons.js';
 import { IAICustomizationWorkspaceService, IWelcomePageFeatures } from '../../common/aiCustomizationWorkspaceService.js';
 import { PromptsType } from '../../common/promptSyntax/promptTypes.js';
-import type { IAICustomizationWelcomePageImplementation, IWelcomePageCallbacks } from './aiCustomizationWelcomePage.js';
+import type { IAICustomizationWelcomePageImplementation, ICustomizationMigrationCategorySummary, IWelcomePageCallbacks } from './aiCustomizationWelcomePage.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
 import { getDefaultHoverDelegate } from '../../../../../base/browser/ui/hover/hoverDelegateFactory.js';
+import { CONFIGURE_DICTATION_INSTRUCTIONS_ACTION_ID, CONFIGURE_VOICE_INSTRUCTIONS_ACTION_ID } from '../actions/configureVoiceInstructionsAction.js';
 
 const $ = DOM.$;
 
@@ -30,6 +31,13 @@ interface IPromptLaunchersCategoryDescription {
 	readonly promptType?: PromptsType;
 }
 
+interface IStandaloneCustomizationDescription {
+	readonly label: string;
+	readonly icon: ThemeIcon;
+	readonly description: string;
+	readonly commandId: string;
+}
+
 export class PromptLaunchersAICustomizationWelcomePage extends Disposable implements IAICustomizationWelcomePageImplementation {
 
 	private readonly cardDisposables = this._register(new DisposableStore());
@@ -37,52 +45,77 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 	readonly container: HTMLElement;
 	private readonly scrollable: DomScrollableElement;
 	private cardsContainer: HTMLElement | undefined;
+	private firstCard: HTMLElement | undefined;
+	private heading: HTMLElement | undefined;
 	private inputElement: HTMLInputElement | undefined;
+	private visibleSectionIds = new Set<AICustomizationManagementSection>();
 
 	private sentLabel: HTMLElement | undefined;
 	private submitBtn: HTMLElement | undefined;
 	private inputRow: HTMLElement | undefined;
+	private migrationCategories: readonly ICustomizationMigrationCategorySummary[] = [];
 
 	private readonly categoryDescriptions: IPromptLaunchersCategoryDescription[] = [
 		{
 			id: AICustomizationManagementSection.Agents,
 			label: localize('agents', "Agentes"),
 			icon: agentIcon,
-			description: localize('agentsDesc', "Defina agentes personalizados com personas, acesso a ferramentas e instruções específicas para cada tarefa."),
+			description: localize('agentsDesc', "Crie agentes especializados para tarefas de desenvolvimento focadas. Controle as instruções, as ferramentas e o comportamento deles."),
 			promptType: PromptsType.agent,
 		},
 		{
 			id: AICustomizationManagementSection.Skills,
 			label: localize('skills', "Skills"),
 			icon: skillIcon,
-			description: localize('skillsDesc', "Crie arquivos de skill reutilizáveis com conhecimento e fluxos de trabalho de um domínio específico."),
+			description: localize('skillsDesc', "Adicione conhecimento e fluxos de trabalho reutilizáveis para tarefas especializadas. Os agentes carregam as skills relevantes quando precisam."),
 			promptType: PromptsType.skill,
 		},
 		{
 			id: AICustomizationManagementSection.Instructions,
 			label: localize('instructions', "Instruções"),
 			icon: instructionsIcon,
-			description: localize('instructionsDesc', "Defina instruções sempre ativas que guiam o comportamento da IA no seu workspace ou perfil de usuário."),
+			description: localize('instructionsDesc', "Defina orientações que moldam como os agentes trabalham. Aplique-as no workspace inteiro ou guarde-as no seu perfil de usuário."),
 			promptType: PromptsType.instructions,
 		},
 		{
 			id: AICustomizationManagementSection.Hooks,
 			label: localize('hooks', "Hooks"),
 			icon: hookIcon,
-			description: localize('hooksDesc', "Configure ações automáticas disparadas por eventos como salvar arquivos ou executar tarefas."),
+			description: localize('hooksDesc', "Execute comandos automáticos em pontos-chave do ciclo de vida do agente. Use hooks para validar, formatar ou coordenar o trabalho."),
 			promptType: PromptsType.hook,
 		},
 		{
 			id: AICustomizationManagementSection.McpServers,
 			label: localize('mcpServers', "Servidores MCP"),
 			icon: Codicon.server,
-			description: localize('mcpServersDesc', "Conecte servidores de ferramentas externos que ampliam a IA com ferramentas e fontes de dados próprias."),
+			description: localize('mcpServersDesc', "Conecte os agentes a ferramentas e dados externos por meio de servidores MCP. Gerencie os servidores disponíveis para o seu agente."),
 		},
 		{
 			id: AICustomizationManagementSection.Plugins,
 			label: localize('plugins', "Plugins"),
 			icon: pluginIcon,
-			description: localize('pluginsDesc', "Instale e gerencie plugins do agente que adicionam ferramentas, skills e integrações."),
+			description: localize('pluginsDesc', "Instale pacotes reutilizáveis que ampliam o agente. Plugins podem adicionar ferramentas, skills, agentes, hooks e servidores MCP."),
+		},
+		{
+			id: AICustomizationManagementSection.Tools,
+			label: localize('tools', "Tools"),
+			icon: toolsIcon,
+			description: localize('toolsDesc', "Review the tools available to the active agent. Enable or disable configurable tool groups."),
+		},
+	];
+
+	private readonly standaloneCustomizations: IStandaloneCustomizationDescription[] = [
+		{
+			label: localize('voiceModeInstructions', "Voice Mode Instructions"),
+			icon: Codicon.voiceMode,
+			description: localize('voiceModeInstructionsDesc', "Customize Voice Mode behavior and terminology with voice.md."),
+			commandId: CONFIGURE_VOICE_INSTRUCTIONS_ACTION_ID,
+		},
+		{
+			label: localize('dictationInstructions', "Dictation Instructions"),
+			icon: Codicon.mic,
+			description: localize('dictationInstructionsDesc', "Customize Dictation terminology and transcript formatting with dictation.md."),
+			commandId: CONFIGURE_DICTATION_INSTRUCTIONS_ACTION_ID,
 		},
 	];
 
@@ -90,9 +123,10 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 		parent: HTMLElement,
 		private readonly welcomePageFeatures: IWelcomePageFeatures | undefined,
 		private readonly callbacks: IWelcomePageCallbacks,
-		_commandService: ICommandService,
+		private readonly commandService: ICommandService,
 		private readonly workspaceService: IAICustomizationWorkspaceService,
 		private readonly hoverService: IHoverService,
+		private harnessLabel: string,
 	) {
 		super();
 
@@ -108,13 +142,13 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 
 		// Re-scan whenever the wrapper changes size so the scrollbar reflects
 		// the current overflow state. rebuildCards() scans after content changes.
-		const resizeObserver = this._register(new DOM.DisposableResizeObserver(() => this.scrollable.scanDomNode()));
+		const resizeObserver = this._register(new DOM.DisposableResizeObserver('AICustomizationWelcomePagePromptLaunchers.scrollable', () => this.scrollable.scanDomNode()));
 		this._register(resizeObserver.observe(scrollableNode));
 
 		const welcomeInner = DOM.append(this.container, $('.welcome-prompts-inner'));
 
-		const heading = DOM.append(welcomeInner, $('h2.welcome-prompts-heading'));
-		heading.textContent = localize('welcomeHeading', "Personalizações do Agente");
+		this.heading = DOM.append(welcomeInner, $('h2.welcome-prompts-heading'));
+		this.updateHeading();
 
 		const subtitle = DOM.append(welcomeInner, $('p.welcome-prompts-subtitle'));
 		subtitle.textContent = localize('welcomeSubtitle', "Ajuste como os agentes trabalham nos seus projetos. Configure personalizações do workspace para o time inteiro ou crie as suas, que te acompanham entre projetos.");
@@ -174,6 +208,8 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 					this.sentLabel.remove();
 				}
 				this.sentLabel = DOM.append(inputRow, $('span.welcome-prompts-sent-label'));
+				this.sentLabel.setAttribute('role', 'status');
+				this.sentLabel.setAttribute('aria-live', 'polite');
 				this.sentLabel.textContent = localize('sentToChat', "Enviado para o chat ✓");
 
 				this.callbacks.prefillChat(query, { isPartialQuery: false, newChat: true });
@@ -218,18 +254,38 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 		if (!this.cardsContainer) {
 			return;
 		}
+		this.visibleSectionIds = new Set(visibleSectionIds);
 
 		this.cardDisposables.clear();
 		DOM.clearNode(this.cardsContainer);
+		this.firstCard = undefined;
 
-		for (const category of this.categoryDescriptions) {
-			if (!visibleSectionIds.has(category.id)) {
+		if (this.migrationCategories.length > 0) {
+			const migrationGrid = this.renderOverviewSection(
+				localize('overviewNeedsAttention', "Needs Attention"),
+				localize('overviewNeedsAttentionDescription', "Review customizations that need an update for the active agent."),
+				'welcome-prompts-attention-section',
+			);
+			this.renderCustomizationMigrationCard(migrationGrid, this.migrationCategories);
+		}
+
+		const exploreGrid = this.renderOverviewSection(
+			localize('overviewExploreCustomizations', "Explore Customizations"),
+			localize('overviewExploreCustomizationsDescription', "Manage what the active agent knows and can do."),
+			'welcome-prompts-explore-section',
+		);
+		for (const section of this.workspaceService.managementSections) {
+			const category = this.categoryDescriptions.find(candidate => candidate.id === section);
+			if (!category || !visibleSectionIds.has(category.id)) {
 				continue;
 			}
 
-			const card = DOM.append(this.cardsContainer, $('.welcome-prompts-card'));
-			card.setAttribute('tabindex', '0');
-			card.setAttribute('role', 'button');
+			const card = DOM.append(exploreGrid, $('button.welcome-prompts-card.welcome-prompts-navigation-card')) as HTMLButtonElement;
+			card.type = 'button';
+			card.setAttribute('aria-label', localize('openCustomizationCategory', "Open {0}", category.label));
+			if (!this.firstCard) {
+				this.firstCard = card;
+			}
 
 			const cardHeader = DOM.append(card, $('.welcome-prompts-card-header'));
 			const iconEl = DOM.append(cardHeader, $('.welcome-prompts-card-icon'));
@@ -240,47 +296,122 @@ export class PromptLaunchersAICustomizationWelcomePage extends Disposable implem
 			const descEl = DOM.append(card, $('p.welcome-prompts-card-description'));
 			descEl.textContent = category.description;
 
-			const footer = DOM.append(card, $('.welcome-prompts-card-footer'));
-			if (category.promptType) {
-				const generateBtn = DOM.append(footer, $('button.welcome-prompts-card-action'));
-				generateBtn.textContent = localize('new', "Novo...");
-				generateBtn.setAttribute('aria-label', localize('newCategoryAriaLabel', "Novo {0}...", category.label));
-				this.cardDisposables.add(DOM.addDisposableListener(generateBtn, 'click', e => {
-					e.stopPropagation();
-					this.callbacks.closeEditor();
-					if (this.workspaceService.isSessionsWindow) {
-						const typeLabel = category.label.toLowerCase().replace(/s$/, '');
-						this.callbacks.prefillChat(`Create me a custom ${typeLabel} that `, { isPartialQuery: true, newChat: true });
-					} else {
-						this.workspaceService.generateCustomization(category.promptType!);
-					}
-				}));
-			} else {
-				const browseBtn = DOM.append(footer, $('button.welcome-prompts-card-action'));
-				browseBtn.textContent = localize('browse', "Explorar...");
-				browseBtn.setAttribute('aria-label', localize('browseCategoryAriaLabel', "Explorar {0}...", category.label));
-				this.cardDisposables.add(DOM.addDisposableListener(browseBtn, 'click', e => {
-					e.stopPropagation();
-					this.callbacks.selectSectionWithMarketplace(category.id);
-				}));
-			}
-
 			this.cardDisposables.add(DOM.addDisposableListener(card, 'click', () => {
 				this.callbacks.selectSection(category.id);
 			}));
-			this.cardDisposables.add(DOM.addDisposableListener(card, 'keydown', e => {
-				if (e.key === 'Enter' || e.key === ' ') {
-					e.preventDefault();
-					this.callbacks.selectSection(category.id);
-				}
-			}));
+		}
+
+		if (!this.workspaceService.isSessionsWindow) {
+			const otherGrid = this.renderOverviewSection(
+				localize('overviewOtherCustomizations', "Other Customizations"),
+				localize('overviewOtherCustomizationsDescription', "Configure specialized voice and dictation behavior."),
+				'welcome-prompts-other-section',
+			);
+			for (const customization of this.standaloneCustomizations) {
+				this.renderStandaloneCustomization(otherGrid, customization);
+			}
 		}
 
 		// Content changed — recompute scroll dimensions.
 		this.scrollable.scanDomNode();
 	}
 
+	private renderOverviewSection(title: string, description: string, className: string): HTMLElement {
+		const section = DOM.append(this.cardsContainer!, $('.welcome-prompts-overview-section'));
+		section.classList.add(className);
+		const heading = DOM.append(section, $('h3.welcome-prompts-overview-section-title'));
+		heading.textContent = title;
+		const descriptionElement = DOM.append(section, $('p.welcome-prompts-overview-section-description'));
+		descriptionElement.textContent = description;
+		return DOM.append(section, $('.welcome-prompts-overview-grid'));
+	}
+
+	private renderStandaloneCustomization(parent: HTMLElement, customization: IStandaloneCustomizationDescription): void {
+		const card = DOM.append(parent, $('button.welcome-prompts-card.welcome-prompts-navigation-card')) as HTMLButtonElement;
+		card.type = 'button';
+		card.setAttribute('aria-label', localize('configureCategoryAriaLabel', "Configure {0}", customization.label));
+		if (!this.firstCard) {
+			this.firstCard = card;
+		}
+
+		const cardHeader = DOM.append(card, $('.welcome-prompts-card-header'));
+		const iconEl = DOM.append(cardHeader, $('.welcome-prompts-card-icon'));
+		iconEl.classList.add(...ThemeIcon.asClassNameArray(customization.icon));
+		const labelEl = DOM.append(cardHeader, $('span.welcome-prompts-card-label'));
+		labelEl.textContent = customization.label;
+
+		const descEl = DOM.append(card, $('p.welcome-prompts-card-description'));
+		descEl.textContent = customization.description;
+
+		const configure = () => {
+			void this.commandService.executeCommand(customization.commandId);
+		};
+		this.cardDisposables.add(DOM.addDisposableListener(card, 'click', configure));
+	}
+
+	setMigrationCategories(categories: readonly ICustomizationMigrationCategorySummary[]): void {
+		const didChange = categories.length !== this.migrationCategories.length
+			|| categories.some((category, index) => {
+				const previous = this.migrationCategories[index];
+				return previous.id !== category.id
+					|| previous.count !== category.count
+					|| previous.description !== category.description;
+			});
+		this.migrationCategories = categories;
+		if (didChange) {
+			this.rebuildCards(this.visibleSectionIds);
+		}
+	}
+
+	setHarnessLabel(label: string): void {
+		if (this.harnessLabel === label) {
+			return;
+		}
+		this.harnessLabel = label;
+		this.updateHeading();
+	}
+
+	private updateHeading(): void {
+		if (this.heading) {
+			this.heading.textContent = localize('welcomeHeading', "Personalizações do Agente");
+		}
+	}
+
+	private renderCustomizationMigrationCard(parent: HTMLElement, categories: readonly ICustomizationMigrationCategorySummary[]): void {
+		const migrationCard = DOM.append(parent, $('button.welcome-prompts-card.welcome-prompts-migration-card')) as HTMLButtonElement;
+		migrationCard.type = 'button';
+		const totalCount = categories.reduce((total, category) => total + category.count, 0);
+		migrationCard.setAttribute('aria-label', localize('reviewCustomizationMigrationsAriaLabel', "Review {0} customizations that need migration", totalCount));
+
+		const cardHeader = DOM.append(migrationCard, $('.welcome-prompts-card-header'));
+		const iconEl = DOM.append(cardHeader, $('.welcome-prompts-card-icon'));
+		iconEl.classList.add(...ThemeIcon.asClassNameArray(Codicon.warning));
+		iconEl.setAttribute('aria-hidden', 'true');
+		const labelEl = DOM.append(cardHeader, $('span.welcome-prompts-card-label'));
+		labelEl.textContent = localize('customizationMigrationOverviewCardLabel', "Review Customization Migrations");
+
+		const descEl = DOM.append(migrationCard, $('p.welcome-prompts-card-description'));
+		descEl.textContent = totalCount === 1
+			? localize('customizationMigrationOverviewCardDescriptionSingle', "1 customization needs an update before it can be used by {0}. Review what will change before migrating.", this.harnessLabel)
+			: localize('customizationMigrationOverviewCardDescription', "{0} customizations need an update before they can be used by {1}. Review what will change before migrating.", totalCount, this.harnessLabel);
+
+		if (!this.firstCard) {
+			this.firstCard = migrationCard;
+		}
+		const actionLabel = DOM.append(migrationCard, $('span.welcome-prompts-card-action-label'));
+		actionLabel.textContent = localize('reviewCustomizationMigrations', "Review Migrations...");
+		this.cardDisposables.add(DOM.addDisposableListener(migrationCard, 'click', () => this.callbacks.reviewMigrations()));
+	}
+
 	focus(): void {
-		this.inputElement?.focus();
+		// Prefer the prompt input so screen reader / keyboard users land on a meaningful
+		// control. If the input isn't rendered (e.g. when the getting-started banner is
+		// disabled), fall back to the first focusable card so focus stays inside the
+		// welcome page rather than escaping to the surrounding workbench editor.
+		if (this.inputElement) {
+			this.inputElement.focus();
+			return;
+		}
+		this.firstCard?.focus();
 	}
 }

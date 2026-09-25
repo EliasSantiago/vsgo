@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import './searchEditorEmptyState.contribution.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { dirname } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -33,7 +34,7 @@ MenuRegistry.appendMenuItem(MenuId.ViewTitle, {
 		title: localize2('openSearch', "Search"),
 		icon: Codicon.search,
 	},
-	group: 'navigation',
+	group: '1_files',
 	order: 0,
 	when: ContextKeyExpr.equals('view', SESSIONS_FILES_VIEW_ID),
 });

@@ -11,28 +11,35 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import {
 	AgentHostPermissionMode,
-	IAgentHostPermissionService,
+	IAgentHostResourceService,
 	IPendingResourceRequest,
-} from '../../../../../../platform/agentHost/common/agentHostPermissionService.js';
-import {
-	IRemoteAgentHostConnectionInfo,
-	IRemoteAgentHostEntry,
-	IRemoteAgentHostService,
-	RemoteAgentHostEntryType,
-} from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
+} from '../../../../../../platform/agentHost/common/agentHostResourceService.js';
+import { AGENT_HOST_SCHEME, agentHostAuthority } from '../../../../../../platform/agentHost/common/agentHostUri.js';
+import { ILabelService } from '../../../../../../platform/label/common/label.js';
 import { TestInstantiationService } from '../../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { Event } from '../../../../../../base/common/event.js';
+import { MockLabelService } from '../../../../../services/label/test/common/mockLabelService.js';
 import { AgentHostPermissionUiContribution } from '../../../browser/agentSessions/agentHost/agentHostPermissionUiContribution.js';
 import {
+	ChatInputNotificationActionKind,
 	IChatInputNotification,
+	IChatInputNotificationCommandAction,
 	IChatInputNotificationService,
 } from '../../../browser/widget/input/chatInputNotificationService.js';
 
-class FakePermissionService extends Disposable implements IAgentHostPermissionService {
+class FakePermissionService extends Disposable implements IAgentHostResourceService {
 	declare readonly _serviceBrand: undefined;
 	readonly pending: ISettableObservable<readonly IPendingResourceRequest[]> = observableValue('pending', []);
 	readonly allPending: IObservable<readonly IPendingResourceRequest[]> = this.pending;
 
+	list = async () => { throw new Error('not implemented'); };
+	read = async () => { throw new Error('not implemented'); };
+	write = async () => { throw new Error('not implemented'); };
+	del = async () => { throw new Error('not implemented'); };
+	move = async () => { throw new Error('not implemented'); };
+	copy = async () => { throw new Error('not implemented'); };
+	resolve = async () => { throw new Error('not implemented'); };
+	mkdir = async () => { throw new Error('not implemented'); };
 	check = async () => true;
 	request = async () => { /* */ };
 	pendingFor = () => this.pending;
@@ -44,6 +51,7 @@ class FakePermissionService extends Disposable implements IAgentHostPermissionSe
 class FakeNotificationService implements IChatInputNotificationService {
 	declare readonly _serviceBrand: undefined;
 	readonly onDidChange: Event<void> = Event.None;
+	readonly onDidDismiss: Event<string> = Event.None;
 	readonly setCalls: IChatInputNotification[] = [];
 	readonly deleteCalls: string[] = [];
 
@@ -53,30 +61,31 @@ class FakeNotificationService implements IChatInputNotificationService {
 	deleteNotification(id: string): void {
 		this.deleteCalls.push(id);
 	}
-	dismissNotification(): void { /* */ }
+	dismissNotification(_id: string): void { /* */ }
 	getActiveNotification(): IChatInputNotification | undefined { return undefined; }
+	refresh(): void { /* */ }
 	handleMessageSent(): void { /* */ }
+	announceRendered(): void { /* */ }
 }
 
-class FakeRemoteAgentHostService implements IRemoteAgentHostService {
-	declare readonly _serviceBrand: undefined;
-	readonly onDidChangeConnections: Event<void> = Event.None;
-	readonly connections: readonly IRemoteAgentHostConnectionInfo[] = [];
-	readonly configuredEntries: readonly IRemoteAgentHostEntry[] = [];
+/**
+ * Mock label service that resolves host labels for the {@link AGENT_HOST_SCHEME}
+ * by mapping authorities encoded via {@link agentHostAuthority} to the
+ * friendly name registered through {@link StubLabelService.setHostName}.
+ * Unknown authorities are returned unchanged.
+ */
+class StubLabelService extends MockLabelService {
+	private readonly _hostLabels = new Map<string, string>();
 
-	private readonly _entries = new Map<string, IRemoteAgentHostEntry>();
-
-	setEntry(address: string, name: string): void {
-		this._entries.set(address, { name, connection: { type: RemoteAgentHostEntryType.WebSocket, address } });
+	setHostName(address: string, name: string): void {
+		this._hostLabels.set(agentHostAuthority(address), name);
 	}
 
-	getConnection() { return undefined; }
-	async addRemoteAgentHost(): Promise<IRemoteAgentHostConnectionInfo> { throw new Error('not used'); }
-	async removeRemoteAgentHost(): Promise<void> { /* */ }
-	reconnect(): void { /* */ }
-	async addManagedConnection(): Promise<IRemoteAgentHostConnectionInfo> { throw new Error('not used'); }
-	getEntryByAddress(address: string): IRemoteAgentHostEntry | undefined {
-		return this._entries.get(address);
+	override getHostLabel(scheme: string, authority?: string): string {
+		if (scheme === AGENT_HOST_SCHEME && authority && this._hostLabels.has(authority)) {
+			return this._hostLabels.get(authority)!;
+		}
+		return authority ?? '';
 	}
 }
 
@@ -101,20 +110,20 @@ suite('AgentHostPermissionUiContribution', () => {
 
 	let permissionService: FakePermissionService;
 	let notificationService: FakeNotificationService;
-	let remoteAgentHostService: FakeRemoteAgentHostService;
+	let labelService: StubLabelService;
 
 	setup(() => {
 		permissionService = disposables.add(new FakePermissionService());
 		notificationService = new FakeNotificationService();
-		remoteAgentHostService = new FakeRemoteAgentHostService();
-		remoteAgentHostService.setEntry('host:1234', 'My Host');
+		labelService = new StubLabelService();
+		labelService.setHostName('host:1234', 'My Host');
 	});
 
 	function createContribution(): AgentHostPermissionUiContribution {
 		const instantiationService = disposables.add(new TestInstantiationService());
-		instantiationService.stub(IAgentHostPermissionService, permissionService);
+		instantiationService.stub(IAgentHostResourceService, permissionService);
 		instantiationService.stub(IChatInputNotificationService, notificationService);
-		instantiationService.stub(IRemoteAgentHostService, remoteAgentHostService);
+		instantiationService.stub(ILabelService, labelService);
 		const contribution = instantiationService.createInstance(AgentHostPermissionUiContribution);
 		disposables.add(contribution as unknown as IDisposable);
 		return contribution;
@@ -133,11 +142,13 @@ suite('AgentHostPermissionUiContribution', () => {
 		assert.strictEqual(notificationService.setCalls.length, 1);
 		const notification = notificationService.setCalls[0];
 		assert.ok(isMarkdownString(notification.message), 'message should be an IMarkdownString');
+		const actions = notification.actions.filter((action): action is IChatInputNotificationCommandAction => action.kind === ChatInputNotificationActionKind.Command);
+		assert.strictEqual(actions.length, notification.actions.length);
 		assert.strictEqual(
-			notification.actions.map(a => a.commandId).join(','),
+			actions.map(action => action.commandId).join(','),
 			'_agentHost.permission.deny,_agentHost.permission.allow,_agentHost.permission.allowAlways',
 		);
-		for (const action of notification.actions) {
+		for (const action of actions) {
 			assert.deepStrictEqual(action.commandArgs, [request.id], 'each action carries the request id');
 		}
 	});

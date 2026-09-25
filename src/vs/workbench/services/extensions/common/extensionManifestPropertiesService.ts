@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { IExtensionManifest, ExtensionUntrustedWorkspaceSupportType, ExtensionVirtualWorkspaceSupportType, IExtensionIdentifier, ALL_EXTENSION_KINDS, ExtensionIdentifierMap, IExtensionContributions } from '../../../../platform/extensions/common/extensions.js';
+import { IExtensionManifest, ExtensionUntrustedWorkspaceSupportType, ExtensionVirtualWorkspaceSupportType, IExtensionIdentifier, ALL_EXTENSION_KINDS, ExtensionIdentifierMap, IExtensionContributions, EXTENSIONS_ENABLE_AGENTS_WINDOW_CAPABILITY } from '../../../../platform/extensions/common/extensions.js';
 import { ExtensionKind } from '../../../../platform/environment/common/environment.js';
 import { ExtensionsRegistry } from './extensionsRegistry.js';
 import { getGalleryExtensionId } from '../../../../platform/extensionManagement/common/extensionManagementUtil.js';
@@ -22,6 +22,8 @@ import { isWeb } from '../../../../base/common/platform.js';
 
 export const IExtensionManifestPropertiesService = createDecorator<IExtensionManifestPropertiesService>('extensionManifestPropertiesService');
 
+export const EXTENSIONS_SUPPORT_AGENTS_WINDOW = 'extensions.supportAgentsWindow';
+
 const SESSIONS_WINDOW_ALLOWED_CONTRIBUTION_POINTS: ReadonlySet<keyof IExtensionContributions> = new Set([
 	'themes',
 	'iconThemes',
@@ -29,6 +31,7 @@ const SESSIONS_WINDOW_ALLOWED_CONTRIBUTION_POINTS: ReadonlySet<keyof IExtensionC
 	'colors',
 	'keybindings',
 	'jsonValidation',
+	'jsonValidationRegistry',
 	'localizations',
 	'grammars',
 	'languages',
@@ -62,6 +65,7 @@ export class ExtensionManifestPropertiesService extends Disposable implements IE
 
 	private _productVirtualWorkspaceSupportMap: ExtensionIdentifierMap<{ default?: boolean; override?: boolean }> | null = null;
 	private _configuredVirtualWorkspaceSupportMap: ExtensionIdentifierMap<boolean> | null = null;
+	private _configuredSessionsWindowSupportMap: ExtensionIdentifierMap<boolean> | null = null;
 
 	private readonly _configuredExtensionWorkspaceTrustRequestMap: ExtensionIdentifierMap<{ supported: ExtensionUntrustedWorkspaceSupportType; version?: string }>;
 	private readonly _productExtensionWorkspaceTrustRequestMap: Map<string, ExtensionUntrustedWorkspaceSupport>;
@@ -91,6 +95,18 @@ export class ExtensionManifestPropertiesService extends Disposable implements IE
 	}
 
 	canExecuteOnSessionsWindow(manifest: IExtensionManifest): boolean {
+		const configuredSessionsWindowSupport = this.getConfiguredSessionsWindowSupport(manifest);
+		if (configuredSessionsWindowSupport !== undefined) {
+			return configuredSessionsWindowSupport;
+		}
+
+		if (this.configurationService.getValue<boolean>(EXTENSIONS_ENABLE_AGENTS_WINDOW_CAPABILITY) && manifest.enabledApiProposals?.includes('agentsWindowActivation')) {
+			const declaredSessionsWindowSupport = manifest.capabilities?.agentsWindow?.supported;
+			if (declaredSessionsWindowSupport !== undefined) {
+				return declaredSessionsWindowSupport;
+			}
+		}
+
 		// In the sessions window only extensions that have no code are currently allowed to run
 		if (manifest.main || manifest.browser) {
 			return false;
@@ -369,6 +385,22 @@ export class ExtensionManifestPropertiesService extends Disposable implements IE
 
 		const extensionId = getGalleryExtensionId(manifest.publisher, manifest.name);
 		return this._configuredVirtualWorkspaceSupportMap.get(extensionId);
+	}
+
+	private getConfiguredSessionsWindowSupport(manifest: IExtensionManifest): boolean | undefined {
+		if (this._configuredSessionsWindowSupportMap === null) {
+			const configuredSessionsWindowSupportMap = new ExtensionIdentifierMap<boolean>();
+			const configuredSessionsWindowSupport = this.configurationService.getValue<{ [key: string]: boolean }>(EXTENSIONS_SUPPORT_AGENTS_WINDOW) || {};
+			for (const id of Object.keys(configuredSessionsWindowSupport)) {
+				if (configuredSessionsWindowSupport[id] !== undefined) {
+					configuredSessionsWindowSupportMap.set(id, configuredSessionsWindowSupport[id]);
+				}
+			}
+			this._configuredSessionsWindowSupportMap = configuredSessionsWindowSupportMap;
+		}
+
+		const extensionId = getGalleryExtensionId(manifest.publisher, manifest.name);
+		return this._configuredSessionsWindowSupportMap.get(extensionId);
 	}
 
 	private getConfiguredExtensionWorkspaceTrustRequest(manifest: IExtensionManifest): ExtensionUntrustedWorkspaceSupportType | undefined {

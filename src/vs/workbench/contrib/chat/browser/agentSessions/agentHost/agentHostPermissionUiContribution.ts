@@ -10,14 +10,16 @@ import { autorun } from '../../../../../../base/common/observable.js';
 import { localize } from '../../../../../../nls.js';
 import {
 	AgentHostPermissionMode,
-	IAgentHostPermissionService,
+	IAgentHostResourceService,
 	IPendingResourceRequest,
-} from '../../../../../../platform/agentHost/common/agentHostPermissionService.js';
-import { IRemoteAgentHostService } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
+} from '../../../../../../platform/agentHost/common/agentHostResourceService.js';
+import { AGENT_HOST_SCHEME, agentHostAuthority } from '../../../../../../platform/agentHost/common/agentHostUri.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
+import { ILabelService } from '../../../../../../platform/label/common/label.js';
 import { ServicesAccessor } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { IWorkbenchContribution } from '../../../../../common/contributions.js';
 import {
+	ChatInputNotificationActionKind,
 	ChatInputNotificationSeverity,
 	IChatInputNotification,
 	IChatInputNotificationService,
@@ -28,19 +30,19 @@ const ALLOW_ALWAYS_COMMAND = '_agentHost.permission.allowAlways';
 const DENY_COMMAND = '_agentHost.permission.deny';
 
 CommandsRegistry.registerCommand(ALLOW_COMMAND, (accessor: ServicesAccessor, requestId: string) => {
-	accessor.get(IAgentHostPermissionService).findPending(requestId)?.allow();
+	accessor.get(IAgentHostResourceService).findPending(requestId)?.allow();
 });
 
 CommandsRegistry.registerCommand(ALLOW_ALWAYS_COMMAND, (accessor: ServicesAccessor, requestId: string) => {
-	accessor.get(IAgentHostPermissionService).findPending(requestId)?.allowAlways();
+	accessor.get(IAgentHostResourceService).findPending(requestId)?.allowAlways();
 });
 
 CommandsRegistry.registerCommand(DENY_COMMAND, (accessor: ServicesAccessor, requestId: string) => {
-	accessor.get(IAgentHostPermissionService).findPending(requestId)?.deny();
+	accessor.get(IAgentHostResourceService).findPending(requestId)?.deny();
 });
 
 /**
- * Bridges {@link IAgentHostPermissionService} to the chat input notification
+ * Bridges {@link IAgentHostResourceService} to the chat input notification
  * banner. While there are pending permission requests, the oldest one is
  * shown above the chat input with three actions:
  *
@@ -59,9 +61,9 @@ export class AgentHostPermissionUiContribution extends Disposable implements IWo
 	private _lastRequestId: string | undefined;
 
 	constructor(
-		@IAgentHostPermissionService private readonly _permissionService: IAgentHostPermissionService,
+		@IAgentHostResourceService private readonly _permissionService: IAgentHostResourceService,
 		@IChatInputNotificationService private readonly _chatInputNotificationService: IChatInputNotificationService,
-		@IRemoteAgentHostService private readonly _remoteAgentHostService: IRemoteAgentHostService,
+		@ILabelService private readonly _labelService: ILabelService,
 	) {
 		super();
 
@@ -124,16 +126,19 @@ export class AgentHostPermissionUiContribution extends Disposable implements IWo
 			description,
 			actions: [
 				{
+					kind: ChatInputNotificationActionKind.Command,
 					label: localize('agentHost.permission.deny', "Deny"),
 					commandId: DENY_COMMAND,
 					commandArgs: [request.id],
 				},
 				{
+					kind: ChatInputNotificationActionKind.Command,
 					label: localize('agentHost.permission.allow', "Allow"),
 					commandId: ALLOW_COMMAND,
 					commandArgs: [request.id],
 				},
 				{
+					kind: ChatInputNotificationActionKind.Command,
 					label: localize('agentHost.permission.allowAlways', "Always Allow"),
 					commandId: ALLOW_ALWAYS_COMMAND,
 					commandArgs: [request.id],
@@ -147,6 +152,8 @@ export class AgentHostPermissionUiContribution extends Disposable implements IWo
 	}
 
 	private _resolveHostName(address: string): string {
-		return this._remoteAgentHostService.getEntryByAddress(address)?.name ?? address;
+		const authority = agentHostAuthority(address);
+		const label = this._labelService.getHostLabel(AGENT_HOST_SCHEME, authority);
+		return label && label !== authority ? label : address;
 	}
 }

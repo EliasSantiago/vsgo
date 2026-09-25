@@ -17,6 +17,11 @@ export interface IResolveNLSConfigurationContext {
 	readonly nlsMetadataPath: string;
 
 	/**
+	 * Precomputed identity of the commit and NLS tables, supplied by packaged products.
+	 */
+	readonly nlsMetadataHash?: string;
+
+	/**
 	 * Path to the user data directory. Used as a cache for
 	 * language packs converted to the format we need.
 	 */
@@ -39,7 +44,7 @@ export interface IResolveNLSConfigurationContext {
 	readonly osLocale: string;
 }
 
-export async function resolveNLSConfiguration({ userLocale, osLocale, userDataPath, commit, nlsMetadataPath }: IResolveNLSConfigurationContext): Promise<INLSConfiguration> {
+export async function resolveNLSConfiguration({ userLocale, osLocale, userDataPath, commit, nlsMetadataPath, nlsMetadataHash }: IResolveNLSConfigurationContext): Promise<INLSConfiguration> {
 	mark('code/willGenerateNls');
 
 	if (
@@ -75,7 +80,7 @@ export async function resolveNLSConfiguration({ userLocale, osLocale, userDataPa
 
 		const languagePackId = `${languagePack.hash}.${resolvedLanguage}`;
 		const globalLanguagePackCachePath = join(userDataPath, 'clp', languagePackId);
-		const commitLanguagePackCachePath = join(globalLanguagePackCachePath, commit ?? 'dev');
+		const commitLanguagePackCachePath = join(globalLanguagePackCachePath, nlsMetadataHash ?? commit ?? 'dev');
 		const languagePackMessagesFile = join(commitLanguagePackCachePath, 'nls.messages.json');
 		const translationsConfigFile = join(globalLanguagePackCachePath, 'tcf.json');
 		const languagePackCorruptMarkerFile = join(globalLanguagePackCachePath, 'corrupted.info');

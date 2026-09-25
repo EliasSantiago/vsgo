@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 // @ts-check
+import { fixupPluginRules } from '@eslint/compat';
+import { defineConfig } from 'eslint/config';
 import fs from 'fs';
-import { builtinModules } from 'module';
 import path from 'path';
 import tseslint from 'typescript-eslint';
 
-import stylisticTs from '@stylistic/eslint-plugin-ts';
+import stylistic from '@stylistic/eslint-plugin';
 import * as pluginLocal from './.eslint-plugin-local/index.ts';
-import pluginImport from 'eslint-plugin-import';
 import pluginJsdoc from 'eslint-plugin-jsdoc';
 
 import pluginHeader from 'eslint-plugin-header';
@@ -21,7 +21,19 @@ const ignores = fs.readFileSync(path.join(import.meta.dirname, '.eslint-ignore')
 	.split(/\r\n|\n/)
 	.filter(line => line && !line.startsWith('#'));
 
-export default tseslint.config(
+const allowedJavaScriptFiles = fs.readFileSync(path.join(import.meta.dirname, '.eslint-allowed-javascript-files'), 'utf8')
+	.toString()
+	.split(/\r\n|\n/)
+	.map(line => line.trim())
+	.filter(line => line && !line.startsWith('#'));
+
+const allowedBracketNotationFiles = fs.readFileSync(path.join(import.meta.dirname, '.eslint-allowed-bracket-notation-files'), 'utf8')
+	.toString()
+	.split(/\r\n|\n/)
+	.map(line => line.trim())
+	.filter(line => line && !line.startsWith('#'));
+
+export default defineConfig(
 	// Global ignores
 	{
 		ignores: [
@@ -36,7 +48,7 @@ export default tseslint.config(
 		},
 		plugins: {
 			'local': pluginLocal,
-			'header': pluginHeader,
+			'header': fixupPluginRules(/** @type {any} */ (pluginHeader)),
 		},
 		rules: {
 			'constructor-super': 'warn',
@@ -135,6 +147,20 @@ export default tseslint.config(
 			]
 		},
 	},
+	// Disallow bracket notation for property names that can use dot notation.
+	{
+		files: [
+			'**/*.{js,cjs,mjs,ts,tsx,mts,cts}',
+			'.eslint-plugin-local/**/*.ts',
+		],
+		ignores: allowedBracketNotationFiles,
+		plugins: {
+			'local': pluginLocal,
+		},
+		rules: {
+			'local/code-no-bracket-notation-for-identifiers': 'warn',
+		},
+	},
 	// TS
 	{
 		files: [
@@ -144,7 +170,7 @@ export default tseslint.config(
 			parser: tseslint.parser,
 		},
 		plugins: {
-			'@stylistic/ts': stylisticTs,
+			'@stylistic': stylistic,
 			'@typescript-eslint': tseslint.plugin,
 			'local': pluginLocal,
 			'jsdoc': pluginJsdoc,
@@ -152,8 +178,8 @@ export default tseslint.config(
 		rules: {
 			// Disable built-in semi rules in favor of stylistic
 			'semi': 'off',
-			'@stylistic/ts/semi': 'warn',
-			'@stylistic/ts/member-delimiter-style': 'warn',
+			'@stylistic/semi': 'warn',
+			'@stylistic/member-delimiter-style': 'warn',
 			'local/code-no-unused-expressions': [
 				'warn',
 				{
@@ -183,6 +209,18 @@ export default tseslint.config(
 		},
 		rules: {
 			'local/code-no-telemetry-common-property': 'warn',
+		}
+	},
+	// Force all gulp imports under build/ to go through the gulp facade
+	{
+		files: [
+			'build/**/*.ts',
+		],
+		plugins: {
+			'local': pluginLocal,
+		},
+		rules: {
+			'local/code-no-direct-gulp-import': 'warn',
 		}
 	},
 	// Disallow 'in' operator except in type predicates
@@ -324,7 +362,7 @@ export default tseslint.config(
 			'src/vs/workbench/services/remote/common/tunnelModel.ts',
 			'src/vs/workbench/services/search/common/textSearchManager.ts',
 			'src/vs/workbench/test/browser/workbenchTestServices.ts',
-			'src/vs/platform/agentHost/common/state/protocol/reducers.ts',
+			'src/vs/platform/agentHost/common/state/protocol/**',
 			'test/automation/src/playwrightDriver.ts',
 			'.eslint-plugin-local/**/*',
 		],
@@ -333,6 +371,36 @@ export default tseslint.config(
 		},
 		rules: {
 			'local/code-no-in-operator': 'warn',
+		}
+	},
+	// Guard the agent host protocol `_meta` bag: no untyped field access or casts.
+	{
+		files: [
+			'src/vs/platform/agentHost/**/*.ts',
+			'src/vs/workbench/contrib/chat/browser/agentSessions/**/*.ts',
+			'src/vs/workbench/services/agentHost/**/*.ts',
+			'src/vs/sessions/**/*.ts',
+		],
+		ignores: [
+			// Tests assert on the raw `_meta` wire shape on purpose (verifying
+			// producers); routing them through readers would weaken them.
+			'**/test/**',
+			'**/*.test.ts',
+			'**/*.integrationTest.ts',
+			// This directory is the validation boundary for typed metadata
+			// readers. Callers elsewhere must consume those readers.
+			'src/vs/platform/agentHost/common/meta/**',
+			// Copilot SDK metadata is already typed and is not an AHP `_meta`
+			// bag. Keep its access isolated in one adapter.
+			'src/vs/platform/agentHost/node/copilot/copilotSdkMeta.ts',
+			// Codex's own generated app-server protocol (not AHP `_meta`).
+			'src/vs/platform/agentHost/node/codex/protocol/**',
+		],
+		plugins: {
+			'local': pluginLocal,
+		},
+		rules: {
+			'local/code-no-untyped-meta-access': 'warn',
 		}
 	},
 	// Strict no explicit `any`
@@ -942,6 +1010,7 @@ export default tseslint.config(
 						'register',
 						'remove',
 						'rename',
+						'reveal',
 						'save',
 						'send',
 						'start',
@@ -1488,12 +1557,13 @@ export default tseslint.config(
 					'when': 'hasNode',
 					'allow': [
 						'@github/copilot-sdk',
+						'zod',
 						'@microsoft/dev-tunnels-contracts',
 						'@microsoft/dev-tunnels-management',
 						'@parcel/watcher',
 						'@vscode/sqlite3',
 						'@vscode/vscode-languagedetection',
-						'@vscode/ripgrep',
+						'@vscode/ripgrep-universal',
 						'@vscode/iconv-lite-umd',
 						'@vscode/native-watchdog',
 						'@vscode/policy-watcher',
@@ -1505,6 +1575,7 @@ export default tseslint.config(
 						'console',
 						'cookie',
 						'crypto',
+						'detect-libc',
 						'dns',
 						'events',
 						'fs',
@@ -1524,11 +1595,13 @@ export default tseslint.config(
 						'ssh2',
 						'stream',
 						'string_decoder',
+						'tar',
 						'tas-client',
 						'tls',
 						'undici',
 						'undici-types',
 						'url',
+						'module',
 						'util',
 						'vscode-regexpp',
 						'vscode-textmate',
@@ -1628,9 +1701,26 @@ export default tseslint.config(
 						'@microsoft/1ds-core-js', // node module allowed even in /common/
 						'@microsoft/1ds-post-js', // node module allowed even in /common/
 						'@xterm/headless', // node module allowed even in /common/
+						'@vscode/fs-copyfile', // used by agentHost for file copying after worktree creation
 						'@vscode/tree-sitter-wasm', // used by agentHost for command auto-approval
 						'@vscode/copilot-api', // used by agentHost for Copilot API requests
-						'@anthropic-ai/sdk' // used by agentHost for Anthropic API requests
+						'@anthropic-ai/sdk', // used by agentHost for Anthropic API requests
+						'@anthropic-ai/claude-agent-sdk', // used by agentHost for Claude Agent SDK session enumeration / queries
+						'@modelcontextprotocol/sdk/**/*', // used by agentHost for Claude client-tool MCP result types (Phase 10)
+						'@github/copilot-sdk',
+						'zod', // used by agentHost for Claude client-tool MCP input schemas
+						{
+							'when': 'test',
+							'pattern': 'events'
+						},
+						{
+							'when': 'test',
+							'pattern': 'module'
+						},
+						{
+							'when': 'test',
+							'pattern': 'websocket'
+						}
 					]
 				},
 				{
@@ -1653,7 +1743,8 @@ export default tseslint.config(
 						'vs/base/parts/*/~',
 						'vs/platform/*/~',
 						'vs/editor/~',
-						'@vscode/tree-sitter-wasm' // node module allowed even in /common/
+						'@vscode/tree-sitter-wasm', // node module allowed even in /common/
+						'@vscode/diff' // type import (loaded at runtime via resolveAmdNodeModulePath)
 					]
 				},
 				{
@@ -1917,7 +2008,8 @@ export default tseslint.config(
 						'vs/workbench/services/*/~',
 						'vs/workbench/contrib/*/~',
 						'vs/workbench/contrib/terminal/terminal.all.js',
-						'vs/sessions/common/theme.js' // side-effect import for color registry
+						'vs/sessions/common/theme.js', // side-effect import for color registry
+						'vs/sessions/common/sizes.js' // side-effect import for size registry
 					]
 				},
 				{
@@ -2014,6 +2106,7 @@ export default tseslint.config(
 						'vs/sessions/~',
 						'vs/sessions/services/*/~',
 						'vs/sessions/contrib/*/~',
+						'vs/sessions/contrib/providers/*/~',
 						'vs/workbench/~',
 						'vs/workbench/api/~',
 						'vs/workbench/services/*/~',
@@ -2034,6 +2127,7 @@ export default tseslint.config(
 						'vs/sessions/~',
 						'vs/sessions/services/*/~',
 						'vs/sessions/contrib/*/~',
+						'vs/sessions/contrib/providers/*/~',
 						'vs/workbench/~',
 						'vs/workbench/api/~',
 						'vs/workbench/services/*/~',
@@ -2054,6 +2148,7 @@ export default tseslint.config(
 						'vs/sessions/~',
 						'vs/sessions/services/*/~',
 						'vs/sessions/contrib/*/~',
+						'vs/sessions/contrib/providers/*/~',
 						'vs/workbench/~',
 						'vs/workbench/api/~',
 						'vs/workbench/services/*/~',
@@ -2070,6 +2165,7 @@ export default tseslint.config(
 						'vs/platform/*/~',
 						'vs/sessions/~',
 						'vs/sessions/contrib/*/~',
+						'vs/sessions/contrib/providers/*/~',
 						'vs/workbench/~',
 						'vs/workbench/browser/**',
 						'vs/workbench/services/*/~',
@@ -2087,6 +2183,7 @@ export default tseslint.config(
 						'vs/sessions/~',
 						'vs/sessions/test/**',
 						'vs/sessions/contrib/*/~',
+						'vs/sessions/contrib/providers/*/~',
 						'vs/workbench/~',
 						'vs/workbench/browser/**',
 						'vs/workbench/services/*/~',
@@ -2123,6 +2220,26 @@ export default tseslint.config(
 						'vs/workbench/services/*/~',
 						'vs/sessions/~',
 						'vs/sessions/services/*/~'
+					]
+				},
+				{
+					'target': 'src/vs/sessions/contrib/providers/*/~',
+					'restrictions': [
+						'vs/base/~',
+						'vs/base/parts/*/~',
+						'vs/platform/*/~',
+						'vs/editor/~',
+						'vs/editor/contrib/*/~',
+						'vs/workbench/~',
+						'vs/workbench/browser/**',
+						'vs/workbench/services/*/~',
+						'vs/workbench/contrib/*/~',
+						'vs/sessions/~',
+						'vs/sessions/contrib/*/~',
+						'vs/sessions/contrib/providers/*/~',
+						'vs/sessions/services/*/~',
+						'@microsoft/dev-tunnels-connections', // type-only browser bundle conformance check
+						'@microsoft/dev-tunnels-management', // type-only browser bundle conformance check
 					]
 				},
 				{
@@ -2235,9 +2352,21 @@ export default tseslint.config(
 					]
 				},
 				{
+					'target': 'test/scenario/**',
+					'restrictions': [
+						'test/automation',
+						'test/scenario/**',
+						'@vscode/*',
+						'@parcel/*',
+						'@playwright/*',
+						'*' // node modules
+					]
+				},
+				{
 					'target': 'test/mcp/**',
 					'restrictions': [
 						'test/automation',
+						'test/scenario',
 						'test/mcp/**',
 						'@vscode/*',
 						'@parcel/*',
@@ -2252,6 +2381,38 @@ export default tseslint.config(
 						'test/componentFixtures/playwright/**',
 						'@playwright/*',
 						'*' // node modules
+					]
+				}
+			]
+		}
+	},
+	{
+		// `IAgentSessionsService` and the agent sessions model are provider-internal
+		// to Copilot. Only the Copilot chat sessions provider may consume them; the
+		// rest of the Agents window (sessions workbench) must stay provider-agnostic.
+		// See src/vs/sessions/SESSIONS.md.
+		files: [
+			'src/vs/sessions/**/*.ts'
+		],
+		ignores: [
+			'src/vs/sessions/contrib/providers/copilotChatSessions/**/*.ts'
+		],
+		languageOptions: {
+			parser: tseslint.parser,
+		},
+		rules: {
+			'no-restricted-imports': [
+				'warn',
+				{
+					'patterns': [
+						{
+							'group': ['dompurify*'],
+							'message': 'Use domSanitize instead of dompurify directly'
+						},
+						{
+							'group': ['**/agentSessions/agentSessionsService', '**/agentSessions/agentSessionsService.js'],
+							'message': 'IAgentSessionsService is provider-internal to Copilot. Only contrib/providers/copilotChatSessions may import it; the rest of the Agents window must stay provider-agnostic. See src/vs/sessions/SESSIONS.md.'
+						}
 					]
 				}
 			]
@@ -2364,8 +2525,8 @@ export default tseslint.config(
 			'extensions/markdown-language-features/src/**/*.ts',
 			'extensions/markdown-language-features/notebook/**/*.ts',
 			'extensions/markdown-language-features/preview-src/**/*.ts',
-			'extensions/mermaid-chat-features/chat-webview-src/**/*.ts',
-			'extensions/mermaid-chat-features/src/**/*.ts',
+			'extensions/mermaid-markdown-features/preview-src/chat/**/*.ts',
+			'extensions/mermaid-markdown-features/src/**/*.ts',
 			'extensions/media-preview/src/**/*.ts',
 			'extensions/simple-browser/**/*.ts',
 			'extensions/typescript-language-features/**/*.ts',
@@ -2386,9 +2547,9 @@ export default tseslint.config(
 					'extensions/simple-browser/tsconfig.json',
 					'extensions/simple-browser/preview-src/tsconfig.json',
 
-					// Mermaid chat features
-					'extensions/mermaid-chat-features/tsconfig.json',
-					'extensions/mermaid-chat-features/chat-webview-src/tsconfig.json',
+					// Mermaid markdown features
+					'extensions/mermaid-markdown-features/tsconfig.json',
+					'extensions/mermaid-markdown-features/preview-src/chat/tsconfig.json',
 
 					// TypeScript
 					'extensions/typescript-language-features/tsconfig.json',
@@ -2425,4 +2586,22 @@ export default tseslint.config(
 				},
 			],
 		}
+	},
+	// Forbid new JavaScript files - use TypeScript instead.
+	// The allowlist of pre-existing JS/CJS/MJS files lives in
+	// `.eslint-allowed-javascript-files`, which is gated by CODEOWNERS.
+	// Do NOT add new entries; convert your file to TypeScript instead.
+	{
+		files: [
+			'**/*.js',
+			'**/*.cjs',
+			'**/*.mjs',
+		],
+		ignores: allowedJavaScriptFiles,
+		plugins: {
+			'local': pluginLocal,
+		},
+		rules: {
+			'local/code-no-new-javascript-files': 'error',
+		},
 	});

@@ -19,7 +19,7 @@ import { IViewsService } from '../../../../workbench/services/views/common/views
 import { WorkspaceFolderCountContext } from '../../../../workbench/common/contextkeys.js';
 import { SESSIONS_FILES_EMPTY_VIEW_ID, SESSIONS_FILES_VIEW_ID, SessionsExplorerEmptyView, SessionsExplorerView } from './filesView.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
-import { IsPhoneLayoutContext } from '../../../common/contextkeys.js';
+import { IsPhoneLayoutContext, IsQuickChatSessionContext, SessionHasWorkspaceContext, SinglePaneLayoutEnabledContext } from '../../../common/contextkeys.js';
 
 export const SESSIONS_FILES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.filesContainer';
 
@@ -35,7 +35,7 @@ const filesViewContainer = viewContainerRegistry.registerViewContainer({
 	order: 11,
 	ctorDescriptor: new SyncDescriptor(ViewPaneContainer, [SESSIONS_FILES_CONTAINER_ID, { mergeViewWithContainerWhenSingleView: true }]),
 	storageId: SESSIONS_FILES_CONTAINER_ID,
-	hideIfEmpty: false,
+	hideIfEmpty: true,
 	openCommandActionDescriptor: {
 		id: SESSIONS_FILES_CONTAINER_ID,
 		title: localize2('explore', "Explorer"),
@@ -46,7 +46,7 @@ const filesViewContainer = viewContainerRegistry.registerViewContainer({
 	windowEnablement: WindowEnablement.Sessions,
 }, ViewContainerLocation.AuxiliaryBar, { isDefault: true });
 
-class RegisterFilesViewContribution implements IWorkbenchContribution {
+export class RegisterFilesViewContribution implements IWorkbenchContribution {
 
 	static readonly ID = 'sessions.registerFilesView';
 
@@ -61,7 +61,7 @@ class RegisterFilesViewContribution implements IWorkbenchContribution {
 			ctorDescriptor: new SyncDescriptor(SessionsExplorerView),
 			canToggleVisibility: false,
 			canMoveView: false,
-			when: ContextKeyExpr.and(WorkspaceFolderCountContext.notEqualsTo('0'), IsPhoneLayoutContext.negate()),
+			when: ContextKeyExpr.and(WorkspaceFolderCountContext.notEqualsTo('0'), IsPhoneLayoutContext.negate(), SessionHasWorkspaceContext),
 			windowEnablement: WindowEnablement.Sessions,
 		}], filesViewContainer);
 
@@ -73,7 +73,13 @@ class RegisterFilesViewContribution implements IWorkbenchContribution {
 			ctorDescriptor: new SyncDescriptor(SessionsExplorerEmptyView),
 			canToggleVisibility: false,
 			canMoveView: false,
-			when: ContextKeyExpr.and(WorkspaceFolderCountContext.isEqualTo('0'), IsPhoneLayoutContext.negate()),
+			when: ContextKeyExpr.and(
+				IsPhoneLayoutContext.negate(),
+				ContextKeyExpr.or(
+					ContextKeyExpr.and(WorkspaceFolderCountContext.isEqualTo('0'), SessionHasWorkspaceContext),
+					ContextKeyExpr.and(SinglePaneLayoutEnabledContext, IsQuickChatSessionContext),
+				),
+			),
 			windowEnablement: WindowEnablement.Sessions,
 		}], filesViewContainer);
 	}
@@ -89,7 +95,7 @@ registerAction2(class extends Action2 {
 			icon: Codicon.collapseAll,
 			menu: {
 				id: MenuId.ViewTitle,
-				group: 'navigation',
+				group: '1_files',
 				order: 10,
 				when: ContextKeyExpr.equals('view', SESSIONS_FILES_VIEW_ID),
 			},

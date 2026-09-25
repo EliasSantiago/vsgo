@@ -83,6 +83,10 @@
 			"project": "vscode-workbench"
 		},
 		{
+			"name": "vs/workbench/services/agentEditorComments",
+			"project": "vscode-workbench"
+		},
+		{
 			"name": "vs/workbench/services/assignment",
 			"project": "vscode-workbench"
 		},
@@ -104,6 +108,10 @@
 		},
 		{
 			"name": "vs/workbench/contrib/folding",
+			"project": "vscode-workbench"
+		},
+		{
+			"name": "vs/workbench/contrib/github",
 			"project": "vscode-workbench"
 		},
 		{
@@ -175,6 +183,10 @@
 			"project": "vscode-workbench"
 		},
 		{
+			"name": "vs/workbench/contrib/agentsVoice",
+			"project": "vscode-workbench"
+		},
+		{
 			"name": "vs/workbench/contrib/chat",
 			"project": "vscode-workbench"
 		},
@@ -232,6 +244,10 @@
 		},
 		{
 			"name": "vs/workbench/contrib/speech",
+			"project": "vscode-workbench"
+		},
+		{
+			"name": "vs/workbench/contrib/modernUI",
 			"project": "vscode-workbench"
 		},
 		{
@@ -307,6 +323,10 @@
 			"project": "vscode-workbench"
 		},
 		{
+			"name": "vs/workbench/contrib/onboarding",
+			"project": "vscode-workbench"
+		},
+		{
 			"name": "vs/workbench/contrib/welcomePage",
 			"project": "vscode-workbench"
 		},
@@ -363,6 +383,10 @@
 			"project": "vscode-workbench"
 		},
 		{
+			"name": "vs/workbench/services/agentHost",
+			"project": "vscode-workbench"
+		},
+		{
 			"name": "vs/workbench/services/authToken",
 			"project": "vscode-workbench"
 		},
@@ -388,6 +412,10 @@
 		},
 		{
 			"name": "vs/workbench/services/configurationResolver",
+			"project": "vscode-workbench"
+		},
+		{
+			"name": "vs/workbench/services/dataChannel",
 			"project": "vscode-workbench"
 		},
 		{
@@ -440,6 +468,10 @@
 		},
 		{
 			"name": "vs/workbench/services/language",
+			"project": "vscode-workbench"
+		},
+		{
+			"name": "vs/workbench/services/mcp",
 			"project": "vscode-workbench"
 		},
 		{
@@ -641,6 +673,10 @@
 			"project": "vscode-sessions"
 		},
 		{
+			"name": "vs/sessions/contrib/automations",
+			"project": "vscode-sessions"
+		},
+		{
 			"name": "vs/sessions/contrib/accountMenu",
 			"project": "vscode-sessions"
 		},
@@ -649,7 +685,11 @@
 			"project": "vscode-sessions"
 		},
 		{
-			"name": "vs/sessions/contrib/agentHost",
+			"name": "vs/sessions/contrib/providers",
+			"project": "vscode-sessions"
+		},
+		{
+			"name": "vs/sessions/contrib/providers/agentHost",
 			"project": "vscode-sessions"
 		},
 		{
@@ -669,7 +709,7 @@
 			"project": "vscode-sessions"
 		},
 		{
-			"name": "vs/sessions/contrib/copilotChatSessions",
+			"name": "vs/sessions/contrib/providers/copilotChatSessions",
 			"project": "vscode-sessions"
 		},
 		{
@@ -678,6 +718,10 @@
 		},
 		{
 			"name": "vs/sessions/contrib/codeReview",
+			"project": "vscode-sessions"
+		},
+		{
+			"name": "vs/sessions/contrib/customViewTest",
 			"project": "vscode-sessions"
 		},
 		{
@@ -693,6 +737,10 @@
 			"project": "vscode-sessions"
 		},
 		{
+			"name": "vs/sessions/contrib/sideChat",
+			"project": "vscode-sessions"
+		},
+		{
 			"name": "vs/sessions/contrib/policyBlocked",
 			"project": "vscode-sessions"
 		},
@@ -701,15 +749,27 @@
 			"project": "vscode-sessions"
 		},
 		{
+			"name": "vs/sessions/contrib/github",
+			"project": "vscode-sessions"
+		},
+		{
+			"name": "vs/sessions/contrib/layout",
+			"project": "vscode-sessions"
+		},
+		{
 			"name": "vs/sessions/contrib/logs",
 			"project": "vscode-sessions"
 		},
 		{
-			"name": "vs/sessions/contrib/remoteAgentHost",
+			"name": "vs/sessions/contrib/providers/remoteAgentHost",
 			"project": "vscode-sessions"
 		},
 		{
 			"name": "vs/sessions/contrib/sessions",
+			"project": "vscode-sessions"
+		},
+		{
+			"name": "vs/sessions/contrib/sessionInputBanners",
 			"project": "vscode-sessions"
 		},
 		{
@@ -734,6 +794,14 @@
 		},
 		{
 			"name": "vs/sessions/contrib/editor",
+			"project": "vscode-sessions"
+		},
+		{
+			"name": "vs/sessions/contrib/extensions",
+			"project": "vscode-sessions"
+		},
+		{
+			"name": "vs/sessions/contrib/onboardingTours",
 			"project": "vscode-sessions"
 		}
 	]
