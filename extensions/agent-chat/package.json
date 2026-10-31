@@ -838,6 +838,19 @@
 					"minimum": 0,
 					"markdownDescription": "Teto de ferramentas MCP oferecidas ao modelo por turno. As ferramentas próprias do agente nunca são cortadas; o excesso sai daqui. Cada ferramenta custa o schema dela em todo turno, e um punhado de servidores passa fácil das cem — sem teto, a janela de contexto acaba antes da conversa."
 				},
+				"agent-chat.anthropic.promptCacheTtl": {
+					"type": "string",
+					"enum": [
+						"5m",
+						"1h"
+					],
+					"default": "5m",
+					"enumDescriptions": [
+						"5 minutos. Gravar no cache custa 1,25x o preço de entrada. Melhor quando as mensagens chegam com menos de 5 minutos de intervalo.",
+						"1 hora. Gravar custa 2x o preço de entrada. Compensa quando há pausas de 5 a 60 minutos entre as mensagens."
+					],
+					"markdownDescription": "Por quanto tempo o prompt fica no cache da Anthropic (só vale para o provedor Anthropic com chave própria). Ler do cache custa 0,1x o preço de entrada (0,05x no Opus 5.5 e no Sonnet 5.5), e cada leitura renova o prazo."
+				},
 				"agent-chat.agentProfile": {
 					"type": "string",
 					"enum": [

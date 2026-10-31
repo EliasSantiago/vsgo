@@ -7,3 +7,4 @@ esbuild*.mts
 package-lock.json
 **/*.map
 **/.gitignore
+test/**

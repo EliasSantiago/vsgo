@@ -271,7 +271,10 @@ export async function handleChatRequest(
 		collectAttachments(request, stream),
 		collectTextReferences(request, profile),
 	]);
-	const messages = buildInitialMessages(context, request, resolvedRules, memories, attachments, textRefs, profile);
+	// Anthropic only: the rules picked by the active file go with the request
+	// instead of the system prompt. See `rulesForCurrentFileInRequest`.
+	const rulesInRequest = rulesForCurrentFileInRequest(model);
+	const messages = buildInitialMessages(context, request, resolvedRules, memories, attachments, textRefs, profile, rulesInRequest);
 
 	// Signatures of read-only calls already answered this request. Re-issuing one
 	// verbatim returns nothing new and costs a turn, so it is short-circuited.
@@ -1251,9 +1254,10 @@ function buildInitialMessages(
 	attachments: readonly vscode.LanguageModelDataPart[],
 	textRefs: readonly ITextReference[],
 	profile: IAgentProfile,
+	rulesInRequest: boolean,
 ): vscode.LanguageModelChatMessage[] {
 	const messages: vscode.LanguageModelChatMessage[] = [];
-	messages.push(vscode.LanguageModelChatMessage.User(buildSystemPrompt(rules, memories, profile)));
+	messages.push(vscode.LanguageModelChatMessage.User(buildSystemPrompt(rules, memories, profile, rulesInRequest)));
 
 	appendHistory(context.history, messages);
 
@@ -1272,6 +1276,10 @@ function buildInitialMessages(
 			return `--- Arquivo: ${ref.uri.fsPath} — conteúdo COMPLETO abaixo. Este arquivo já está lido: responda a partir do que está aqui e NÃO chame agent_read_file para ele. ---\n${ref.content}\n---`;
 		});
 		userPrompt = refBlocks.join('\n\n') + (userPrompt ? '\n\n' + userPrompt : '');
+	}
+
+	if (rulesInRequest && rules && rules.matched.length > 0) {
+		userPrompt = renderMatchedRules(rules) + (userPrompt ? '\n\n' + userPrompt : '');
 	}
 
 	if (attachments.length > 0) {
@@ -1393,12 +1401,30 @@ function formatBytes(n: number): string {
 	return `${(n / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-function buildSystemPrompt(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[], profile: IAgentProfile): string {
-	return [profile.systemPrompt, buildProjectContext(rules, memories)].filter(Boolean).join('\n\n');
+function buildSystemPrompt(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[], profile: IAgentProfile, rulesInRequest: boolean): string {
+	return [profile.systemPrompt, buildProjectContext(rules, memories, rulesInRequest)].filter(Boolean).join('\n\n');
+}
+
+/**
+ * Whether the rules matched by the active file travel in the request message
+ * rather than in the system prompt.
+ *
+ * The system prompt is the first message, ahead of the whole conversation, and
+ * Anthropic's prompt cache matches on the prefix: rules that change whenever the
+ * user switches files would make every follow-up re-read the conversation at
+ * full price. In the request message they sit after the cached part. Other
+ * providers keep the original layout on purpose.
+ */
+function rulesForCurrentFileInRequest(model: vscode.LanguageModelChat): boolean {
+	return model.vendor === 'anthropic';
+}
+
+function renderMatchedRules(rules: ResolvedRules): string {
+	return '# Rules for the current file\n\n' + rules.matched.map(renderRule).join('\n\n');
 }
 
 /** Workspace roots, project instructions, rules and memories: what any agent working here should know. */
-function buildProjectContext(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[]): string {
+function buildProjectContext(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[], omitMatchedRules = false): string {
 	const sections: string[] = [];
 	const workspaceSection = describeWorkspaceRoots();
 	if (workspaceSection) {
@@ -1410,8 +1436,8 @@ function buildProjectContext(rules: ResolvedRules | undefined, memories: readonl
 	if (rules && rules.always.length > 0) {
 		sections.push('# Always-on rules\n\n' + rules.always.map(renderRule).join('\n\n'));
 	}
-	if (rules && rules.matched.length > 0) {
-		sections.push('# Rules for the current file\n\n' + rules.matched.map(renderRule).join('\n\n'));
+	if (rules && rules.matched.length > 0 && !omitMatchedRules) {
+		sections.push(renderMatchedRules(rules));
 	}
 	if (memories.length > 0) {
 		const rendered = memories.map(m => `## ${m.entry.title}\n${m.body}`).join('\n\n');
