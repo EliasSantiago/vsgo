@@ -75,7 +75,7 @@ export function cacheControlFor(ttl: AnthropicCacheTtl): IAnthropicCacheControl 
 
 /** Lê o valor da configuração, tratando qualquer coisa inesperada como o padrão. */
 export function parseCacheTtl(value: unknown): AnthropicCacheTtl {
-	return value === '1h' ? '1h' : '5m';
+	return value === '5m' ? '5m' : '1h';
 }
 
 /** Monta o corpo de `/v1/messages` com os breakpoints de cache no lugar. */

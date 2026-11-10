@@ -132,11 +132,11 @@ test('TTL de 1h vai igual no breakpoint explícito e no automático', () => {
 	assert.deepEqual(body.system![0].cache_control, { type: 'ephemeral', ttl: '1h' });
 });
 
-test('configuração inválida do TTL cai no padrão de 5 minutos', () => {
+test('configuração inválida do TTL cai no padrão de 1 hora', () => {
 	assert.equal(parseCacheTtl('1h'), '1h');
 	assert.equal(parseCacheTtl('5m'), '5m');
-	assert.equal(parseCacheTtl(undefined), '5m');
-	assert.equal(parseCacheTtl('2h'), '5m');
+	assert.equal(parseCacheTtl(undefined), '1h');
+	assert.equal(parseCacheTtl('2h'), '1h');
 });
 
 test('nunca marca bloco de texto vazio (a API recusa)', () => {

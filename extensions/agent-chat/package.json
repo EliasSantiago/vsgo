@@ -844,7 +844,7 @@
 						"5m",
 						"1h"
 					],
-					"default": "5m",
+					"default": "1h",
 					"enumDescriptions": [
 						"5 minutos. Gravar no cache custa 1,25x o preço de entrada. Melhor quando as mensagens chegam com menos de 5 minutos de intervalo.",
 						"1 hora. Gravar custa 2x o preço de entrada. Compensa quando há pausas de 5 a 60 minutos entre as mensagens."
