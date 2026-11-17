@@ -17,7 +17,7 @@ import { log } from './logger.js';
  */
 export interface IAgentProfile {
 	readonly id: 'full' | 'compact';
-	/** Turn budget for one request. */
+	/** Turn ceiling for one request; `Infinity` when the user lifted it. */
 	readonly maxTurns: number;
 	/** Base system prompt, before workspace, rules and memories are appended. */
 	readonly systemPrompt: string;
@@ -127,8 +127,8 @@ When the user asks you to run, open, test or look at a web app, in this order:
 2. \`agent_run_command\` with that script and \`"background": true\`.
 3. \`agent_read_terminal\` with the returned id to read the URL the server actually printed.
 4. \`open_browser_page\` with that url. It returns a \`pageId\`.
-5. \`read_page\` with the \`pageId\`. This is how you see the page — \`screenshot_page\` returns
-   nothing you can read, it is only for showing the user.
+5. \`read_page\` with the \`pageId\`. This is how you see the page. \`screenshot_page\` is for
+   showing the user; when it comes back as a note that images are not supported, ignore it.
 6. Interact with \`click_element\` / \`type_in_page\` using refs from the LATEST \`read_page\`,
    then \`read_page\` again to confirm.
 Never say the app works until \`read_page\` actually showed it.
@@ -150,7 +150,7 @@ The user wants the answer, not an account of the work. When they ask what the ro
 are, list the routes and the file they came from. Nothing else.
 `.trim();
 
-/** The full profile's prompt and turn budget, owned by the agent loop. */
+/** The full profile's prompt and the turn ceiling both profiles share, owned by the agent loop. */
 export interface IFullProfileDefaults {
 	readonly systemPrompt: string;
 	readonly maxTurns: number;
@@ -166,7 +166,7 @@ export interface IFullProfileDefaults {
 export function resolveProfile(model: vscode.LanguageModelChat, defaults: IFullProfileDefaults): IAgentProfile {
 	const setting = vscode.workspace.getConfiguration('agent-chat').get<'auto' | 'compact' | 'full'>('agentProfile', 'auto');
 	const compact = setting === 'compact' || (setting === 'auto' && isLocallyHosted(model.vendor));
-	const profile = compact ? compactProfile() : fullProfile(defaults);
+	const profile = compact ? compactProfile(defaults) : fullProfile(defaults);
 	log(`[profile] ${profile.id} for ${model.vendor}/${model.id} (setting=${setting})`);
 	return profile;
 }
@@ -175,13 +175,13 @@ function isLocallyHosted(vendor: string): boolean {
 	return vendor === 'local' || vendor === 'ollama';
 }
 
-function compactProfile(): IAgentProfile {
+function compactProfile(defaults: IFullProfileDefaults): IAgentProfile {
 	return {
 		id: 'compact',
 		// One call per turn means more turns for the same work, not fewer, and a
 		// browser run spends several of them before it even reaches the page. A
 		// budget below the full one truncated those runs mid-task.
-		maxTurns: 32,
+		maxTurns: defaults.maxTurns,
 		systemPrompt: COMPACT_SYSTEM_PROMPT,
 		// A small model writes poor hand-off prompts and reads reports badly, and
 		// sub-agents all hit the same local server, so running them side by side

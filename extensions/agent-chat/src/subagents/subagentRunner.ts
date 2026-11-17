@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import { clampToolResult } from '../agentProfile.js';
 import { log } from '../logger.js';
-import { IToolRunEnvironment, READ_ONLY_TOOL_NAMES, runAgentTool } from '../toolExecutor.js';
+import { IToolRunEnvironment, pruneOldToolImages, READ_ONLY_TOOL_NAMES, runAgentTool } from '../toolExecutor.js';
 import { ISubagentDefinition } from './definitions.js';
 
 export const TASK_TOOL_NAME = 'agent_task';
@@ -16,7 +16,10 @@ export const TASK_TOOL_NAME = 'agent_task';
  * afford to be generous — and unlike the parent, a sub-agent that runs out
  * cannot be resumed, which makes a tight budget expensive rather than safe.
  */
-const MAX_SUBAGENT_TURNS = 20;
+const MAX_SUBAGENT_TURNS = 40;
+
+/** Turns left when a sub-agent is told to stop working and write its report. */
+const SUBAGENT_WRAP_UP_TURNS = 2;
 
 /** Sub-agents running at once. Each one is a stream of model requests of its own. */
 const MAX_CONCURRENT_SUBAGENTS = 4;
@@ -166,6 +169,7 @@ async function runSubagent(
 		try {
 			// Some providers reject an empty tool list outright.
 			const options: vscode.LanguageModelChatRequestOptions = tools.length > 0 ? { tools, toolMode: vscode.LanguageModelChatToolMode.Auto } : {};
+			pruneOldToolImages(messages);
 			const response = await model.sendRequest(messages, options, token);
 			for await (const part of response.stream) {
 				if (part instanceof vscode.LanguageModelTextPart) {
@@ -212,7 +216,13 @@ async function runSubagent(
 			}
 			results.push((await runAgentTool(tc, env, token)).part);
 		}
-		messages.push(vscode.LanguageModelChatMessage.User(results));
+		// A sub-agent cannot be resumed, so it is warned before it runs out and
+		// spends its last turns on the report rather than on a half-finished step.
+		const remaining = MAX_SUBAGENT_TURNS - (turn + 1);
+		const notes = remaining === SUBAGENT_WRAP_UP_TURNS
+			? [new vscode.LanguageModelTextPart(`Turn budget: only ${remaining} turns are left. Finish the step you are on, then stop calling tools and write your report — what you found or changed, and what is left undone.`)]
+			: [];
+		messages.push(vscode.LanguageModelChatMessage.User([...results, ...notes]));
 	}
 
 	const handoff = await requestHandoff(messages, model, tag, token);

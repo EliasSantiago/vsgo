@@ -90,6 +90,15 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 
 	abstract fallbackModels(): ModelSpec[];
 
+	/**
+	 * Whether `spec` reads images. Declared to the workbench as `imageInput`, which
+	 * is what lets the agent loop hand it screenshots and what enables image
+	 * attachments in the chat input. Off unless the provider knows better.
+	 */
+	protected supportsImageInput(_spec: ModelSpec): boolean {
+		return false;
+	}
+
 	protected async fetchAvailableModels(_credential: string, _token: vscode.CancellationToken): Promise<ModelSpec[] | undefined> {
 		return undefined;
 	}
@@ -139,7 +148,7 @@ export abstract class BaseChatProvider implements vscode.LanguageModelChatProvid
 			maxInputTokens: spec.maxInputTokens,
 			maxOutputTokens: spec.maxOutputTokens,
 			isUserSelectable: true,
-			capabilities: { toolCalling: true },
+			capabilities: { toolCalling: true, imageInput: this.supportsImageInput(spec) },
 		}));
 	}
 

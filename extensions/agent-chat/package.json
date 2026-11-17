@@ -866,6 +866,12 @@
 					],
 					"description": "Como o laço do agente é ajustado ao modelo que o conduz."
 				},
+				"agent-chat.maxTurns": {
+					"type": "number",
+					"default": 200,
+					"minimum": 0,
+					"markdownDescription": "Teto de turnos (idas e voltas com o modelo) por solicitação ao agente. O laço termina quando o modelo para de chamar ferramentas; este teto é só uma rede de segurança contra um laço descontrolado, e quem pega um modelo travado são as proteções de chamadas repetidas e de falhas seguidas. `0` remove o teto. Ao atingi-lo, o chat oferece o botão **Continuar**, com tudo o que foi feito preservado."
+				},
 				"agent-chat.compaction.enabled": {
 					"type": "boolean",
 					"default": true,

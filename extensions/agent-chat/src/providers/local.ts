@@ -213,6 +213,15 @@ export class LocalProvider extends OAICompatProvider {
 	 * render it. Left untouched otherwise, so models that do carry a tool section
 	 * — Qwen, Gemma 4 — keep the structured protocol the runtime parses for us.
 	 */
+	/**
+	 * A local model only reads images when the runtime was started with its
+	 * vision projector, which this server never loads; and the template folding
+	 * in {@link flattenToAlternating} is text only.
+	 */
+	protected override supportsImageInput(): boolean {
+		return false;
+	}
+
 	protected override toWireMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], model: ModelSpec): IWireMessage[] {
 		const wire = super.toWireMessages(messages, model);
 		const caps = this.server.cachedTemplateCaps(model.id);

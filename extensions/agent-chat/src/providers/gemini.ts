@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { BaseChatProvider, ModelSpec, parseSSE, toAbort } from './base.js';
+import { splitToolResult, toolImagesCaption } from './toolResultContent.js';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -21,6 +22,11 @@ interface GeminiModelsResponse {
 
 export class GeminiProvider extends BaseChatProvider {
 	fallbackModels(): ModelSpec[] { return FALLBACK; }
+
+	/** Gemini models are multimodal across the line. */
+	protected override supportsImageInput(): boolean {
+		return true;
+	}
 
 	protected override async fetchAvailableModels(credential: string, token: vscode.CancellationToken): Promise<ModelSpec[] | undefined> {
 		const res = await fetch(`${BASE}?key=${encodeURIComponent(credential)}`, { signal: toAbort(token) });
@@ -104,6 +110,9 @@ function toGeminiMessages(messages: readonly vscode.LanguageModelChatRequestMess
 		}
 		const role = m.role === vscode.LanguageModelChatMessageRole.Assistant ? 'model' : 'user';
 		const parts: unknown[] = [];
+		// A functionResponse carries text only on the models this targets, so a
+		// tool's images follow the responses as inline data in the same turn.
+		const toolImages: unknown[] = [];
 		for (const p of m.content) {
 			if (p instanceof vscode.LanguageModelTextPart) {
 				if (p.value) {
@@ -112,12 +121,17 @@ function toGeminiMessages(messages: readonly vscode.LanguageModelChatRequestMess
 			} else if (p instanceof vscode.LanguageModelToolCallPart) {
 				parts.push({ functionCall: { name: p.name, args: p.input } });
 			} else if (p instanceof vscode.LanguageModelToolResultPart) {
-				parts.push({ functionResponse: { name: p.callId, response: { content: toolText(p.content) } } });
+				const result = splitToolResult(p.content);
+				parts.push({ functionResponse: { name: p.callId, response: { content: result.text } } });
+				toolImages.push(...result.images.map(image => ({ inlineData: { mimeType: image.mimeType, data: image.base64 } })));
 			} else if (p instanceof vscode.LanguageModelDataPart) {
 				if (p.mimeType.startsWith('image/') || p.mimeType === 'application/pdf') {
 					parts.push({ inlineData: { mimeType: p.mimeType, data: Buffer.from(p.data).toString('base64') } });
 				}
 			}
+		}
+		if (toolImages.length > 0) {
+			parts.push({ text: toolImagesCaption(toolImages.length) }, ...toolImages);
 		}
 		if (parts.length === 0) {
 			parts.push({ text: '' });
@@ -125,16 +139,4 @@ function toGeminiMessages(messages: readonly vscode.LanguageModelChatRequestMess
 		contents.push({ role, parts });
 	}
 	return { systemInstruction, contents };
-}
-
-function toolText(parts: readonly unknown[]): string {
-	let out = '';
-	for (const p of parts) {
-		if (p instanceof vscode.LanguageModelTextPart) {
-			out += p.value;
-		} else if (typeof p === 'string') {
-			out += p;
-		}
-	}
-	return out;
 }

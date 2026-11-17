@@ -8,7 +8,7 @@ import { ByokStorage } from './byokStorage.js';
 import { registerAllProviders } from './providers/index.js';
 import { registerCommands } from './commands.js';
 import { registerTools } from './tools.js';
-import { createChatHandler } from './chatHandler.js';
+import { createChatHandler, TURN_LIMIT_METADATA_KEY } from './chatHandler.js';
 import { RulesLoader } from './rules/rulesLoader.js';
 import { MemoryService } from './memory/memoryService.js';
 import { AgentSessionsStore } from './agentsWindow/agentSessionsStore.js';
@@ -71,6 +71,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	const participant = vscode.chat.createChatParticipant(PARTICIPANT_ID, createChatHandler(rulesLoader, memoryService, mcpServers));
 	participant.iconPath = new vscode.ThemeIcon('sparkle');
+	// A request that stopped at the turn ceiling offers to resume with one click,
+	// so a long task never depends on the user typing "continue".
+	participant.followupProvider = {
+		provideFollowups: result => result.metadata?.[TURN_LIMIT_METADATA_KEY]
+			? [{ prompt: 'continue de onde parou', label: 'Continuar' }]
+			: [],
+	};
 
 	context.subscriptions.push(
 		participant,

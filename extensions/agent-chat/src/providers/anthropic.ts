@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { log } from '../logger.js';
 import { BaseChatProvider, IProviderUsage, limitsForModel, ModelSpec, parseSSE, toAbort } from './base.js';
+import { splitToolResult } from './toolResultContent.js';
 import { addUsage, buildAnthropicRequest, formatUsageLine, IAnthropicMessage, IAnthropicUsage, mergeUsage, parseCacheTtl } from './anthropicCache.js';
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
@@ -24,6 +25,11 @@ interface AnthropicModelsResponse {
 
 export class AnthropicProvider extends BaseChatProvider {
 	fallbackModels(): ModelSpec[] { return FALLBACK; }
+
+	/** Every model the API still serves reads images. */
+	protected override supportsImageInput(): boolean {
+		return true;
+	}
 
 	protected override async fetchAvailableModels(credential: string, token: vscode.CancellationToken): Promise<ModelSpec[] | undefined> {
 		const res = await fetch(MODELS_ENDPOINT, {
@@ -158,16 +164,20 @@ function toAnthropicMessages(
 	return { system, messages: out };
 }
 
-function toAnthropicToolResult(content: unknown[]): unknown {
-	const text: string[] = [];
-	for (const p of content) {
-		if (p instanceof vscode.LanguageModelTextPart) {
-			text.push(p.value);
-		} else if (typeof p === 'string') {
-			text.push(p);
-		}
+/**
+ * A tool result in Anthropic's shape: a plain string while it is only text, and
+ * a list of blocks once it carries images — which is how a screenshot taken by a
+ * tool reaches the model. An empty text block is rejected, so it is left out.
+ */
+function toAnthropicToolResult(content: readonly unknown[]): string | Array<Record<string, unknown>> {
+	const { text, images } = splitToolResult(content);
+	if (images.length === 0) {
+		return text;
 	}
-	return text.join('\n');
+	return [
+		...(text ? [{ type: 'text', text }] : []),
+		...images.map(image => ({ type: 'image', source: { type: 'base64', media_type: image.mimeType, data: image.base64 } })),
+	];
 }
 
 /**

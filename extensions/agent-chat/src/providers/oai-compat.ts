@@ -6,15 +6,20 @@
 import * as vscode from 'vscode';
 import { BaseChatProvider, IProviderUsage, ITokenLimits, limitsForModel, ModelSpec, parseSSE, toAbort } from './base.js';
 import { log } from '../logger.js';
+import { IToolResultImage, looksVisionCapable, splitToolResult, toolImagesCaption } from './toolResultContent.js';
 
 interface OAIToolCallAccum { id: string; name: string; arguments: string }
 
 interface IWireToolCall { id: string; type: 'function'; function: { name: string; arguments: string } }
 
+/** A piece of a multimodal user message in the OpenAI chat completions format. */
+type WireContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
+
 /** One message in the OpenAI chat completions wire format. */
 export interface IWireMessage {
 	role: 'system' | 'user' | 'assistant' | 'tool';
-	content: string | null;
+	/** A list of parts only on a user message that carries images. */
+	content: string | null | WireContentPart[];
 	tool_calls?: IWireToolCall[];
 	tool_call_id?: string;
 }
@@ -110,8 +115,17 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 	 * runtime that renders the model's own chat template can only accept what
 	 * that template knows how to write.
 	 */
-	protected toWireMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], _model: ModelSpec): IWireMessage[] {
-		return toOAIMessages(messages);
+	protected toWireMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], model: ModelSpec): IWireMessage[] {
+		return toOAIMessages(messages, this.supportsImageInput(model));
+	}
+
+	/**
+	 * These endpoints publish no capability flags, so vision is judged by the
+	 * model id, and an id that is not recognised stays text-only: an image sent
+	 * to a model that cannot read it fails the whole request.
+	 */
+	protected override supportsImageInput(spec: ModelSpec): boolean {
+		return looksVisionCapable(spec.id);
 	}
 
 	async sendChat(
@@ -255,7 +269,13 @@ export function flattenToAlternating(wire: readonly IWireMessage[]): IWireMessag
 	return merged;
 }
 
-export function toOAIMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): IWireMessage[] {
+/**
+ * The conversation in the chat completions format. With `includeImages`, images
+ * — the user's attachments and those a tool returned — go out as `image_url`
+ * parts; tool messages are text only in this format, so a tool's images ride in
+ * the user message right after them. Without it, images are left out.
+ */
+export function toOAIMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], includeImages = false): IWireMessage[] {
 	const out: IWireMessage[] = [];
 	for (const m of messages) {
 		if (m.role === vscode.LanguageModelChatMessageRole.System) {
@@ -282,17 +302,37 @@ export function toOAIMessages(messages: readonly vscode.LanguageModelChatRequest
 		// User
 		let plainText = '';
 		const toolResults: Array<{ id: string; text: string }> = [];
+		const toolImages: IToolResultImage[] = [];
+		const attachedImages: IToolResultImage[] = [];
 		for (const p of m.content) {
 			if (p instanceof vscode.LanguageModelTextPart) {
 				plainText += p.value;
 			} else if (p instanceof vscode.LanguageModelToolResultPart) {
-				toolResults.push({ id: p.callId, text: textOfUnknown(p.content) });
+				const result = splitToolResult(p.content);
+				toolResults.push({ id: p.callId, text: result.text });
+				toolImages.push(...result.images);
+			} else if (p instanceof vscode.LanguageModelDataPart) {
+				attachedImages.push(...splitToolResult([p]).images);
 			}
 		}
 		for (const tr of toolResults) {
 			out.push({ role: 'tool', tool_call_id: tr.id, content: tr.text });
 		}
-		if (plainText) {
+		const imageParts = (images: readonly IToolResultImage[]): WireContentPart[] =>
+			images.map(image => ({ type: 'image_url', image_url: { url: `data:${image.mimeType};base64,${image.base64}` } }));
+		const parts: WireContentPart[] = [];
+		if (includeImages && toolImages.length > 0) {
+			parts.push({ type: 'text', text: toolImagesCaption(toolImages.length) }, ...imageParts(toolImages));
+		}
+		if (includeImages) {
+			parts.push(...imageParts(attachedImages));
+		}
+		if (parts.length > 0) {
+			if (plainText) {
+				parts.push({ type: 'text', text: plainText });
+			}
+			out.push({ role: 'user', content: parts });
+		} else if (plainText) {
 			out.push({ role: 'user', content: plainText });
 		}
 	}
@@ -304,18 +344,6 @@ function textOf(parts: readonly unknown[]): string {
 	for (const p of parts) {
 		if (p instanceof vscode.LanguageModelTextPart) {
 			out += p.value;
-		}
-	}
-	return out;
-}
-
-function textOfUnknown(parts: readonly unknown[]): string {
-	let out = '';
-	for (const p of parts) {
-		if (p instanceof vscode.LanguageModelTextPart) {
-			out += p.value;
-		} else if (typeof p === 'string') {
-			out += p;
 		}
 	}
 	return out;

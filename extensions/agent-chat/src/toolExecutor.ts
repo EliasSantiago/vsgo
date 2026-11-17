@@ -60,6 +60,12 @@ export interface IToolRunEnvironment {
 	 * every write, since a write can change what a read returns.
 	 */
 	readonly answeredReads: Set<string>;
+	/**
+	 * Whether the model reads images. When it does, a screenshot a tool returns
+	 * goes back to it as an image; when it does not, it gets a note in its place,
+	 * so it knows to look through the accessibility tree instead.
+	 */
+	readonly imageInput: boolean;
 }
 
 export interface IToolRunOutcome {
@@ -68,6 +74,11 @@ export interface IToolRunOutcome {
 	readonly kind: 'search' | 'file' | 'command' | 'other';
 	/** The file the call read or changed, when there was one. */
 	readonly uri?: vscode.Uri;
+	/**
+	 * The call errored or was refused without doing anything. A run of turns made
+	 * only of these is how the agent loop recognises a model going in circles.
+	 */
+	readonly failed?: boolean;
 }
 
 /** Runs one tool call and returns its result for the model. Never throws for a tool error. */
@@ -80,6 +91,7 @@ export async function runAgentTool(tc: vscode.LanguageModelToolCallPart, env: IT
 			return {
 				part: text('You already made this exact call in this request and nothing has changed since. Reuse the earlier result and move on to the next step.'),
 				kind: 'other',
+				failed: true,
 			};
 		}
 		env.answeredReads.add(readSignature);
@@ -103,7 +115,7 @@ export async function runAgentTool(tc: vscode.LanguageModelToolCallPart, env: IT
 				const uri = resolveUri(input.path);
 				const outcome = await computeFileEdit(input);
 				if (outcome.content === undefined) {
-					return { part: text(outcome.message), kind: 'other' };
+					return { part: text(outcome.message), kind: 'other', failed: true };
 				}
 				await applyFileEdit({ path: input.path, content: outcome.content }, env.stream as ChatStreamWithEdits);
 				env.answeredReads.clear();
@@ -114,7 +126,7 @@ export async function runAgentTool(tc: vscode.LanguageModelToolCallPart, env: IT
 				const uri = resolveUri(input.path);
 				const outcome = await computeMultiFileEdit(input);
 				if (outcome.content === undefined) {
-					return { part: text(outcome.message), kind: 'other' };
+					return { part: text(outcome.message), kind: 'other', failed: true };
 				}
 				await applyFileEdit({ path: input.path, content: outcome.content }, env.stream as ChatStreamWithEdits);
 				env.answeredReads.clear();
@@ -142,7 +154,7 @@ export async function runAgentTool(tc: vscode.LanguageModelToolCallPart, env: IT
 				return { part: text(clampToolResult(await listDirectory((tc.input as { path?: string }).path), env.profile)), kind: 'other' };
 		}
 	} catch (err) {
-		return { part: text(`Tool error: ${err instanceof Error ? err.message : String(err)}`), kind: 'other' };
+		return { part: text(`Tool error: ${err instanceof Error ? err.message : String(err)}`), kind: 'other', failed: true };
 	}
 
 	// agent_run_command, ferramentas MCP e desconhecidas — o VS Code cuida dos
@@ -150,7 +162,9 @@ export async function runAgentTool(tc: vscode.LanguageModelToolCallPart, env: IT
 	try {
 		const result = await vscode.lm.invokeTool(tc.name, { input: tc.input, toolInvocationToken: env.toolInvocationToken }, token);
 		return {
-			part: new vscode.LanguageModelToolResultPart(tc.callId, result.content as Array<vscode.LanguageModelTextPart | vscode.LanguageModelPromptTsxPart>),
+			part: new vscode.LanguageModelToolResultPart(tc.callId, result.content.map(part => isImagePart(part) && !env.imageInput
+				? new vscode.LanguageModelTextPart(IMAGE_NOT_SUPPORTED)
+				: part)),
 			kind: 'command',
 		};
 	} catch (err) {
@@ -165,7 +179,7 @@ export async function runAgentTool(tc: vscode.LanguageModelToolCallPart, env: IT
 		const nextStep = env.mcpToolNames.has(tc.name)
 			? 'Essa ferramenta vem de um servidor MCP externo; nenhuma ferramenta local faz o trabalho dela. Se o erro indicar falta de autenticação ou servidor fora do ar, diga isso ao usuário e siga com o que for possível sem ela.'
 			: 'Não repita essa chamada — faça o mesmo trabalho com outra ferramenta (`agent_search` para um símbolo, `agent_find_files` para um arquivo, `agent_list_dir` para ver o que existe) e siga sem perguntar nada ao usuário.';
-		return { part: text(`Erro da ferramenta ${tc.name}: ${message}. ${nextStep}`), kind: 'command' };
+		return { part: text(`Erro da ferramenta ${tc.name}: ${message}. ${nextStep}`), kind: 'command', failed: true };
 	}
 }
 
@@ -191,4 +205,55 @@ async function applyFileEdit(
 	stream.textEdit(uri, new vscode.TextEdit(range, input.content));
 	stream.textEdit(uri, true);
 	return `Alterações em ${input.path} exibidas no editor para revisão (Aceitar / Rejeitar).`;
+}
+
+/** Stands in for an image the current model cannot read. */
+const IMAGE_NOT_SUPPORTED = '[The tool returned an image, but the current model does not accept images, so it was left out. Use read_page to see the page.]';
+
+/** Stands in for a tool image dropped from the context because newer ones replaced it. */
+const IMAGE_PRUNED = '[Older image removed to save context. Take a new screenshot if you still need to look at it.]';
+
+/**
+ * Tool images kept in the conversation. A screenshot costs as much context as a
+ * mid-sized file and only the latest few still describe the page as it is, so a
+ * browser session that takes one per step would otherwise fill the window with
+ * pictures of states long gone.
+ */
+const MAX_TOOL_IMAGES = 3;
+
+function isImagePart(part: unknown): part is vscode.LanguageModelDataPart {
+	return part instanceof vscode.LanguageModelDataPart && part.mimeType.startsWith('image/');
+}
+
+/**
+ * Replaces all but the newest {@link MAX_TOOL_IMAGES} images in tool results
+ * with a short note. Mutates `messages`, so a pruned image stays pruned on the
+ * following turns.
+ */
+export function pruneOldToolImages(messages: vscode.LanguageModelChatMessage[]): void {
+	let kept = 0;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i];
+		let changed = false;
+		const content = message.content.map(part => {
+			if (!(part instanceof vscode.LanguageModelToolResultPart) || !part.content.some(isImagePart)) {
+				return part;
+			}
+			const inner = part.content.map(item => {
+				if (!isImagePart(item)) {
+					return item;
+				}
+				if (kept < MAX_TOOL_IMAGES) {
+					kept++;
+					return item;
+				}
+				changed = true;
+				return new vscode.LanguageModelTextPart(IMAGE_PRUNED);
+			});
+			return changed ? new vscode.LanguageModelToolResultPart(part.callId, inner) : part;
+		});
+		if (changed) {
+			messages[i] = vscode.LanguageModelChatMessage.User(content as Array<vscode.LanguageModelTextPart | vscode.LanguageModelToolResultPart>);
+		}
+	}
 }
