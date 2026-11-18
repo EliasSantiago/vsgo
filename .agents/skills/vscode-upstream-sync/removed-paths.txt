@@ -1,0 +1,13 @@
+# Caminhos que o vsgo removeu de propósito do VS Code.
+# Durante um sync, tudo que o upstream alterar ou adicionar debaixo deles é descartado.
+# Um prefixo por linha (sem glob). Linhas com # são comentários.
+# Ao remover algo novo do upstream no vsgo, acrescente aqui com o motivo.
+
+# 79868bfd: extensão GitHub Copilot Chat embarcada (marca GitHub, telemetria MS, endpoints copilot_internal)
+extensions/copilot/
+build/azure-pipelines/copilot/
+build/azure-pipelines/product-copilot.yml
+build/azure-pipelines/product-copilot-recovery.yml
+build/azure-pipelines/common/downloadCopilotVsix.ts
+# 79868bfd: harness de performance que instala GitHub.copilot-chat
+scripts/chat-simulation/

@@ -13,6 +13,7 @@ import { MockContextKeyService } from '../../../../../platform/keybinding/test/c
 import { NullLogService } from '../../../../../platform/log/common/log.js';
 import { IProductService } from '../../../../../platform/product/common/productService.js';
 import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
+import { IAuthenticationService } from '../../../../services/authentication/common/authentication.js';
 import { ChatEntitlement, ChatEntitlementContext, ChatEntitlementContextKeys, ChatEntitlementService, getQuotaReset, getQuotaUsage, parseQuotas, QuotaUsageKind } from '../../../../services/chat/common/chatEntitlementService.js';
 import { IWorkbenchEnvironmentService } from '../../../../services/environment/common/environmentService.js';
 import { TestStorageService } from '../../../../test/common/workbenchTestServices.js';
@@ -669,6 +670,8 @@ suite('ChatEntitlementContext', () => {
 			new NullLogService(),
 			new TestConfigurationService(),
 			NullTelemetryService,
+			new class extends mock<IAuthenticationService>() { },
+			new class extends mock<IProductService>() { },
 		));
 
 		await context.update({ entitlement: ChatEntitlement.Pro, organisations, isStaff, sku: undefined, copilotTrackingId: undefined });
