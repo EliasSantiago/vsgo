@@ -11,7 +11,7 @@ import { loadSubagentDefinitions } from './subagents/definitions.js';
 import { buildTaskTool, runTaskCalls, TASK_TOOL_NAME } from './subagents/subagentRunner.js';
 import { log } from './logger.js';
 import { FileLinkStream } from './fileLinks.js';
-import { EDIT_FILE_TOOL_NAME, IToolRunEnvironment, MULTI_EDIT_TOOL_NAME, OPEN_FILE_TOOL_NAME, runAgentTool, WRITE_FILE_TOOL_NAME } from './toolExecutor.js';
+import { EDIT_FILE_TOOL_NAME, IToolRunEnvironment, MULTI_EDIT_TOOL_NAME, OPEN_FILE_TOOL_NAME, pruneOldToolImages, runAgentTool, WRITE_FILE_TOOL_NAME } from './toolExecutor.js';
 import { parseTodos, renderTodosForModel, renderTodosForUser, TODO_TOOL, TODO_TOOL_NAME, TodoItem } from './todoList.js';
 import { restoreTranscript, serializeTranscript, TRANSCRIPT_METADATA_KEY } from './transcript.js';
 import { extractTextToolCalls, IAgentProfile, resolveProfile } from './agentProfile.js';
@@ -20,12 +20,19 @@ import { usageBus } from './usageBus.js';
 import { FIGMA_TOOL_NAME } from './figma/figmaTool.js';
 
 /**
- * Turn budget for one request under the full profile. Tasks that run the app and
- * then drive the browser spend several turns on exploration alone, so this has to
- * be well above the handful of turns a pure question needs. The compact profile
- * carries its own, smaller budget.
+ * Default turn ceiling for one request, overridable with `agent-chat.maxTurns`.
+ *
+ * The loop is meant to end because the model stops calling tools, the way
+ * Claude Code and Codex run theirs — not because a counter ran out. The ceiling
+ * is only a safety net against a runaway loop, so it sits far above what a long
+ * task really takes (a refactor plus build plus browser check is ~60-100 turns).
+ * What actually catches a stuck model is the stagnation guards below: empty
+ * turns, repeated calls and turns where every call failed.
  */
-const MAX_AGENT_TURNS = 32;
+const DEFAULT_MAX_AGENT_TURNS = 200;
+
+/** Metadata flag on a result that stopped at the turn ceiling, read by the followup provider. */
+export const TURN_LIMIT_METADATA_KEY = 'agentChatTurnLimit';
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 
 const MIME_BY_EXT: Record<string, string> = {
@@ -132,13 +139,13 @@ Workflow:
 1. Find the dev server URL before guessing: read package.json (or the vite/next/webpack config) to see the start script and port. Read only what you need — do not survey the whole workspace first.
 2. If no server is running, start it with \`agent_run_command\` and \`"background": true\`. A dev server never exits, so a foreground call would hang until it is killed. The tool returns the first seconds of output, which is where the actual port is printed — use that port, do not assume 3000. It also returns a terminal id: a server that prints "ready" can still crash a moment later, so before you trust it, call \`agent_read_terminal\` with that id and \`"waitSeconds": 5\` to see what it printed next.
 3. \`open_browser_page\` with an absolute \`url\`. It returns a \`pageId\` plus an accessibility summary of the page. Every other browser tool takes that \`pageId\`.
-4. \`read_page\` to see the current state — it returns the accessibility tree WITH element refs. This is how you see. You do NOT receive image content back, so never rely on \`screenshot_page\` to observe anything yourself.
+4. \`read_page\` to see the current state — it returns the accessibility tree WITH element refs. This is how you find elements and read text.
 5. Interact using refs from the LATEST \`read_page\` (\`click_element\`, \`type_in_page\`, \`hover_element\`, \`drag_element\`), then \`read_page\` again to confirm the result. Refs go stale after the page changes — re-read instead of reusing old ones.
 6. \`navigate_page\` for url/back/forward/reload on a page you already opened. \`handle_dialog\` when an alert/confirm blocks you.
 7. \`run_playwright_code\` is the escape hatch for anything the dedicated tools do not cover — waiting for a selector, reading \`document.title\`, extracting a list. Access the page only through the provided \`page\` object, never \`document\`/\`window\` directly.
-8. \`screenshot_page\` when the USER would benefit from seeing the result — it is for them, not for you.
+8. \`screenshot_page\` returns an image of the page that you can look at. Use it for what the accessibility tree cannot tell you — layout, spacing, alignment, colours, overlapping or cut-off elements, whether the screen matches a design — and to show the user the result. When it comes back as a note saying images are not supported, rely on \`read_page\` alone.
 
-Never claim the app works until \`read_page\` or \`run_playwright_code\` output actually shows it. Report what you observed, not what you expect.
+Never claim the app works until \`read_page\`, \`run_playwright_code\` or a screenshot actually shows it. Report what you observed, not what you expect.
 
 ## Running commands
 Commands that exit on their own run in the foreground and return their full output.
@@ -243,7 +250,7 @@ export async function handleChatRequest(
 		return {};
 	}
 
-	const profile = resolveProfile(model, { systemPrompt: BASE_SYSTEM_PROMPT, maxTurns: MAX_AGENT_TURNS });
+	const profile = resolveProfile(model, { systemPrompt: BASE_SYSTEM_PROMPT, maxTurns: readMaxTurns() });
 	const browserWanted = wantsBrowserTools(request, context);
 	const baseTools = collectTools(profile, browserWanted);
 	const subagents = profile.allowDelegation ? await loadSubagentDefinitions() : [];
@@ -271,18 +278,31 @@ export async function handleChatRequest(
 		collectAttachments(request, stream),
 		collectTextReferences(request, profile),
 	]);
-	const messages = buildInitialMessages(context, request, resolvedRules, memories, attachments, textRefs, profile);
+	// Anthropic only: the rules picked by the active file go with the request
+	// instead of the system prompt. See `rulesForCurrentFileInRequest`.
+	const rulesInRequest = rulesForCurrentFileInRequest(model);
+	const messages = buildInitialMessages(context, request, resolvedRules, memories, attachments, textRefs, profile, rulesInRequest);
 
 	// Signatures of read-only calls already answered this request. Re-issuing one
 	// verbatim returns nothing new and costs a turn, so it is short-circuited.
 	const answeredReads = new Set<string>();
-	const toolEnvironment: IToolRunEnvironment = { stream, profile, toolInvocationToken: request.toolInvocationToken, mcpToolNames, answeredReads };
+	// Whether screenshots taken by tools can go back to the model as images.
+	const imageInput = model.capabilities.supportsImageToText;
+	const toolEnvironment: IToolRunEnvironment = { stream, profile, toolInvocationToken: request.toolInvocationToken, mcpToolNames, answeredReads, imageInput };
 	// What a sub-agent needs to know about the project, without the main agent's
 	// own instructions: it gets a system prompt of its own.
 	const projectContext = buildProjectContext(resolvedRules, memories);
 
 	// Checklist the model keeps for itself, replaced wholesale on every write.
 	let todos: readonly TodoItem[] = [];
+	// Times the model was sent back to work because it answered with items still
+	// open, and whether it has done anything since the last time. A model that
+	// answers again straight after being sent back has a reason to stop — most
+	// often a question only the user can answer — and is not pushed a second time.
+	let todoNudges = 0;
+	let workedSinceTodoNudge = true;
+	// Consecutive turns in which every call errored or was refused.
+	let failingTurns = 0;
 
 	// The request itself, kept aside so compaction can re-insert it verbatim: a
 	// summary may blur what was discovered, never what was asked.
@@ -315,6 +335,7 @@ export async function handleChatRequest(
 		let budgeted: vscode.LanguageModelChatMessage[] = [];
 
 		try {
+			pruneOldToolImages(messages);
 			budgeted = await ensurePromptFits(messages, budget, stats, pinnedRequest, model, stream, token);
 			// Tagging the request is what lets its token counts find their way back
 			// here from the provider; see `usageBus`.
@@ -394,10 +415,25 @@ export async function handleChatRequest(
 			emptyTurns = 0;
 			// Closing answer: keep it in the transcript so a follow-up sees what was said.
 			messages.push(vscode.LanguageModelChatMessage.Assistant(assistantText));
+			// The model's own checklist says the task is not done. Models drift into
+			// answering after a sub-step ("pronto, agora vou...") and that answer used
+			// to end the request, leaving the user to type "continue". Send it back to
+			// the open items instead — the same check Claude Code's stop hooks and
+			// Copilot's todo reminder make — bounded, and only once per stretch of work.
+			const open = todos.filter(t => t.status !== 'done');
+			if (open.length > 0 && workedSinceTodoNudge && todoNudges < MAX_TODO_NUDGES && turn + 1 < profile.maxTurns) {
+				todoNudges++;
+				workedSinceTodoNudge = false;
+				log(`final answer with ${open.length} open todo(s); sending the model back to work (${todoNudges}/${MAX_TODO_NUDGES})`);
+				stream.progress('Continuando as tarefas pendentes...');
+				messages.push(vscode.LanguageModelChatMessage.User(openTodosNudge(open)));
+				continue;
+			}
 			return finishRequest('concluído', stats, messages);
 		}
 
 		emptyTurns = 0;
+		workedSinceTodoNudge = true;
 		stats.toolCalls += toolCalls.length;
 
 		const assistantParts: Array<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart> = [];
@@ -436,7 +472,7 @@ export async function handleChatRequest(
 			resultParts.push(...await runTaskCalls(taskCalls, subagents, {
 				model,
 				tools: baseTools,
-				environment: { stream, profile, toolInvocationToken: request.toolInvocationToken, mcpToolNames },
+				environment: { stream, profile, toolInvocationToken: request.toolInvocationToken, mcpToolNames, imageInput },
 				projectContext,
 			}, token));
 			// A sub-agent that edits changes what the main agent's reads return.
@@ -445,6 +481,8 @@ export async function handleChatRequest(
 
 		// All other tool calls run inside a single collapsible progress section.
 		const agentToolCalls = toolCalls.filter(tc => tc.name !== TASK_TOOL_NAME);
+		let ranCalls = 0;
+		let failedCalls = 0;
 		if (agentToolCalls.length > 0 && !token.isCancellationRequested) {
 			let toolsDoneResolve!: () => void;
 			const toolsDone = new Promise<void>(resolve => { toolsDoneResolve = resolve; });
@@ -458,11 +496,14 @@ export async function handleChatRequest(
 						if (token.isCancellationRequested) {
 							break;
 						}
+						ranCalls++;
 						if (tc.name === TODO_TOOL_NAME) {
 							const parsed = parseTodos(tc.input);
 							if (parsed.todos) {
 								todos = parsed.todos;
 								stream.markdown(renderTodosForUser(todos));
+							} else {
+								failedCalls++;
 							}
 							resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [
 								new vscode.LanguageModelTextPart(parsed.todos ? renderTodosForModel(parsed.todos) : parsed.error!),
@@ -471,6 +512,9 @@ export async function handleChatRequest(
 						}
 						const outcome = await runAgentTool(tc, toolEnvironment, token);
 						resultParts.push(outcome.part);
+						if (outcome.failed) {
+							failedCalls++;
+						}
 						if (outcome.kind === 'search') {
 							searchCount++;
 						} else if (outcome.kind === 'command') {
@@ -500,15 +544,50 @@ export async function handleChatRequest(
 			await toolsDone;
 		}
 
-		messages.push(vscode.LanguageModelChatMessage.User(resultParts));
+		// Notes for the model ride in the same message as the tool results, after
+		// them: a second user message in a row is rejected by some providers, and
+		// Anthropic wants tool results first.
+		const notes: vscode.LanguageModelTextPart[] = [];
+
+		// A turn where everything failed made no progress. One of them is normal —
+		// a wrong path, a typo — but a run of them is a model going in circles,
+		// and with a high turn ceiling that is what has to end the request.
+		failingTurns = ranCalls > 0 && failedCalls === ranCalls ? failingTurns + 1 : 0;
+		if (failingTurns >= MAX_FAILING_TURNS * 2) {
+			messages.push(vscode.LanguageModelChatMessage.User(resultParts));
+			stream.markdown(`\n\n_O agente parou: as ferramentas falharam em ${failingTurns} rodadas seguidas, sem avanço. O que já foi feito ficou preservado — veja os erros acima, ajuste o que for preciso e peça para continuar._`);
+			return finishRequest('travado em erros de ferramenta', stats, messages);
+		}
+		if (failingTurns === MAX_FAILING_TURNS) {
+			log(`every tool call failed for ${failingTurns} turns in a row; asking the model to change approach`);
+			notes.push(new vscode.LanguageModelTextPart(FAILING_TURNS_NUDGE));
+		}
+
+		// Close to the ceiling, tell the model so it lands the task in a state the
+		// next request can pick up, instead of being cut off mid-edit.
+		const remainingTurns = profile.maxTurns - (turn + 1);
+		if (remainingTurns === WRAP_UP_TURNS) {
+			notes.push(new vscode.LanguageModelTextPart(wrapUpNote(remainingTurns)));
+		}
+
+		messages.push(vscode.LanguageModelChatMessage.User([...resultParts, ...notes]));
 	}
 
 	const unfinished = todos.filter(t => t.status !== 'done');
 	const pending = unfinished.length > 0
 		? `\n\nFaltou:\n${unfinished.map(t => `- ${t.content}`).join('\n')}`
 		: '';
-	stream.markdown(`\n\n_Limite de turnos do agente atingido. O que já foi lido e executado ficou preservado — envie **continue** para retomar de onde parei._${pending}`);
-	return finishRequest('limite de turnos', stats, messages);
+	stream.markdown(`\n\n_O agente usou os ${profile.maxTurns} turnos desta solicitação. Tudo o que foi lido e executado ficou preservado — clique em **Continuar** abaixo para retomar de onde parou. Para tarefas longas, aumente \`agent-chat.maxTurns\` (0 = sem limite)._${pending}`);
+	return finishRequest('limite de turnos', stats, messages, { [TURN_LIMIT_METADATA_KEY]: true });
+}
+
+/** The turn ceiling from settings. `0` lifts it, leaving only the stagnation guards. */
+function readMaxTurns(): number {
+	const configured = vscode.workspace.getConfiguration('agent-chat').get<number>('maxTurns', DEFAULT_MAX_AGENT_TURNS);
+	if (!Number.isFinite(configured) || configured < 0) {
+		return DEFAULT_MAX_AGENT_TURNS;
+	}
+	return configured === 0 ? Number.POSITIVE_INFINITY : Math.max(MIN_AGENT_TURNS, Math.floor(configured));
 }
 
 /**
@@ -572,6 +651,48 @@ const MAX_REPEATED_TURNS = 2;
 
 /** Sent back in place of a tool call the model has been repeating unchanged. */
 const REPEATED_CALL_NUDGE = 'You have made this exact call, with these exact arguments, on the last turns in a row, and it was not run again because the result cannot have changed. Do something different: take the next step of the task with a different tool or different arguments, or write the final answer for the user.';
+
+/**
+ * What one image costs in the prompt. Providers bill by pixel area and cap it
+ * around this for a screenshot-sized image; an estimate on the high side keeps
+ * the trimmer from letting a few screenshots overflow the window.
+ */
+const IMAGE_TOKENS = 1600;
+
+/** Lowest ceiling a setting may ask for; below it a single build-and-fix cycle no longer fits. */
+const MIN_AGENT_TURNS = 10;
+
+/** Turns left when the model is told to land the task, so its last steps leave a resumable state. */
+const WRAP_UP_TURNS = 3;
+
+/**
+ * Times per request a final answer is sent back because the todo list still has
+ * open items. Each one is a stretch of work in which the model drifted out; past
+ * a few, the list is more likely stale than the task unfinished.
+ */
+const MAX_TODO_NUDGES = 5;
+
+/**
+ * Consecutive turns in which every call failed before the model is told to change
+ * approach. Twice this many ends the request.
+ */
+const MAX_FAILING_TURNS = 3;
+
+/** Sent back when every call in the last few turns errored or was refused. */
+const FAILING_TURNS_NUDGE = 'Every tool call in your last turns failed or was refused, so the task has not moved. Stop retrying the same approach. Re-read the error messages above, then either take a different route to the same goal (another tool, another path, a smaller step) or, if you are truly blocked on something only the user can fix, say exactly what is blocking you and stop.';
+
+function openTodosNudge(open: readonly TodoItem[]): string {
+	return [
+		'Your todo list still has open items, so the task is not finished:',
+		...open.map(t => `- [${t.status}] ${t.content}`),
+		'',
+		'Do not stop and do not ask whether to continue — continue with the next open item now. If an item is already done or no longer needed, mark it with agent_todo_write first. Only stop if you are blocked on information or an action that only the user can provide; in that case say exactly what you need.',
+	].join('\n');
+}
+
+function wrapUpNote(remainingTurns: number): string {
+	return `Turn budget: only ${remainingTurns} turns are left in this request. Bring the current step to a safe stopping point — never leave a file half-edited — update agent_todo_write so it shows exactly what is done and what is left, then write a short status for the user. The user can resume the task right after with everything preserved, so do not try to rush the remaining work.`;
+}
 
 /**
  * Whether `text` is a tool call the model failed to finish.
@@ -1039,6 +1160,8 @@ function estimateMessagesTokens(messages: readonly vscode.LanguageModelChatMessa
 				for (const inner of part.content) {
 					if (inner instanceof vscode.LanguageModelTextPart) {
 						total += Math.ceil(inner.value.length / perToken);
+					} else if (inner instanceof vscode.LanguageModelDataPart) {
+						total += IMAGE_TOKENS;
 					}
 				}
 			}
@@ -1075,15 +1198,16 @@ interface IRequestStats {
  * The leading system prompt is dropped from the snapshot: it is rebuilt from the
  * rules and memories that are current at the time of the next request.
  */
-function finishRequest(outcome: string, stats: IRequestStats, messages: readonly vscode.LanguageModelChatMessage[]): vscode.ChatResult {
+function finishRequest(outcome: string, stats: IRequestStats, messages: readonly vscode.LanguageModelChatMessage[], extraMetadata?: Record<string, unknown>): vscode.ChatResult {
 	const seconds = Math.round((Date.now() - stats.startedAt) / 1000);
 	const perTurn = stats.turnsUsed > 0 ? (stats.toolCalls / stats.turnsUsed).toFixed(1) : '0';
 	const dropped = stats.droppedMessages > 0 ? `, ${stats.droppedMessages} mensagens descartadas por limite de contexto` : '';
 	const recalibrated = stats.overflowRetries > 0 ? `, ${stats.overflowRetries} reenvios após estouro de contexto` : '';
 	const evicted = stats.evictedToolResults > 0 ? `, ${stats.evictedToolResults} resultados de ferramenta descartados` : '';
 	const compacted = stats.compactions > 0 ? `, ${stats.compactions} compactações da conversa` : '';
-	log(`request: ${outcome} — ${stats.turnsUsed}/${stats.profile.maxTurns} turnos, ${stats.toolCalls} tool calls (${perTurn}/turno), ${seconds}s, modelo ${stats.modelId}, perfil ${stats.profile.id}${evicted}${compacted}${dropped}${recalibrated}`);
-	return { metadata: { [TRANSCRIPT_METADATA_KEY]: serializeTranscript(messages.slice(1)) } };
+	const ceiling = Number.isFinite(stats.profile.maxTurns) ? String(stats.profile.maxTurns) : '∞';
+	log(`request: ${outcome} — ${stats.turnsUsed}/${ceiling} turnos, ${stats.toolCalls} tool calls (${perTurn}/turno), ${seconds}s, modelo ${stats.modelId}, perfil ${stats.profile.id}${evicted}${compacted}${dropped}${recalibrated}`);
+	return { metadata: { ...extraMetadata, [TRANSCRIPT_METADATA_KEY]: serializeTranscript(messages.slice(1)) } };
 }
 
 /** Pick a progress label that reflects what the agent is doing this turn. */
@@ -1251,9 +1375,10 @@ function buildInitialMessages(
 	attachments: readonly vscode.LanguageModelDataPart[],
 	textRefs: readonly ITextReference[],
 	profile: IAgentProfile,
+	rulesInRequest: boolean,
 ): vscode.LanguageModelChatMessage[] {
 	const messages: vscode.LanguageModelChatMessage[] = [];
-	messages.push(vscode.LanguageModelChatMessage.User(buildSystemPrompt(rules, memories, profile)));
+	messages.push(vscode.LanguageModelChatMessage.User(buildSystemPrompt(rules, memories, profile, rulesInRequest)));
 
 	appendHistory(context.history, messages);
 
@@ -1272,6 +1397,10 @@ function buildInitialMessages(
 			return `--- Arquivo: ${ref.uri.fsPath} — conteúdo COMPLETO abaixo. Este arquivo já está lido: responda a partir do que está aqui e NÃO chame agent_read_file para ele. ---\n${ref.content}\n---`;
 		});
 		userPrompt = refBlocks.join('\n\n') + (userPrompt ? '\n\n' + userPrompt : '');
+	}
+
+	if (rulesInRequest && rules && rules.matched.length > 0) {
+		userPrompt = renderMatchedRules(rules) + (userPrompt ? '\n\n' + userPrompt : '');
 	}
 
 	if (attachments.length > 0) {
@@ -1393,12 +1522,30 @@ function formatBytes(n: number): string {
 	return `${(n / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-function buildSystemPrompt(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[], profile: IAgentProfile): string {
-	return [profile.systemPrompt, buildProjectContext(rules, memories)].filter(Boolean).join('\n\n');
+function buildSystemPrompt(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[], profile: IAgentProfile, rulesInRequest: boolean): string {
+	return [profile.systemPrompt, buildProjectContext(rules, memories, rulesInRequest)].filter(Boolean).join('\n\n');
+}
+
+/**
+ * Whether the rules matched by the active file travel in the request message
+ * rather than in the system prompt.
+ *
+ * The system prompt is the first message, ahead of the whole conversation, and
+ * Anthropic's prompt cache matches on the prefix: rules that change whenever the
+ * user switches files would make every follow-up re-read the conversation at
+ * full price. In the request message they sit after the cached part. Other
+ * providers keep the original layout on purpose.
+ */
+function rulesForCurrentFileInRequest(model: vscode.LanguageModelChat): boolean {
+	return model.vendor === 'anthropic';
+}
+
+function renderMatchedRules(rules: ResolvedRules): string {
+	return '# Rules for the current file\n\n' + rules.matched.map(renderRule).join('\n\n');
 }
 
 /** Workspace roots, project instructions, rules and memories: what any agent working here should know. */
-function buildProjectContext(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[]): string {
+function buildProjectContext(rules: ResolvedRules | undefined, memories: readonly LoadedMemory[], omitMatchedRules = false): string {
 	const sections: string[] = [];
 	const workspaceSection = describeWorkspaceRoots();
 	if (workspaceSection) {
@@ -1410,8 +1557,8 @@ function buildProjectContext(rules: ResolvedRules | undefined, memories: readonl
 	if (rules && rules.always.length > 0) {
 		sections.push('# Always-on rules\n\n' + rules.always.map(renderRule).join('\n\n'));
 	}
-	if (rules && rules.matched.length > 0) {
-		sections.push('# Rules for the current file\n\n' + rules.matched.map(renderRule).join('\n\n'));
+	if (rules && rules.matched.length > 0 && !omitMatchedRules) {
+		sections.push(renderMatchedRules(rules));
 	}
 	if (memories.length > 0) {
 		const rendered = memories.map(m => `## ${m.entry.title}\n${m.body}`).join('\n\n');

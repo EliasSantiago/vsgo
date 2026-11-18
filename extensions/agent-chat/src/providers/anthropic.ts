@@ -4,7 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { log } from '../logger.js';
 import { BaseChatProvider, IProviderUsage, limitsForModel, ModelSpec, parseSSE, toAbort } from './base.js';
+import { splitToolResult } from './toolResultContent.js';
+import { addUsage, buildAnthropicRequest, formatUsageLine, IAnthropicMessage, IAnthropicUsage, mergeUsage, parseCacheTtl } from './anthropicCache.js';
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const MODELS_ENDPOINT = 'https://api.anthropic.com/v1/models';
@@ -22,6 +25,11 @@ interface AnthropicModelsResponse {
 
 export class AnthropicProvider extends BaseChatProvider {
 	fallbackModels(): ModelSpec[] { return FALLBACK; }
+
+	/** Every model the API still serves reads images. */
+	protected override supportsImageInput(): boolean {
+		return true;
+	}
 
 	protected override async fetchAvailableModels(credential: string, token: vscode.CancellationToken): Promise<ModelSpec[] | undefined> {
 		const res = await fetch(MODELS_ENDPOINT, {
@@ -49,7 +57,15 @@ export class AnthropicProvider extends BaseChatProvider {
 		progress: vscode.Progress<vscode.LanguageModelResponsePart2>,
 		token: vscode.CancellationToken,
 	): Promise<IProviderUsage | void> {
-		const { system, messages: body } = toAnthropicMessages(messages);
+		const { system, messages: converted } = toAnthropicMessages(messages);
+		const body = buildAnthropicRequest({
+			model: model.id,
+			maxTokens: model.maxOutputTokens,
+			system,
+			messages: converted,
+			tools: tools?.map(t => ({ name: t.name, description: t.description, input_schema: t.inputSchema })),
+			ttl: parseCacheTtl(vscode.workspace.getConfiguration('agent-chat').get('anthropic.promptCacheTtl')),
+		});
 		const response = await fetch(ENDPOINT, {
 			method: 'POST',
 			headers: {
@@ -57,14 +73,7 @@ export class AnthropicProvider extends BaseChatProvider {
 				'anthropic-version': VERSION,
 				'content-type': 'application/json',
 			},
-			body: JSON.stringify({
-				model: model.id,
-				max_tokens: model.maxOutputTokens,
-				stream: true,
-				system: system || undefined,
-				messages: body,
-				tools: tools ? tools.map(t => ({ name: t.name, description: t.description, input_schema: t.inputSchema })) : undefined,
-			}),
+			body: JSON.stringify(body),
 			signal: toAbort(token),
 		});
 		if (!response.ok) {
@@ -72,16 +81,15 @@ export class AnthropicProvider extends BaseChatProvider {
 		}
 
 		const currentToolCall: { id?: string; name?: string; jsonBuf: string } = { jsonBuf: '' };
-		let inputTokens = 0;
-		let outputTokens = 0;
+		let usage: IAnthropicUsage = {};
 		for await (const evt of parseSSE(response, token)) {
-			const e = evt as { type?: string; index?: number; delta?: { type?: string; text?: string; partial_json?: string }; content_block?: { type?: string; id?: string; name?: string }; message?: { usage?: AnthropicUsage }; usage?: AnthropicUsage };
+			const e = evt as { type?: string; index?: number; delta?: { type?: string; text?: string; partial_json?: string }; content_block?: { type?: string; id?: string; name?: string }; message?: { usage?: IAnthropicUsage }; usage?: IAnthropicUsage };
 			if (e.type === 'message_start' && e.message?.usage) {
-				inputTokens = promptTokensOf(e.message.usage) ?? inputTokens;
-				outputTokens = e.message.usage.output_tokens ?? outputTokens;
+				usage = mergeUsage(usage, e.message.usage);
 			} else if (e.type === 'message_delta' && e.usage) {
-				// message_delta carries the cumulative output token count.
-				outputTokens = e.usage.output_tokens ?? outputTokens;
+				// message_delta carries the cumulative output token count (and,
+				// when server tools ran, updated input/cache counters).
+				usage = mergeUsage(usage, e.usage);
 			}
 			if (e.type === 'content_block_start' && e.content_block?.type === 'tool_use') {
 				currentToolCall.id = e.content_block.id;
@@ -105,15 +113,20 @@ export class AnthropicProvider extends BaseChatProvider {
 				}
 			}
 		}
-		return { inputTokens, outputTokens };
+		sessionUsage = addUsage(sessionUsage, usage);
+		log(formatUsageLine(model.id, usage, sessionUsage));
+		return { inputTokens: promptTokensOf(usage) ?? 0, outputTokens: usage.output_tokens ?? 0 };
 	}
 }
 
+/** Usage summed over every Anthropic call since the extension host started, for the session hit rate in the log. */
+let sessionUsage: IAnthropicUsage = {};
+
 function toAnthropicMessages(
 	messages: readonly vscode.LanguageModelChatRequestMessage[],
-): { system: string; messages: Array<{ role: 'user' | 'assistant'; content: unknown[] }> } {
+): { system: string; messages: IAnthropicMessage[] } {
 	let system = '';
-	const out: Array<{ role: 'user' | 'assistant'; content: unknown[] }> = [];
+	const out: IAnthropicMessage[] = [];
 	for (const m of messages) {
 		if (m.role === vscode.LanguageModelChatMessageRole.System) {
 			for (const p of m.content) {
@@ -124,7 +137,7 @@ function toAnthropicMessages(
 			continue;
 		}
 		const role: 'user' | 'assistant' = m.role === vscode.LanguageModelChatMessageRole.Assistant ? 'assistant' : 'user';
-		const content: unknown[] = [];
+		const content: IAnthropicMessage['content'] = [];
 		for (const p of m.content) {
 			if (p instanceof vscode.LanguageModelTextPart) {
 				if (p.value) {
@@ -151,39 +164,32 @@ function toAnthropicMessages(
 	return { system, messages: out };
 }
 
-function toAnthropicToolResult(content: unknown[]): unknown {
-	const text: string[] = [];
-	for (const p of content) {
-		if (p instanceof vscode.LanguageModelTextPart) {
-			text.push(p.value);
-		} else if (typeof p === 'string') {
-			text.push(p);
-		}
-	}
-	return text.join('\n');
-}
-
 /**
- * The usage block Anthropic sends, which splits the prompt across three counters.
+ * A tool result in Anthropic's shape: a plain string while it is only text, and
+ * a list of blocks once it carries images — which is how a screenshot taken by a
+ * tool reaches the model. An empty text block is rejected, so it is left out.
  */
-interface AnthropicUsage {
-	readonly input_tokens?: number;
-	readonly output_tokens?: number;
-	readonly cache_read_input_tokens?: number;
-	readonly cache_creation_input_tokens?: number;
+function toAnthropicToolResult(content: readonly unknown[]): string | Array<Record<string, unknown>> {
+	const { text, images } = splitToolResult(content);
+	if (images.length === 0) {
+		return text;
+	}
+	return [
+		...(text ? [{ type: 'text', text }] : []),
+		...images.map(image => ({ type: 'image', source: { type: 'base64', media_type: image.mimeType, data: image.base64 } })),
+	];
 }
 
 /**
  * The size of the prompt the model actually read.
  *
- * `input_tokens` alone is not it: Anthropic reports tokens served from the
- * prompt cache under separate counters and leaves them out of `input_tokens`.
- * We do not send `cache_control` today, so those counters are zero and the sum
- * equals `input_tokens` — but the day caching is turned on, reading only
- * `input_tokens` would show a 200k conversation as a couple of thousand tokens,
- * which is exactly the moment the context bar would matter most.
+ * `input_tokens` alone is not it: Anthropic reports tokens served from or
+ * written to the prompt cache under separate counters and leaves them out of
+ * `input_tokens`. Reading only `input_tokens` would show a cached 200k
+ * conversation as a couple of thousand tokens, which is exactly the moment the
+ * context bar matters most.
  */
-function promptTokensOf(usage: AnthropicUsage): number | undefined {
+function promptTokensOf(usage: IAnthropicUsage): number | undefined {
 	const { input_tokens, cache_read_input_tokens, cache_creation_input_tokens } = usage;
 	if (input_tokens === undefined && cache_read_input_tokens === undefined && cache_creation_input_tokens === undefined) {
 		return undefined;

@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { log } from '../logger.js';
 import { BaseChatProvider, limitsForModel, ModelSpec, parseSSE, toAbort } from './base.js';
+import { IToolResultImage, splitToolResult, toolImagesCaption } from './toolResultContent.js';
 
 const CHAT_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 const RESPONSES_ENDPOINT = 'https://api.openai.com/v1/responses';
@@ -39,6 +40,11 @@ interface OAIToolCallAccum { id: string; name: string; arguments: string }
 
 export class OpenAIProvider extends BaseChatProvider {
 	fallbackModels(): ModelSpec[] { return FALLBACK; }
+
+	/** The small reasoning models and the GPT-3.5 line are the ones without vision. */
+	protected override supportsImageInput(spec: ModelSpec): boolean {
+		return !/^(o1-mini|o3-mini|gpt-3\.5)/.test(spec.id);
+	}
 
 	protected override async fetchAvailableModels(credential: string, token: vscode.CancellationToken): Promise<ModelSpec[] | undefined> {
 		const res = await fetch(MODELS_ENDPOINT, {
@@ -253,14 +259,19 @@ function toOpenAIMessages(messages: readonly vscode.LanguageModelChatRequestMess
 			continue;
 		}
 		// User
-		const mediaParts: Array<{ type: 'image_url'; image_url: { url: string } }> = [];
+		const mediaParts: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [];
 		let plainText = '';
 		const toolResults: Array<{ id: string; text: string }> = [];
+		// Tool messages are text only in this API, so a tool's images travel in
+		// the user message that follows them.
+		const toolImages: IToolResultImage[] = [];
 		for (const p of m.content) {
 			if (p instanceof vscode.LanguageModelTextPart) {
 				plainText += p.value;
 			} else if (p instanceof vscode.LanguageModelToolResultPart) {
-				toolResults.push({ id: p.callId, text: textOfUnknown(p.content) });
+				const result = splitToolResult(p.content);
+				toolResults.push({ id: p.callId, text: result.text });
+				toolImages.push(...result.images);
 			} else if (p instanceof vscode.LanguageModelDataPart && p.mimeType.startsWith('image/')) {
 				const data = Buffer.from(p.data).toString('base64');
 				mediaParts.push({ type: 'image_url', image_url: { url: `data:${p.mimeType};base64,${data}` } });
@@ -268,6 +279,12 @@ function toOpenAIMessages(messages: readonly vscode.LanguageModelChatRequestMess
 		}
 		for (const tr of toolResults) {
 			out.push({ role: 'tool', tool_call_id: tr.id, content: tr.text });
+		}
+		if (toolImages.length > 0) {
+			mediaParts.unshift(
+				{ type: 'text', text: toolImagesCaption(toolImages.length) },
+				...toolImages.map(image => ({ type: 'image_url' as const, image_url: { url: `data:${image.mimeType};base64,${image.base64}` } })),
+			);
 		}
 		if (mediaParts.length > 0) {
 			const content: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [...mediaParts];
@@ -310,13 +327,16 @@ function toResponsesInput(messages: readonly vscode.LanguageModelChatRequestMess
 		// User
 		const inputContent: Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> = [];
 		const toolResults: Array<{ callId: string; text: string }> = [];
+		const toolImages: IToolResultImage[] = [];
 		for (const p of m.content) {
 			if (p instanceof vscode.LanguageModelTextPart) {
 				if (p.value) {
 					inputContent.push({ type: 'input_text', text: p.value });
 				}
 			} else if (p instanceof vscode.LanguageModelToolResultPart) {
-				toolResults.push({ callId: p.callId, text: textOfUnknown(p.content) });
+				const result = splitToolResult(p.content);
+				toolResults.push({ callId: p.callId, text: result.text });
+				toolImages.push(...result.images);
 			} else if (p instanceof vscode.LanguageModelDataPart && p.mimeType.startsWith('image/')) {
 				const data = Buffer.from(p.data).toString('base64');
 				inputContent.push({ type: 'input_image', image_url: `data:${p.mimeType};base64,${data}` });
@@ -324,6 +344,12 @@ function toResponsesInput(messages: readonly vscode.LanguageModelChatRequestMess
 		}
 		for (const tr of toolResults) {
 			out.push({ type: 'function_call_output', call_id: tr.callId, output: tr.text });
+		}
+		if (toolImages.length > 0) {
+			inputContent.unshift(
+				{ type: 'input_text', text: toolImagesCaption(toolImages.length) },
+				...toolImages.map(image => ({ type: 'input_image' as const, image_url: `data:${image.mimeType};base64,${image.base64}` })),
+			);
 		}
 		if (inputContent.length > 0) {
 			out.push({ role: 'user', content: inputContent });
@@ -337,18 +363,6 @@ function textOf(parts: readonly unknown[]): string {
 	for (const p of parts) {
 		if (p instanceof vscode.LanguageModelTextPart) {
 			out += p.value;
-		}
-	}
-	return out;
-}
-
-function textOfUnknown(parts: readonly unknown[]): string {
-	let out = '';
-	for (const p of parts) {
-		if (p instanceof vscode.LanguageModelTextPart) {
-			out += p.value;
-		} else if (typeof p === 'string') {
-			out += p;
 		}
 	}
 	return out;
