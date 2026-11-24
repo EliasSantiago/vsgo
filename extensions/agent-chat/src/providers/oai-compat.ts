@@ -111,6 +111,14 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 	}
 
 	/**
+	 * `tool_choice` sent alongside the tools, or `undefined` to leave it to the
+	 * server. Only an endpoint whose tool parser is broken or missing needs it.
+	 */
+	protected get toolChoice(): string | undefined {
+		return undefined;
+	}
+
+	/**
 	 * The conversation in the shape the endpoint expects. Overridable because a
 	 * runtime that renders the model's own chat template can only accept what
 	 * that template knows how to write.
@@ -149,6 +157,7 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 				// Ask OpenAI-compatible APIs to include a final usage chunk.
 				stream_options: { include_usage: true },
 				tools: tools ? tools.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.inputSchema } })) : undefined,
+				tool_choice: tools?.length ? this.toolChoice : undefined,
 				...this.samplingOptions,
 				...this.extraRequestBody,
 			}),
@@ -162,7 +171,7 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 		const calls = new Map<number, OAIToolCallAccum>();
 		let usage: IProviderUsage | undefined;
 		for await (const evt of parseSSE(response, token)) {
-			const e = evt as { choices?: Array<{ delta?: { content?: string; reasoning_content?: string; tool_calls?: Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }>; finish_reason?: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+			const e = evt as { choices?: Array<{ delta?: { content?: string; reasoning_content?: string; reasoning?: string; tool_calls?: Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }>; finish_reason?: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
 			if (e.usage) {
 				usage = { inputTokens: e.usage.prompt_tokens ?? 0, outputTokens: e.usage.completion_tokens ?? 0 };
 			}
@@ -174,9 +183,11 @@ export abstract class OAICompatProvider extends BaseChatProvider {
 			// A reasoning model puts its whole turn here and leaves `content` empty
 			// until the answer itself starts, so dropping this means reporting
 			// nothing at all while it works — the request looks frozen for as long
-			// as the reasoning takes, which on CPU inference is minutes.
-			if (delta.reasoning_content) {
-				progress.report(new vscode.LanguageModelThinkingPart(delta.reasoning_content));
+			// as the reasoning takes, which on CPU inference is minutes. Recent vLLM
+			// releases renamed the field to `reasoning`.
+			const reasoning = delta.reasoning_content ?? delta.reasoning;
+			if (reasoning) {
+				progress.report(new vscode.LanguageModelThinkingPart(reasoning));
 			}
 			if (delta.content) {
 				progress.report(new vscode.LanguageModelTextPart(delta.content));

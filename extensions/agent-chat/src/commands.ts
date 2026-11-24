@@ -209,6 +209,10 @@ export function registerCommands(
 			return;
 		}
 		const existing = await storage.get(provider);
+		if (provider === 'goias') {
+			await promptGoiasCredential(storage, existing);
+			return;
+		}
 		const value = await vscode.window.showInputBox({
 			title: `${PROVIDER_LABELS[provider]} — API key`,
 			placeHolder: PROVIDER_KEY_HINTS[provider],
@@ -264,8 +268,45 @@ export function registerCommands(
 	return vscode.Disposable.from(...subs);
 }
 
+/**
+ * O provedor do Estado de Goiás não usa uma chave só: o Consumer Key e o
+ * Consumer Secret da aplicação são trocados por um token OAuth a cada hora.
+ * Os dois são guardados juntos, como `key:secret`.
+ */
+async function promptGoiasCredential(storage: ByokStorage, existing: string | undefined): Promise<void> {
+	const separator = existing?.indexOf(':') ?? -1;
+	const label = PROVIDER_LABELS.goias;
+	const consumerKey = await vscode.window.showInputBox({
+		title: `${label} — Consumer Key`,
+		prompt: 'Consumer Key da aplicação (deixe vazio para remover a credencial)',
+		value: separator > 0 ? existing!.slice(0, separator) : undefined,
+		ignoreFocusOut: true,
+	});
+	if (consumerKey === undefined) {
+		return;
+	}
+	if (consumerKey.trim() === '') {
+		await storage.delete('goias');
+		vscode.window.showInformationMessage(`Credencial de ${label} removida.`);
+		return;
+	}
+	const consumerSecret = await vscode.window.showInputBox({
+		title: `${label} — Consumer Secret`,
+		prompt: 'Consumer Secret da aplicação (guardado no chaveiro do sistema)',
+		password: true,
+		value: separator > 0 ? existing!.slice(separator + 1) : undefined,
+		ignoreFocusOut: true,
+		validateInput: value => value.trim() ? undefined : 'Informe o Consumer Secret.',
+	});
+	if (consumerSecret === undefined) {
+		return;
+	}
+	await storage.set('goias', `${consumerKey.trim()}:${consumerSecret.trim()}`);
+	vscode.window.showInformationMessage(`Credencial de ${label} salva.`);
+}
+
 async function pickProvider(placeHolder: string, allow?: readonly ProviderId[]): Promise<ProviderId | undefined> {
-	const all: ProviderId[] = ['anthropic', 'openai', 'gemini', 'ollama', 'mistral', 'groq', 'deepseek', 'xai'];
+	const all: ProviderId[] = ['anthropic', 'openai', 'gemini', 'ollama', 'mistral', 'groq', 'deepseek', 'xai', 'goias'];
 	const list = allow ?? all;
 	const items = list.map(p => ({ label: PROVIDER_LABELS[p], description: PROVIDER_KEY_HINTS[p], id: p }));
 	const picked = await vscode.window.showQuickPick(items, { placeHolder, ignoreFocusOut: true });

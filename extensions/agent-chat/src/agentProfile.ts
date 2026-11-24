@@ -161,18 +161,21 @@ export interface IFullProfileDefaults {
  *
  * `auto` keys off the vendor rather than the context window: a vendor that
  * serves weights from this machine is the reliable signal that the model is
- * small, and it produces no false positives on hosted models.
+ * small, and it produces no false positives on hosted models. The Estado de
+ * Goiás gateway is hosted but joins them: it serves a single 8B model with a
+ * 32k window and no server-side tool parser, so its tool calls only ever
+ * arrive as text.
  */
 export function resolveProfile(model: vscode.LanguageModelChat, defaults: IFullProfileDefaults): IAgentProfile {
 	const setting = vscode.workspace.getConfiguration('agent-chat').get<'auto' | 'compact' | 'full'>('agentProfile', 'auto');
-	const compact = setting === 'compact' || (setting === 'auto' && isLocallyHosted(model.vendor));
+	const compact = setting === 'compact' || (setting === 'auto' && servesSmallModels(model.vendor));
 	const profile = compact ? compactProfile(defaults) : fullProfile(defaults);
 	log(`[profile] ${profile.id} for ${model.vendor}/${model.id} (setting=${setting})`);
 	return profile;
 }
 
-function isLocallyHosted(vendor: string): boolean {
-	return vendor === 'local' || vendor === 'ollama';
+function servesSmallModels(vendor: string): boolean {
+	return vendor === 'local' || vendor === 'ollama' || vendor === 'goias';
 }
 
 function compactProfile(defaults: IFullProfileDefaults): IAgentProfile {

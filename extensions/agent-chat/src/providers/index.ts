@@ -14,6 +14,7 @@ import { MistralProvider } from './mistral.js';
 import { GroqProvider } from './groq.js';
 import { DeepSeekProvider } from './deepseek.js';
 import { XAIProvider } from './xai.js';
+import { GoiasProvider } from './goias.js';
 import { VsgoProvider } from './vsgo.js';
 
 export function registerAllProviders(storage: ByokStorage, local: LocalProvider, vsgo: VsgoProvider): vscode.Disposable {
@@ -30,5 +31,6 @@ export function registerAllProviders(storage: ByokStorage, local: LocalProvider,
 	subs.push(vscode.lm.registerLanguageModelChatProvider('groq', new GroqProvider('groq', storage)));
 	subs.push(vscode.lm.registerLanguageModelChatProvider('deepseek', new DeepSeekProvider('deepseek', storage)));
 	subs.push(vscode.lm.registerLanguageModelChatProvider('xai', new XAIProvider('xai', storage)));
+	subs.push(vscode.lm.registerLanguageModelChatProvider('goias', new GoiasProvider('goias', storage)));
 	return vscode.Disposable.from(...subs);
 }

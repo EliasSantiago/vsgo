@@ -188,6 +188,30 @@
 						"apiKey"
 					]
 				}
+			},
+			{
+				"vendor": "goias",
+				"displayName": "Estado de Goiás (Qwen3)",
+				"configuration": {
+					"properties": {
+						"consumerKey": {
+							"type": "string",
+							"secret": true,
+							"description": "Consumer Key da aplicação cadastrada no SSO do Estado de Goiás",
+							"title": "Consumer Key"
+						},
+						"consumerSecret": {
+							"type": "string",
+							"secret": true,
+							"description": "Consumer Secret da aplicação. É trocado por um token de acesso (OAuth2 client_credentials) renovado automaticamente.",
+							"title": "Consumer Secret"
+						}
+					},
+					"required": [
+						"consumerKey",
+						"consumerSecret"
+					]
+				}
 			}
 		],
 		"languageModelTools": [
@@ -899,6 +923,11 @@
 					"type": "boolean",
 					"default": false,
 					"markdownDescription": "Deixa modelos locais com modo de raciocínio (como o Gemma 4) pensarem em voz alta antes de responder. Melhora a qualidade em tarefas difíceis, mas em CPU multiplica o tempo de cada turno do agente. Modelos sem modo de raciocínio ignoram esta opção."
+				},
+				"agent-chat.goias.thinking": {
+					"type": "boolean",
+					"default": false,
+					"markdownDescription": "Deixa o Qwen3 do Estado de Goiás raciocinar antes de responder. Melhora tarefas difíceis, mas cada turno do agente fica bem mais lento e gasta parte da janela de 32k tokens do modelo."
 				},
 				"agent-chat.localModels.preload": {
 					"type": "boolean",
