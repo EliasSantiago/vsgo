@@ -39,6 +39,12 @@
 					"ask",
 					"edit",
 					"agent"
+				],
+				"commands": [
+					{
+						"name": "compact",
+						"description": "Resume a conversa até aqui para reduzir os tokens das próximas mensagens. Texto depois do comando diz no que o resumo deve focar."
+					}
 				]
 			}
 		],
@@ -899,7 +905,19 @@
 				"agent-chat.compaction.enabled": {
 					"type": "boolean",
 					"default": true,
-					"description": "Quando a conversa enche a janela de contexto, resume o histórico mais antigo e continua na mesma sessão, em vez de descartar as mensagens iniciais. Custa uma chamada extra ao modelo no momento em que o resumo é feito."
+					"markdownDescription": "Resume automaticamente o histórico mais antigo da conversa e continua na mesma sessão — quando a conversa passa de `#agent-chat.compaction.thresholdTokens#` ou quando enche a janela de contexto do modelo. Custa uma chamada extra ao modelo no momento do resumo e reduz os tokens de todas as requisições seguintes. O comando `/compact` no chat resume sob demanda, mesmo com esta opção desligada."
+				},
+				"agent-chat.compaction.thresholdTokens": {
+					"type": "number",
+					"default": 80000,
+					"minimum": 0,
+					"markdownDescription": "Tamanho estimado da conversa, em tokens, a partir do qual ela é resumida para economizar — mesmo que ainda caiba na janela do modelo. `0` resume só quando a janela enche. Valores muito baixos podem sair mais caros com provedores que fazem cache de prompt (Anthropic, OpenAI, DeepSeek): cada resumo invalida o cache do histórico."
+				},
+				"agent-chat.compaction.toolResultThresholdTokens": {
+					"type": "number",
+					"default": 40000,
+					"minimum": 0,
+					"markdownDescription": "Tamanho estimado da conversa, em tokens, a partir do qual a saída de ferramentas antigas (leituras de arquivo, saídas de comando) é descartada — o agente lê de novo se precisar. Não custa chamada extra ao modelo. As mensagens mais recentes nunca são afetadas. `0` descarta só quando a janela enche."
 				},
 				"agent-chat.localModels.serverPath": {
 					"type": "string",

@@ -17,6 +17,7 @@ import { restoreTranscript, serializeTranscript, TRANSCRIPT_METADATA_KEY } from 
 import { extractTextToolCalls, IAgentProfile, resolveProfile } from './agentProfile.js';
 import { isMcpToolInfo, McpServers } from './mcp.js';
 import { usageBus } from './usageBus.js';
+import { compactionThresholds, compactionTrigger, DEFAULT_COMPACTION_SETTINGS, evictionTarget, ICompactionSettings } from './compactionPolicy.js';
 import { FIGMA_TOOL_NAME } from './figma/figmaTool.js';
 
 /**
@@ -250,6 +251,10 @@ export async function handleChatRequest(
 		return {};
 	}
 
+	if (request.command === COMPACT_COMMAND) {
+		return compactOnRequest(request, context, model, stream, token);
+	}
+
 	const profile = resolveProfile(model, { systemPrompt: BASE_SYSTEM_PROMPT, maxTurns: readMaxTurns() });
 	const browserWanted = wantsBrowserTools(request, context);
 	const baseTools = collectTools(profile, browserWanted);
@@ -308,7 +313,7 @@ export async function handleChatRequest(
 	// summary may blur what was discovered, never what was asked.
 	const pinnedRequest = messages[messages.length - 1];
 
-	const stats: IRequestStats = { turnsUsed: 0, toolCalls: 0, startedAt: Date.now(), modelId: model.id, profile, droppedMessages: 0, overflowRetries: 0, evictedToolResults: 0, compactions: 0 };
+	const stats: IRequestStats = { turnsUsed: 0, toolCalls: 0, startedAt: Date.now(), modelId: model.id, profile, droppedMessages: 0, overflowRetries: 0, evictedToolResults: 0, compactions: 0, thresholdCompactionFailed: false };
 
 	const budget: IPromptBudget = {
 		maxInputTokens: model.maxInputTokens,
@@ -800,38 +805,55 @@ async function ensurePromptFits(
 	stream: vscode.ChatResponseStream,
 	token: vscode.CancellationToken,
 ): Promise<vscode.LanguageModelChatMessage[]> {
-	const fits = () => estimateMessagesTokens(messages, budget) <= messageAllowance(budget);
-	if (fits()) {
-		return [...messages];
-	}
+	// Steps 1 and 2 also run below the window, at the cost thresholds: a long
+	// conversation on a large-window model would otherwise resend almost a whole
+	// window of history on every call before anything was cleaned up.
+	const thresholds = compactionThresholds(messageAllowance(budget), readCompactionSettings());
+	const size = () => estimateMessagesTokens(messages, budget);
 
-	stats.evictedToolResults += evictOldToolResults(messages, budget);
-	if (fits()) {
-		return [...messages];
+	const evictTo = evictionTarget(size(), thresholds);
+	if (evictTo !== undefined) {
+		stats.evictedToolResults += evictOldToolResults(messages, budget, evictTo);
 	}
 
 	if (compactionEnabled() && !token.isCancellationRequested) {
-		stream.progress('Compactando a conversa...');
-		if (await compactConversation(messages, budget, pinned, model, token)) {
-			stats.compactions++;
-			stream.markdown('\n\n_A conversa encheu a janela de contexto. Resumi o que veio antes e segui daqui — o histórico completo continua visível acima._\n\n');
-			if (fits()) {
-				return [...messages];
+		const plan = planCompaction(messages, KEEP_RECENT_MESSAGES);
+		const trigger = plan && compactionTrigger(size(), estimateMessagesTokens(plan.head, budget), thresholds, stats.thresholdCompactionFailed);
+		if (plan && trigger) {
+			stream.progress('Compactando a conversa...');
+			if (await compactConversation(messages, plan, budget, pinned, model, token)) {
+				stats.compactions++;
+				stream.markdown(trigger === 'overflow'
+					? '\n\n_A conversa encheu a janela de contexto. Resumi o que veio antes e segui daqui — o histórico completo continua visível acima._\n\n'
+					: '\n\n_A conversa ficou longa. Resumi o que veio antes para reduzir os tokens enviados a cada requisição — o histórico completo continua visível acima._\n\n');
+			} else if (trigger === 'threshold') {
+				stats.thresholdCompactionFailed = true;
 			}
 		}
 	}
 
+	if (size() <= thresholds.hardLimit) {
+		return [...messages];
+	}
 	return trimToBudget(messages, budget, stats);
 }
 
-/** Whether the conversation may be summarised when the window fills. */
+/** Whether the conversation may be summarised, at the threshold or when the window fills. */
 function compactionEnabled(): boolean {
 	return vscode.workspace.getConfiguration('agent-chat').get<boolean>('compaction.enabled', true);
 }
 
+function readCompactionSettings(): ICompactionSettings {
+	const config = vscode.workspace.getConfiguration('agent-chat');
+	return {
+		toolResultThresholdTokens: config.get<number>('compaction.toolResultThresholdTokens', DEFAULT_COMPACTION_SETTINGS.toolResultThresholdTokens),
+		thresholdTokens: config.get<number>('compaction.thresholdTokens', DEFAULT_COMPACTION_SETTINGS.thresholdTokens),
+	};
+}
+
 /**
  * Replaces the output of old tool results with a marker, oldest first, until the
- * prompt fits.
+ * prompt is at or below `targetTokens`.
  *
  * The call itself is left in place, so every tool call still has the result
  * answering it — an OpenAI-format server rejects the whole prompt over a
@@ -839,12 +861,11 @@ function compactionEnabled(): boolean {
  *
  * Returns how many results were emptied.
  */
-function evictOldToolResults(messages: vscode.LanguageModelChatMessage[], budget: IPromptBudget): number {
-	const allowance = messageAllowance(budget);
+function evictOldToolResults(messages: vscode.LanguageModelChatMessage[], budget: IPromptBudget, targetTokens: number): number {
 	const lastTouchable = messages.length - KEEP_RECENT_MESSAGES;
 	let evicted = 0;
 
-	for (let i = 1; i < lastTouchable && estimateMessagesTokens(messages, budget) > allowance; i++) {
+	for (let i = 1; i < lastTouchable && estimateMessagesTokens(messages, budget) > targetTokens; i++) {
 		const message = messages[i];
 		if (!isOrphanToolResult(message)) {
 			continue;
@@ -887,32 +908,27 @@ function isEvictedToolResult(part: vscode.LanguageModelToolResultPart): boolean 
  * after the summary when it falls inside the compacted range — a summary is
  * allowed to blur what was discovered, never what was asked.
  *
- * Returns false when there was nothing to compact, or when the summariser failed
- * or was cancelled; the caller then falls back to dropping messages. Nothing is
- * mutated unless a usable summary came back.
+ * Returns false when the summariser failed or was cancelled; the caller then
+ * falls back to dropping messages. Nothing is mutated unless a usable summary
+ * came back.
  */
 async function compactConversation(
 	messages: vscode.LanguageModelChatMessage[],
+	plan: ICompactionPlan,
 	budget: IPromptBudget,
 	pinned: vscode.LanguageModelChatMessage | undefined,
 	model: vscode.LanguageModelChat,
 	token: vscode.CancellationToken,
+	focus?: string,
 ): Promise<boolean> {
-	let cut = Math.max(2, messages.length - KEEP_RECENT_MESSAGES);
-	while (cut < messages.length && isOrphanToolResult(messages[cut])) {
-		cut++;
-	}
-	const head = messages.slice(1, cut);
-	if (head.length < 2) {
-		return false;
-	}
+	const { cut, head } = plan;
 
 	let summary: string;
 	try {
 		// The summariser gets a request of its own and has to fit the same window.
 		// Half of it, in characters, leaves ample room for the summary to come back.
 		const renderBudget = Math.floor(budget.maxInputTokens * budget.charsPerToken * 0.5);
-		summary = await summarize(head, renderBudget, model, token);
+		summary = await summarize(head, renderBudget, model, token, focus);
 	} catch (err) {
 		// A summariser that fails must not take the turn down with it: the caller
 		// still has trimming, which needs nothing from the model.
@@ -938,14 +954,87 @@ async function compactConversation(
 	return true;
 }
 
+/** Slash command that summarises the conversation on the user's say-so. */
+const COMPACT_COMMAND = 'compact';
+
+/**
+ * `/compact`: summarises the whole conversation so far without waiting for a
+ * threshold.
+ *
+ * The summary becomes this turn's transcript snapshot, and the snapshot is what
+ * the next request rebuilds its history from — so every request after this one
+ * starts from the summary instead of the full history. Text typed after the
+ * command steers what the summary keeps. When there is nothing to summarise, or
+ * the summariser fails, the history is snapshotted unchanged so this turn adds
+ * nothing to what the next request carries.
+ */
+async function compactOnRequest(
+	request: vscode.ChatRequest,
+	context: vscode.ChatContext,
+	model: vscode.LanguageModelChat,
+	stream: vscode.ChatResponseStream,
+	token: vscode.CancellationToken,
+): Promise<vscode.ChatResult> {
+	// Index 0 stands in for the system prompt, which compaction never touches and
+	// the snapshot never stores: it is rebuilt fresh on every request.
+	const messages: vscode.LanguageModelChatMessage[] = [vscode.LanguageModelChatMessage.User('')];
+	appendHistory(context.history, messages);
+	const snapshot = (): vscode.ChatResult => ({ metadata: { [TRANSCRIPT_METADATA_KEY]: serializeTranscript(messages.slice(1)) } });
+
+	const plan = planCompaction(messages, 0);
+	if (!plan) {
+		stream.markdown('Ainda não há conversa suficiente para compactar.');
+		return snapshot();
+	}
+
+	const budget: IPromptBudget = { maxInputTokens: model.maxInputTokens, toolTokens: 0, charsPerToken: DEFAULT_CHARS_PER_TOKEN };
+	const before = estimateMessagesTokens(messages, budget);
+	stream.progress('Compactando a conversa...');
+	const focus = request.prompt.trim() || undefined;
+	if (!await compactConversation(messages, plan, budget, undefined, model, token, focus)) {
+		stream.markdown('Não foi possível compactar a conversa agora. O motivo está no canal de saída **Agent Chat**.');
+		return snapshot();
+	}
+	const after = estimateMessagesTokens(messages, budget);
+	stream.markdown(`Conversa compactada: de ~${before.toLocaleString('pt-BR')} para ~${after.toLocaleString('pt-BR')} tokens. As próximas mensagens partem do resumo — o histórico completo continua visível acima.`);
+	return snapshot();
+}
+
+/** Where the conversation is cut for a summary: `head` is what gets summarised. */
+interface ICompactionPlan {
+	/** Index of the first message kept verbatim. */
+	readonly cut: number;
+	/** `messages[1..cut)` — everything after the system prompt and before the cut. */
+	readonly head: readonly vscode.LanguageModelChatMessage[];
+}
+
+/**
+ * Picks the cut that keeps the last `keepRecent` messages verbatim, or
+ * `undefined` when there is too little before it to be worth a summary.
+ *
+ * The cut never lands on a message of tool results whose assistant call would
+ * be summarised away: the tail has to start somewhere the server can still read
+ * as a conversation.
+ */
+function planCompaction(messages: readonly vscode.LanguageModelChatMessage[], keepRecent: number): ICompactionPlan | undefined {
+	let cut = Math.max(2, messages.length - keepRecent);
+	while (cut < messages.length && isOrphanToolResult(messages[cut])) {
+		cut++;
+	}
+	const head = messages.slice(1, cut);
+	return head.length < 2 ? undefined : { cut, head };
+}
+
 /** Asks the model for the summary that will stand in for the conversation. */
 async function summarize(
 	head: readonly vscode.LanguageModelChatMessage[],
 	renderBudget: number,
 	model: vscode.LanguageModelChat,
 	token: vscode.CancellationToken,
+	focus?: string,
 ): Promise<string> {
-	const request = vscode.LanguageModelChatMessage.User(`${COMPACTION_PROMPT}\n\n---\n${renderForSummary(head, renderBudget)}\n---`);
+	const instructions = focus ? `${COMPACTION_PROMPT}\n\nThe user asked this summary to focus on: ${focus}` : COMPACTION_PROMPT;
+	const request = vscode.LanguageModelChatMessage.User(`${instructions}\n\n---\n${renderForSummary(head, renderBudget)}\n---`);
 	// Deliberately untagged for the usage bus: these tokens are spent on the
 	// summary, not on the conversation the context ring describes.
 	const response = await model.sendRequest([request], {}, token);
@@ -1187,6 +1276,8 @@ interface IRequestStats {
 	evictedToolResults: number;
 	/** Times the conversation was summarised to keep going in the same session. */
 	compactions: number;
+	/** A summary at the cost threshold failed; it is not retried in this request. */
+	thresholdCompactionFailed: boolean;
 }
 
 /**
