@@ -80,7 +80,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Baixar extensões embutidas
-        run: node build/lib/builtInExtensions.ts
+        # As extensões vêm do Open VSX, que falha de vez em quando (5xx, limite de
+        # requisições). Sem nova tentativa, uma falha passageira derrubava o
+        # release inteiro; o script pula o que já baixou.
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            node build/lib/builtInExtensions.ts && exit 0
+            echo "Tentativa $attempt falhou; tentando de novo em 30s..."
+            sleep 30
+          done
+          exit 1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -131,7 +141,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Baixar extensões embutidas
-        run: node build/lib/builtInExtensions.ts
+        # As extensões vêm do Open VSX, que falha de vez em quando (5xx, limite de
+        # requisições). Sem nova tentativa, uma falha passageira derrubava o
+        # release inteiro; o script pula o que já baixou.
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            node build/lib/builtInExtensions.ts && exit 0
+            echo "Tentativa $attempt falhou; tentando de novo em 30s..."
+            sleep 30
+          done
+          exit 1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
