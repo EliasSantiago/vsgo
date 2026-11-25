@@ -79,6 +79,15 @@ jobs:
       - name: Desligar o download nativo do Foundry Local
         run: node build/azure-pipelines/common/disableFoundryLocalInstall.ts
 
+      # Os headers do Electron 43 não compilam no GCC 11 do ubuntu-22.04; o
+      # build/npm/preinstall.ts baixa os headers e aplica a correção de
+      # build/npm/gyp/custom-headers. Só que o npm roda o preinstall da raiz
+      # DEPOIS de compilar as dependências, então num runner limpo os módulos
+      # nativos (native-keymap etc.) compilavam com os headers sem correção.
+      # Rodá-lo antes deixa o cache do node-gyp pronto.
+      - name: Preparar headers do Electron
+        run: node build/npm/preinstall.ts
+
       - name: npm ci
         # O laço sozinho terminava no echo e dava sucesso mesmo com as três
         # tentativas falhando; o erro só aparecia na etapa seguinte, longe da causa.
