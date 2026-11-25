@@ -70,9 +70,24 @@ jobs:
             pkg-config libxkbfile-dev libkrb5-dev libsecret-1-dev \
             fakeroot dpkg-dev
 
+      # O foundry-local-sdk (ditado por voz local) baixa centenas de MB de
+      # bibliotecas nativas no próprio npm ci, e o download falha de forma
+      # intermitente — a segunda fonte dele é um feed interno da Microsoft, que
+      # responde 401. O instalador não leva essas bibliotecas (o gulpfile as
+      # exclui; o vsgo as baixa sob demanda), então o download é desligado antes
+      # do npm ci, como o CI da Microsoft faz.
+      - name: Desligar o download nativo do Foundry Local
+        run: node build/azure-pipelines/common/disableFoundryLocalInstall.ts
+
       - name: npm ci
+        # O laço sozinho terminava no echo e dava sucesso mesmo com as três
+        # tentativas falhando; o erro só aparecia na etapa seguinte, longe da causa.
         run: |
-          for i in 1 2 3; do npm ci && break; echo "npm ci falhou ($i), tentando de novo..."; done
+          for i in 1 2 3; do
+            npm ci && exit 0
+            echo "npm ci falhou ($i), tentando de novo..."
+          done
+          exit 1
         env:
           npm_config_arch: x64
           VSCODE_ARCH: x64
@@ -123,6 +138,15 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+
+      # O foundry-local-sdk (ditado por voz local) baixa centenas de MB de
+      # bibliotecas nativas no próprio npm ci, e o download falha de forma
+      # intermitente — a segunda fonte dele é um feed interno da Microsoft, que
+      # responde 401. O instalador não leva essas bibliotecas (o gulpfile as
+      # exclui; o vsgo as baixa sob demanda), então o download é desligado antes
+      # do npm ci, como o CI da Microsoft faz.
+      - name: Desligar o download nativo do Foundry Local
+        run: node build/azure-pipelines/common/disableFoundryLocalInstall.ts
 
       - name: npm ci
         shell: pwsh
